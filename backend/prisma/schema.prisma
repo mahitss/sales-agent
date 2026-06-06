@@ -1,0 +1,85 @@
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id        String     @id @default(uuid())
+  email     String     @unique
+  password  String
+  name      String
+  role      String     @default("USER")
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  businesses Business[]
+}
+
+model Business {
+  id           String          @id @default(uuid())
+  ownerId      String
+  owner        User            @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  companyName  String
+  website      String
+  industry     String
+  description  String
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  leads        Lead[]
+  conversations Conversation[]
+  appointments Appointment[]
+  knowledgeBases KnowledgeBase[]
+}
+
+model KnowledgeBase {
+  id         String   @id @default(uuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  title      String
+  content    String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model Lead {
+  id           String         @id @default(uuid())
+  businessId   String
+  business     Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  name         String?
+  email        String?
+  phone        String?
+  budget       String?
+  source       String         @default("WIDGET")
+  status       String         @default("COLD") // HOT, WARM, COLD
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  conversations Conversation[]
+  appointments Appointment[]
+}
+
+model Conversation {
+  id         String    @id @default(uuid())
+  leadId     String?
+  lead       Lead?     @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  businessId String
+  business   Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  messages   String    @default("[]") // JSON string of message history: [{role: "user"|"model", content: "..."}]
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+}
+
+model Appointment {
+  id         String   @id @default(uuid())
+  leadId     String
+  lead       Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  date       String
+  time       String
+  status     String   @default("PENDING") // PENDING, CONFIRMED, CANCELLED
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
