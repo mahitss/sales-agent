@@ -6,7 +6,7 @@
     return;
   }
 
-  const frontendUrl = 'http://localhost:3000'; // Next.js server
+  const frontendUrl = scriptTag.getAttribute('data-frontend-url') || 'http://localhost:3000';
 
   // Create iframe container
   const container = document.createElement('div');

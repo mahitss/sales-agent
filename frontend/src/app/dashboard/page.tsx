@@ -2065,7 +2065,7 @@ export default function DashboardPage() {
                 <div className="space-y-4">
                   <div className="rounded-2xl bg-slate-950 border border-slate-900 p-5 font-mono text-xs overflow-x-auto text-emerald-400 select-all leading-relaxed relative group">
                     <code>
-                      {`<script\n  src="${API_URL}/widget/logicra-widget.js"\n  data-business-id="${business.id}"\n></script>`}
+                      {`<script\n  src="${API_URL}/widget/logicra-widget.js"\n  data-business-id="${business.id}"\n  data-frontend-url="${typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000'}"\n></script>`}
                     </code>
                   </div>
                   <div className="p-4 bg-emerald-500/5 border border-emerald-500/10 rounded-xl space-y-2 text-xs leading-relaxed text-slate-300">

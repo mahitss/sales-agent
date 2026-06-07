@@ -1,0 +1,39 @@
+services:
+  # 1. FastAPI AI Service
+  - type: web
+    name: beacon-ai-service
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    rootDir: ai-service
+    envVars:
+      - key: GEMINI_API_KEY
+        sync: false # User will input their Google Gemini API Key in the Render Dashboard
+      - key: HOST
+        value: 0.0.0.0
+
+  # 2. NestJS Backend API
+  - type: web
+    name: beacon-backend
+    env: node
+    plan: free
+    buildCommand: npm run build
+    startCommand: npm run start:prod
+    rootDir: backend
+    envVars:
+      - key: DATABASE_URL
+        value: file:./dev.db # SQLite DB in the runtime directory
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_REFRESH_SECRET
+        generateValue: true
+      - key: JWT_EXPIRATION
+        value: 1d
+      - key: JWT_REFRESH_EXPIRATION
+        value: 7d
+      - key: AI_SERVICE_URL
+        fromService:
+          type: web
+          name: beacon-ai-service
+          property: host
