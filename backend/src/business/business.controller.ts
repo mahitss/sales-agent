@@ -46,4 +46,46 @@ export class BusinessController {
   async deleteFAQ(@Param('faqId') faqId: string, @Request() req) {
     return this.businessService.deleteFAQ(faqId, req.user.sub);
   }
+
+  // --- Visitor Tracking Endpoints ---
+  @Post(':id/track-visitor')
+  async trackVisitor(
+    @Param('id') id: string,
+    @Body() body: { location: string; pagesViewed: string[]; duration: number }
+  ) {
+    return this.businessService.trackVisitor(id, body);
+  }
+
+  @UseGuards(AuthGuard)
+  @Get(':id/visitor-tracks')
+  async getVisitorTracks(@Param('id') id: string) {
+    return this.businessService.getVisitorTracks(id);
+  }
+
+  // --- Auto Scraper / Web Learning Endpoint ---
+  @UseGuards(AuthGuard)
+  @Post(':id/scrape')
+  async scrapeWebsite(@Param('id') id: string, @Body('url') url: string) {
+    return this.businessService.scrapeWebsite(id, url);
+  }
+
+  // --- Competitor Analysis Endpoints ---
+  @UseGuards(AuthGuard)
+  @Post(':id/competitor-analysis')
+  async competitorAnalysis(@Param('id') id: string, @Body('competitorUrl') competitorUrl: string) {
+    return this.businessService.competitorAnalysis(id, competitorUrl);
+  }
+
+  @UseGuards(AuthGuard)
+  @Get(':id/competitor-analysis')
+  async getCompetitorAnalyses(@Param('id') id: string) {
+    return this.businessService.getCompetitorAnalyses(id);
+  }
+
+  // --- Recommendations Endpoint ---
+  @UseGuards(AuthGuard)
+  @Get(':id/recommendations')
+  async getRecommendations(@Param('id') id: string) {
+    return this.businessService.getRecommendations(id);
+  }
 }

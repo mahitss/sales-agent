@@ -64,4 +64,15 @@ export class ConversationService {
       messages: JSON.parse(conversation.messages),
     };
   }
+
+  async toggleTakeover(id: string, isHumanTakeover: boolean) {
+    const conversation = await this.prisma.conversation.update({
+      where: { id },
+      data: { isHumanTakeover },
+    });
+    return {
+      ...conversation,
+      messages: JSON.parse(conversation.messages),
+    };
+  }
 }

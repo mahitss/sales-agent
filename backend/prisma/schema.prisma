@@ -19,19 +19,28 @@ model User {
 }
 
 model Business {
-  id           String          @id @default(uuid())
-  ownerId      String
-  owner        User            @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  companyName  String
-  website      String
-  industry     String
-  description  String
-  createdAt    DateTime        @default(now())
-  updatedAt    DateTime        @updatedAt
-  leads        Lead[]
-  conversations Conversation[]
-  appointments Appointment[]
-  knowledgeBases KnowledgeBase[]
+  id                 String               @id @default(uuid())
+  ownerId            String
+  owner              User                 @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  companyName        String
+  website            String
+  industry           String
+  description        String
+  whatsappEnabled    Boolean              @default(false)
+  instagramEnabled   Boolean              @default(false)
+  emailEnabled       Boolean              @default(false)
+  whatsappApiKey     String?
+  instagramAccountId String?
+  emailSmtp          String?
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  leads              Lead[]
+  conversations      Conversation[]
+  appointments       Appointment[]
+  knowledgeBases     KnowledgeBase[]
+  visitorTracks      VisitorTrack[]
+  competitorAnalyses CompetitorAnalysis[]
+  recommendations    Recommendation[]
 }
 
 model KnowledgeBase {
@@ -52,7 +61,7 @@ model Lead {
   email        String?
   phone        String?
   budget       String?
-  source       String         @default("WIDGET")
+  source       String         @default("WIDGET") // WIDGET, WHATSAPP, INSTAGRAM, EMAIL
   status       String         @default("COLD") // HOT, WARM, COLD
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
@@ -61,14 +70,16 @@ model Lead {
 }
 
 model Conversation {
-  id         String    @id @default(uuid())
-  leadId     String?
-  lead       Lead?     @relation(fields: [leadId], references: [id], onDelete: SetNull)
-  businessId String
-  business   Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  messages   String    @default("[]") // JSON string of message history: [{role: "user"|"model", content: "..."}]
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
+  id              String    @id @default(uuid())
+  leadId          String?
+  lead            Lead?     @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  businessId      String
+  business        Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  messages        String    @default("[]") // JSON string of message history: [{role: "user"|"model", content: "..."}]
+  channel         String    @default("WIDGET") // WIDGET, WHATSAPP, INSTAGRAM, EMAIL
+  isHumanTakeover Boolean   @default(false)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 }
 
 model Appointment {
@@ -80,6 +91,39 @@ model Appointment {
   date       String
   time       String
   status     String   @default("PENDING") // PENDING, CONFIRMED, CANCELLED
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model VisitorTrack {
+  id          String   @id @default(uuid())
+  businessId  String
+  business    Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  location    String   @default("Unknown")
+  pagesViewed String   @default("[]") // JSON string array
+  duration    Int      @default(0)     // in seconds
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model CompetitorAnalysis {
+  id            String   @id @default(uuid())
+  businessId    String
+  business      Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  competitorUrl String
+  analysis      String   @default("{}") // JSON string of serviceCompare, missingOfferings, contentGaps
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model Recommendation {
+  id         String   @id @default(uuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  title      String
+  content    String
+  priority   String   @default("MEDIUM") // HIGH, MEDIUM, LOW
+  category   String   @default("LEAD")   // LEAD, COMPETITOR, KB
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 }

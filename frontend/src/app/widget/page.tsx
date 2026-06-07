@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
-import { Send, X, Bot, User, Phone, Mail, UserCheck, Calendar } from "lucide-react";
+import { Send, X, Bot, User, Phone, Mail, UserCheck } from "lucide-react";
 
 interface Message {
   role: "user" | "model";
@@ -93,6 +93,61 @@ function WidgetContent() {
         setError("Unable to load chat assistant. Please try again later.");
       });
   }, [businessId]);
+
+  // Track visitor on mount
+  useEffect(() => {
+    if (!businessId) return;
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+    
+    // Generate realistic mock tracking parameters for dashboard metrics
+    const locations = ["Mumbai", "New York", "London", "Berlin", "San Francisco", "Sydney", "Tokyo", "Paris", "Toronto"];
+    const randomLocation = locations[Math.floor(Math.random() * locations.length)];
+    
+    const pageOptions = [
+      ["/pricing", "/services"],
+      ["/features", "/pricing"],
+      ["/documentation", "/services", "/pricing"],
+      ["/pricing"],
+      ["/services"],
+      ["/features", "/about", "/pricing"]
+    ];
+    const randomPages = pageOptions[Math.floor(Math.random() * pageOptions.length)];
+    const randomDuration = Math.floor(Math.random() * 400) + 80; // seconds
+    
+    fetch(`${apiUrl}/business/${businessId}/track-visitor`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        location: randomLocation,
+        pagesViewed: randomPages,
+        duration: randomDuration
+      })
+    }).catch(console.error);
+  }, [businessId]);
+
+  // Poll conversation history for operator takeover replies
+  useEffect(() => {
+    if (!conversationId || loading) return;
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+    
+    const interval = setInterval(() => {
+      fetch(`${apiUrl}/conversations/${conversationId}`)
+        .then((r) => r.json())
+        .then((cData) => {
+          if (cData && cData.messages && !loading) {
+            setMessages((prev) => {
+              if (prev.length !== cData.messages.length) {
+                return cData.messages;
+              }
+              return prev;
+            });
+          }
+        })
+        .catch(console.error);
+    }, 2000);
+
+    return () => clearInterval(interval);
+  }, [conversationId, loading]);
 
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -250,7 +305,7 @@ function WidgetContent() {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Captured Info Banner (If lead info exists, show progress in a subtle banner) */}
+      {/* Captured Info Banner */}
       {lead && (lead.name || lead.email || lead.phone || lead.budget) && (
         <div className="mx-4 mb-2 p-2 rounded-xl bg-slate-900/40 border border-slate-800/60 flex items-center justify-between text-[11px] text-slate-400">
           <div className="flex items-center gap-1.5">

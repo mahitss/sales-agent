@@ -8,7 +8,7 @@ export class ChatService {
   constructor(private prisma: PrismaService) {}
 
   async sendMessage(dto: SendMessageDto) {
-    const { message, businessId, leadId: inputLeadId, conversationId: inputConvId } = dto;
+    const { message, businessId, leadId: inputLeadId, conversationId: inputConvId, channel } = dto;
 
     // 1. Get or create Lead
     let lead;
@@ -24,6 +24,7 @@ export class ChatService {
         data: {
           businessId,
           name: 'Anonymous Visitor',
+          source: channel || 'WIDGET',
           status: 'COLD',
         },
       });
@@ -44,8 +45,32 @@ export class ChatService {
           leadId: lead.id,
           businessId,
           messages: '[]',
+          channel: channel || 'WIDGET',
         },
       });
+    }
+
+    // --- Human Takeover Bypass ---
+    if (conversation.isHumanTakeover) {
+      const messageHistory = JSON.parse(conversation.messages);
+      messageHistory.push({ role: 'user', content: message });
+      
+      conversation = await this.prisma.conversation.update({
+        where: { id: conversation.id },
+        data: {
+          leadId: lead.id,
+          messages: JSON.stringify(messageHistory),
+        },
+      });
+
+      return {
+        response: 'A live agent is currently typing...',
+        intent: 'HumanTakeoverActive',
+        leadId: lead.id,
+        conversationId: conversation.id,
+        lead,
+        isHumanTakeover: true,
+      };
     }
 
     // Parse messages history
@@ -171,5 +196,92 @@ export class ChatService {
       conversationId: conversation.id,
       lead,
     };
+  }
+
+  // --- Manual Human Agent Reply ---
+  async sendOperatorReply(conversationId: string, message: string) {
+    let conversation = await this.prisma.conversation.findUnique({
+      where: { id: conversationId },
+    });
+    if (!conversation) {
+      throw new Error('Conversation not found');
+    }
+
+    const messageHistory = JSON.parse(conversation.messages);
+    messageHistory.push({ role: 'model', content: message });
+
+    conversation = await this.prisma.conversation.update({
+      where: { id: conversationId },
+      data: {
+        messages: JSON.stringify(messageHistory),
+      },
+    });
+
+    return {
+      success: true,
+      conversation,
+    };
+  }
+
+  // --- Simulate Multi-Channel Incoming Message ---
+  async simulateIncomingMessage(dto: {
+    businessId: string;
+    channel: string;
+    message: string;
+    leadName?: string;
+    leadPhone?: string;
+    leadEmail?: string;
+  }) {
+    const { businessId, channel, message, leadName, leadPhone, leadEmail } = dto;
+
+    // 1. Find or create Lead
+    let lead;
+    if (leadPhone) {
+      lead = await this.prisma.lead.findFirst({
+        where: { businessId, phone: leadPhone },
+      });
+    } else if (leadEmail) {
+      lead = await this.prisma.lead.findFirst({
+        where: { businessId, email: leadEmail },
+      });
+    }
+
+    if (!lead) {
+      lead = await this.prisma.lead.create({
+        data: {
+          businessId,
+          name: leadName || 'Simulated User',
+          phone: leadPhone || null,
+          email: leadEmail || null,
+          source: channel,
+          status: 'COLD',
+        },
+      });
+    }
+
+    // 2. Find or create Conversation
+    let conversation = await this.prisma.conversation.findFirst({
+      where: { leadId: lead.id, businessId, channel },
+    });
+
+    if (!conversation) {
+      conversation = await this.prisma.conversation.create({
+        data: {
+          leadId: lead.id,
+          businessId,
+          channel,
+          messages: '[]',
+        },
+      });
+    }
+
+    // 3. Call standard sendMessage logic to save and run AI response
+    return this.sendMessage({
+      message,
+      businessId,
+      leadId: lead.id,
+      conversationId: conversation.id,
+      channel,
+    });
   }
 }

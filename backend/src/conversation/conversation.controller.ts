@@ -1,4 +1,4 @@
-import { Controller, Get, Param, UseGuards } from '@nestjs/common';
+import { Controller, Get, Param, UseGuards, Put, Body } from '@nestjs/common';
 import { ConversationService } from './conversation.service';
 import { AuthGuard } from '../auth/auth.guard';
 
@@ -15,5 +15,14 @@ export class ConversationController {
   @Get(':id')
   async getById(@Param('id') id: string) {
     return this.conversationService.getById(id);
+  }
+
+  @UseGuards(AuthGuard)
+  @Put(':id/takeover')
+  async toggleTakeover(
+    @Param('id') id: string,
+    @Body('isHumanTakeover') isHumanTakeover: boolean
+  ) {
+    return this.conversationService.toggleTakeover(id, isHumanTakeover);
   }
 }

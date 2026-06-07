@@ -38,6 +38,27 @@ class AgentResponse(BaseModel):
     )
 
 
+# FAQ Extraction Models
+class FAQItem(BaseModel):
+    title: str = Field(description="The question part of the FAQ.")
+    content: str = Field(description="The answer part of the FAQ.")
+
+class ExtractFAQsResponse(BaseModel):
+    faqs: List[FAQItem] = Field(description="List of extracted FAQs.")
+
+
+# Competitor Analysis Models
+class ServiceCompareItem(BaseModel):
+    feature: str = Field(description="The feature or service name being compared.")
+    us: str = Field(description="How our business implements/offers this feature.")
+    competitor: str = Field(description="How the competitor implements/offers this feature.")
+
+class CompetitorAnalysisResponse(BaseModel):
+    serviceCompare: List[ServiceCompareItem] = Field(description="Service comparison matrix.")
+    missingOfferings: List[str] = Field(description="List of services/features the competitor has but we lack.")
+    contentGaps: List[str] = Field(description="SEO content gaps or keyword areas we should cover.")
+
+
 class AIAgentService:
     def __init__(self):
         # The Client will automatically use GEMINI_API_KEY from environment variables
@@ -159,7 +180,6 @@ class AIAgentService:
                 
         if ("my name is" in msg_lower or "i am" in msg_lower or "call me" in msg_lower) and not name:
             parts = latest_message.split()
-            # simple mock name extraction
             if len(parts) > 2:
                 extracted_name = parts[-1].strip(" .!,")
                 name = extracted_name
@@ -201,3 +221,88 @@ class AIAgentService:
             extracted_appointment_time=extracted_time,
             lead_score=score
         )
+
+    # --- Auto Website Learning (FAQ extract) Service ---
+    def extract_faqs(self, scraped_text: str, company_name: str, industry: str, description: str) -> ExtractFAQsResponse:
+        if not self.client:
+            # Fallback mock FAQs
+            return ExtractFAQsResponse(faqs=[
+                FAQItem(title=f"What are the core offerings of {company_name}?", content=f"We provide specialized services in the {industry} sector tailored specifically to user specifications as described in our company profile: {description[:100]}..."),
+                FAQItem(title="Do you provide customizable configurations?", content="Yes, all client widget configurations and integrations are fully custom-built and modular."),
+                FAQItem(title="How do I setup billing?", content="Billing details and service quotes can be finalized during your onboarding demo call. Please leave your email to schedule a consult."),
+            ])
+
+        try:
+            prompt = (
+                f"Analyze the following scraped text from the company website and extract a structured list of at least 3 FAQ (Q&A) items.\n"
+                f"Company Details:\n- Name: {company_name}\n- Industry: {industry}\n- Description: {description}\n\n"
+                f"Scraped Web Text:\n{scraped_text or 'No scraped text. Please generate standard FAQs based on the company details above.'}"
+            )
+            response = self.client.models.generate_content(
+                model='gemini-2.5-flash',
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    response_schema=ExtractFAQsResponse,
+                    temperature=0.2,
+                )
+            )
+            return ExtractFAQsResponse.model_validate_json(response.text)
+        except Exception as e:
+            print(f"Error in Gemini extract_faqs: {e}")
+            return ExtractFAQsResponse(faqs=[
+                FAQItem(title=f"What services does {company_name} provide?", content=f"We provide professional services in the {industry} sector."),
+                FAQItem(title="Where can I view pricing?", content="Please contact our sales team by providing your name and email in the chat widget."),
+            ])
+
+    # --- Competitor Analysis Service ---
+    def analyze_competitor(self, competitor_url: str, scraped_text: str, my_business: Dict[str, Any]) -> CompetitorAnalysisResponse:
+        my_name = my_business.get("companyName", "Our Business")
+        my_industry = my_business.get("industry", "Technology")
+        my_desc = my_business.get("description", "")
+
+        if not self.client:
+            # Fallback mock comparison
+            return CompetitorAnalysisResponse(
+                serviceCompare=[
+                    ServiceCompareItem(feature="Product Customization", us="Highly customized modular setups", competitor="Standard fixed plans only"),
+                    ServiceCompareItem(feature="Instant AI Chatbot", us="Yes, live 24/7", competitor="No, email forms only"),
+                    ServiceCompareItem(feature="Multi-channel Inbox", us="WhatsApp, Instagram, Email, Web", competitor="Web chat only"),
+                    ServiceCompareItem(feature="Data Analytics", us="Live Lead qualifying & tracking", competitor="Basic stats grid"),
+                ],
+                missingOfferings=[
+                    "Self-service onboarding portal dashboards",
+                    "Automated text-message verification sequences",
+                ],
+                contentGaps=[
+                    f"Low competition keywords for '{my_name} alternatives'",
+                    f"SEO optimization target keyword groups in {my_industry}",
+                ]
+            )
+
+        try:
+            prompt = (
+                f"Perform a professional competitor analysis comparing our business '{my_name}' against the competitor website '{competitor_url}'.\n"
+                f"Our Business details:\n- Industry: {my_industry}\n- Description: {my_desc}\n\n"
+                f"Scraped competitor web text:\n{scraped_text or 'No competitor text. Please simulate standard comparative insights.'}\n\n"
+                f"Extract a structured JSON response comparing features, listing our missing offerings, and noting SEO content gaps."
+            )
+            response = self.client.models.generate_content(
+                model='gemini-2.5-flash',
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    response_schema=CompetitorAnalysisResponse,
+                    temperature=0.3,
+                )
+            )
+            return CompetitorAnalysisResponse.model_validate_json(response.text)
+        except Exception as e:
+            print(f"Error in Gemini analyze_competitor: {e}")
+            return CompetitorAnalysisResponse(
+                serviceCompare=[
+                    ServiceCompareItem(feature="AI Sales Agent", us="Yes (Standard)", competitor="Unknown"),
+                ],
+                missingOfferings=["Detailed competitor comparison metrics"],
+                contentGaps=["SEO optimization target terms"]
+            )

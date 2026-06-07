@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
+import Link from "next/link";
 import {
   Users,
   MessageSquare,
@@ -25,7 +26,17 @@ import {
   Globe,
   Briefcase,
   FileText,
-  Bot
+  Bot,
+  MapPin,
+  Eye,
+  Compass,
+  Radio,
+  Share2,
+  Brain,
+  ShieldAlert,
+  ArrowUpRight,
+  Flame,
+  Check
 } from "lucide-react";
 
 interface UserInfo {
@@ -41,6 +52,12 @@ interface BusinessInfo {
   website: string;
   industry: string;
   description: string;
+  whatsappEnabled: boolean;
+  instagramEnabled: boolean;
+  emailEnabled: boolean;
+  whatsappApiKey?: string;
+  instagramAccountId?: string;
+  emailSmtp?: string;
   knowledgeBases?: FAQItem[];
 }
 
@@ -64,8 +81,11 @@ interface Lead {
 
 interface Conversation {
   id: string;
+  leadId: string | null;
   lead: Lead | null;
   messages: Array<{ role: "user" | "model"; content: string }>;
+  channel: string; // WIDGET, WHATSAPP, INSTAGRAM, EMAIL
+  isHumanTakeover: boolean;
   updatedAt: string;
 }
 
@@ -75,6 +95,25 @@ interface Appointment {
   date: string;
   time: string;
   status: string; // PENDING, CONFIRMED, CANCELLED
+  createdAt: string;
+}
+
+interface VisitorTrack {
+  id: string;
+  location: string;
+  pagesViewed: string[];
+  duration: number;
+  createdAt: string;
+}
+
+interface CompetitorAnalysis {
+  id: string;
+  competitorUrl: string;
+  analysis: {
+    serviceCompare: Array<{ feature: string; us: string; competitor: string }>;
+    missingOfferings: string[];
+    contentGaps: string[];
+  };
   createdAt: string;
 }
 
@@ -110,7 +149,9 @@ export default function DashboardPage() {
   const [onboardLoading, setOnboardLoading] = useState(false);
 
   // Dashboard Active State
-  const [activeTab, setActiveTab] = useState<"overview" | "leads" | "conversations" | "appointments" | "kb" | "widget">("overview");
+  const [activeTab, setActiveTab] = useState<
+    "overview" | "leads" | "conversations" | "appointments" | "kb" | "widget" | "visitor" | "competitor" | "integrations"
+  >("overview");
 
   // Content Data States
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -134,6 +175,41 @@ export default function DashboardPage() {
   const [faqTitle, setFaqTitle] = useState("");
   const [faqContent, setFaqContent] = useState("");
   const [faqLoading, setFaqLoading] = useState(false);
+
+  // --- V2 Extensions Local States ---
+  // Visitor Tracking
+  const [visitorTracks, setVisitorTracks] = useState<VisitorTrack[]>([]);
+  // Competitor Analysis
+  const [competitorUrl, setCompetitorUrl] = useState("");
+  const [competitorAnalyses, setCompetitorAnalyses] = useState<CompetitorAnalysis[]>([]);
+  const [competitorLoading, setCompetitorLoading] = useState(false);
+  const [competitorLogs, setCompetitorLogs] = useState<string[]>([]);
+  // Scraper/Website Learning
+  const [scraperUrl, setScraperUrl] = useState("");
+  const [scraperLoading, setScraperLoading] = useState(false);
+  const [scraperLogs, setScraperLogs] = useState<string[]>([]);
+  // AI Recommendations
+  const [recommendations, setRecommendations] = useState<any[]>([]);
+  // Takeover Input
+  const [operatorReply, setOperatorReply] = useState("");
+  const [operatorSending, setOperatorSending] = useState(false);
+  // Channel Simulator Input
+  const [simChannel, setSimChannel] = useState("WHATSAPP");
+  const [simMessage, setSimMessage] = useState("");
+  const [simLeadName, setSimLeadName] = useState("");
+  const [simLeadPhone, setSimLeadPhone] = useState("");
+  const [simLeadEmail, setSimLeadEmail] = useState("");
+  const [simLoading, setSimLoading] = useState(false);
+  const [simStatus, setSimStatus] = useState("");
+
+  // Connection Settings
+  const [whatsappEnabled, setWhatsappEnabled] = useState(false);
+  const [instagramEnabled, setInstagramEnabled] = useState(false);
+  const [emailEnabled, setEmailEnabled] = useState(false);
+  const [whatsappApiKey, setWhatsappApiKey] = useState("");
+  const [instagramAccountId, setInstagramAccountId] = useState("");
+  const [emailSmtp, setEmailSmtp] = useState("");
+  const [connectionSaving, setConnectionSaving] = useState(false);
 
   // Global Loading States
   const [dataLoading, setDataLoading] = useState(false);
@@ -164,6 +240,39 @@ export default function DashboardPage() {
     }
   }, [business, activeTab]);
 
+  // Poll current chat conversation details when takeover chat is selected
+  useEffect(() => {
+    if (!token || !selectedConv || activeTab !== "conversations") return;
+
+    const interval = setInterval(() => {
+      fetch(`${API_URL}/conversations/${selectedConv.id}`)
+        .then((res) => res.json())
+        .then((data) => {
+          if (data && data.messages) {
+            setSelectedConv((prev) => {
+              if (prev && prev.id === data.id) {
+                return {
+                  ...prev,
+                  messages: data.messages,
+                  isHumanTakeover: data.isHumanTakeover
+                };
+              }
+              return prev;
+            });
+            // Update in list too
+            setConversations((prev) =>
+              prev.map((c) =>
+                c.id === data.id ? { ...c, messages: data.messages, isHumanTakeover: data.isHumanTakeover } : c
+              )
+            );
+          }
+        })
+        .catch(console.error);
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [token, selectedConv, activeTab]);
+
   const fetchBusiness = async () => {
     try {
       const res = await fetch(`${API_URL}/business`, {
@@ -178,10 +287,16 @@ export default function DashboardPage() {
         const data = JSON.parse(text);
         setBusiness(data);
         if (data) {
-          setCompName(data.companyName || "");
-          setCompWeb(data.website || "");
-          setCompInd(data.industry || "");
-          setCompDesc(data.description || "");
+          setCompName(data.companyName);
+          setCompWeb(data.website);
+          setCompInd(data.industry);
+          setCompDesc(data.description);
+          setWhatsappEnabled(data.whatsappEnabled);
+          setInstagramEnabled(data.instagramEnabled);
+          setEmailEnabled(data.emailEnabled);
+          setWhatsappApiKey(data.whatsappApiKey || "");
+          setInstagramAccountId(data.instagramAccountId || "");
+          setEmailSmtp(data.emailSmtp || "");
         }
       }
     } catch (err) {
@@ -196,8 +311,11 @@ export default function DashboardPage() {
       const headers = { Authorization: `Bearer ${localStorage.getItem("beacon_token")}` };
       
       if (activeTab === "overview") {
-        const res = await fetch(`${API_URL}/leads/stats/${business.id}`, { headers });
-        if (res.ok) setStats(await res.json());
+        const statsRes = await fetch(`${API_URL}/leads/stats/${business.id}`, { headers });
+        if (statsRes.ok) setStats(await statsRes.json());
+        
+        const recsRes = await fetch(`${API_URL}/business/${business.id}/recommendations`, { headers });
+        if (recsRes.ok) setRecommendations(await recsRes.json());
       } else if (activeTab === "leads") {
         const res = await fetch(`${API_URL}/leads/business/${business.id}`, { headers });
         if (res.ok) setLeads(await res.json());
@@ -206,7 +324,6 @@ export default function DashboardPage() {
         if (res.ok) {
           const list = await res.json();
           setConversations(list);
-          // Sync selected conversation if open
           if (selectedConv) {
             const updated = list.find((c: Conversation) => c.id === selectedConv.id);
             if (updated) setSelectedConv(updated);
@@ -218,6 +335,12 @@ export default function DashboardPage() {
       } else if (activeTab === "kb") {
         const res = await fetch(`${API_URL}/business/${business.id}/faq`);
         if (res.ok) setFaqs(await res.json());
+      } else if (activeTab === "visitor") {
+        const res = await fetch(`${API_URL}/business/${business.id}/visitor-tracks`, { headers });
+        if (res.ok) setVisitorTracks(await res.json());
+      } else if (activeTab === "competitor") {
+        const res = await fetch(`${API_URL}/business/${business.id}/competitor-analysis`, { headers });
+        if (res.ok) setCompetitorAnalyses(await res.json());
       }
     } catch (err) {
       console.error("Data refresh failed", err);
@@ -243,7 +366,8 @@ export default function DashboardPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      const data = await res.json();
+      const text = await res.text();
+      const data = text ? JSON.parse(text) : {};
       if (!res.ok) {
         throw new Error(data.message || "Authentication failed");
       }
@@ -376,6 +500,232 @@ export default function DashboardPage() {
     }
   };
 
+  // --- V2 Feature Handlers ---
+
+  // Save Channels Integrations settings
+  const handleSaveConnections = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!business) return;
+    setConnectionSaving(true);
+    try {
+      const res = await fetch(`${API_URL}/business/${business.id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          companyName: business.companyName,
+          website: business.website,
+          industry: business.industry,
+          description: business.description,
+          whatsappEnabled,
+          instagramEnabled,
+          emailEnabled,
+          whatsappApiKey,
+          instagramAccountId,
+          emailSmtp
+        })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setBusiness(data);
+        alert("Connectivity configurations saved successfully.");
+      }
+    } catch (e) {
+      console.error(e);
+      alert("Failed to save connectivity parameters.");
+    } finally {
+      setConnectionSaving(false);
+    }
+  };
+
+  // Trigger Multi-Channel incoming message simulation
+  const handleSimulateMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!business || !simMessage) return;
+    setSimLoading(true);
+    setSimStatus("[Simulating] Resolving webhook endpoint...");
+
+    setTimeout(() => setSimStatus(`[Simulating] Creating qualified lead source: ${simChannel}...`), 600);
+    setTimeout(() => setSimStatus("[Simulating] Mapping webhook contents to conversation log..."), 1200);
+    setTimeout(() => setSimStatus("[AI Service] Executing intent scoring & response parsing..."), 1800);
+
+    try {
+      const res = await fetch(`${API_URL}/chat/simulate-incoming`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          businessId: business.id,
+          channel: simChannel,
+          message: simMessage,
+          leadName: simLeadName || "Simulated " + simChannel + " Lead",
+          leadPhone: simLeadPhone || null,
+          leadEmail: simLeadEmail || null
+        })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setTimeout(() => {
+          setSimStatus(`[Success] AI replied: "${data.response}". Simulation complete! Go to Conversations to view.`);
+          setSimMessage("");
+          setSimLeadName("");
+          setSimLeadPhone("");
+          setSimLeadEmail("");
+          setSimLoading(false);
+        }, 2400);
+      } else {
+        throw new Error();
+      }
+    } catch (e) {
+      setTimeout(() => {
+        setSimStatus("[Error] Simulation failed. Check server logs.");
+        setSimLoading(false);
+      }, 2400);
+    }
+  };
+
+  // Trigger website scraper (Auto Learning)
+  const handleStartScrape = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!business || !scraperUrl) return;
+    setScraperLoading(true);
+    setScraperLogs(["[Scraper] Initializing Web Crawler...", `[Scraper] Connecting to ${scraperUrl}...`]);
+
+    setTimeout(() => setScraperLogs(prev => [...prev, "[Crawl] Loading HTML homepage structure..."]), 800);
+    setTimeout(() => setScraperLogs(prev => [...prev, "[Parser] Extracted text blocks (4,000 characters)..."]), 1600);
+    setTimeout(() => setScraperLogs(prev => [...prev, "[AI Service] Querying Gemini for FAQ context extraction..."]), 2400);
+
+    try {
+      const res = await fetch(`${API_URL}/business/${business.id}/scrape`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ url: scraperUrl })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setTimeout(() => {
+          setScraperLogs(prev => [
+            ...prev,
+            `[Success] Generated and saved ${data.count} new FAQ items directly into your Knowledge Base!`
+          ]);
+          setScraperLoading(false);
+          setScraperUrl("");
+          refreshData();
+        }, 3000);
+      } else {
+        throw new Error();
+      }
+    } catch (e) {
+      setTimeout(() => {
+        setScraperLogs(prev => [...prev, "[Error] Crawl failed. Re-verify the domain parameters."]);
+        setScraperLoading(false);
+      }, 3000);
+    }
+  };
+
+  // Run competitor analysis scraper
+  const handleStartCompetitor = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!business || !competitorUrl) return;
+    setCompetitorLoading(true);
+    setCompetitorLogs(["[Auditor] Connecting to competitor domain...", `[Auditor] Fetching headers of ${competitorUrl}...`]);
+
+    setTimeout(() => setCompetitorLogs(prev => [...prev, "[Auditor] Extracting service lists and SEO keywords..."]), 800);
+    setTimeout(() => setCompetitorLogs(prev => [...prev, "[AI Service] Generating service compare matrices..."]), 1600);
+    setTimeout(() => setCompetitorLogs(prev => [...prev, "[AI Service] Finding missing offerings & content gaps..."]), 2400);
+
+    try {
+      const res = await fetch(`${API_URL}/business/${business.id}/competitor-analysis`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ competitorUrl })
+      });
+      if (res.ok) {
+        setTimeout(() => {
+          setCompetitorLogs(prev => [...prev, "[Success] Competitor audit analysis completed!"]);
+          setCompetitorLoading(false);
+          setCompetitorUrl("");
+          refreshData();
+        }, 3000);
+      } else {
+        throw new Error();
+      }
+    } catch (e) {
+      setTimeout(() => {
+        setCompetitorLogs(prev => [...prev, "[Error] Audit execution failed. Re-verify competitor domain."]);
+        setCompetitorLoading(false);
+      }, 3000);
+    }
+  };
+
+  // Toggle Human Takeover
+  const handleToggleTakeover = async () => {
+    if (!selectedConv) return;
+    const nextVal = !selectedConv.isHumanTakeover;
+    try {
+      const res = await fetch(`${API_URL}/conversations/${selectedConv.id}/takeover`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ isHumanTakeover: nextVal })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setSelectedConv(prev => prev ? { ...prev, isHumanTakeover: data.isHumanTakeover } : null);
+        setConversations(prev =>
+          prev.map(c => c.id === data.id ? { ...c, isHumanTakeover: data.isHumanTakeover } : c)
+        );
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  // Send human operator reply
+  const handleSendOperatorReply = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedConv || !operatorReply.trim() || operatorSending) return;
+    setOperatorSending(true);
+    try {
+      const res = await fetch(`${API_URL}/chat/operator-reply`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          conversationId: selectedConv.id,
+          message: operatorReply.trim()
+        })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setOperatorReply("");
+        // Local state updates
+        setSelectedConv(prev => prev ? { ...prev, messages: data.conversation.messages } : null);
+        setConversations(prev =>
+          prev.map(c => c.id === data.conversation.id ? { ...c, messages: data.conversation.messages } : c)
+        );
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setOperatorSending(false);
+    }
+  };
+
   // RENDER: Auth Gate
   if (!token) {
     return (
@@ -441,7 +791,7 @@ export default function DashboardPage() {
               <button
                 type="submit"
                 disabled={authLoading}
-                className="group relative flex w-full justify-center rounded-xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white hover:bg-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 disabled:opacity-50 transition-all shadow-lg"
+                className="group relative flex w-full justify-center rounded-xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white hover:bg-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 disabled:opacity-50 transition-all shadow-lg cursor-pointer"
               >
                 {authLoading ? (
                   <span className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent"></span>
@@ -460,7 +810,7 @@ export default function DashboardPage() {
                 setIsLogin(!isLogin);
                 setAuthError("");
               }}
-              className="text-xs font-medium text-emerald-400 hover:text-emerald-300 transition-colors"
+              className="text-xs font-medium text-emerald-400 hover:text-emerald-300 transition-colors cursor-pointer"
             >
               {isLogin ? "Need a portal account? Register here" : "Already have an account? Sign in"}
             </button>
@@ -550,7 +900,7 @@ export default function DashboardPage() {
               <button
                 type="submit"
                 disabled={onboardLoading}
-                className="group relative flex w-full justify-center rounded-xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white hover:bg-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 disabled:opacity-50 transition-all shadow-lg"
+                className="group relative flex w-full justify-center rounded-xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white hover:bg-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 disabled:opacity-50 transition-all shadow-lg cursor-pointer"
               >
                 {onboardLoading ? (
                   <span className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent"></span>
@@ -583,72 +933,108 @@ export default function DashboardPage() {
           </div>
 
           {/* Navigation Links */}
-          <nav className="mt-6 px-3 space-y-1">
+          <nav className="mt-6 px-3 space-y-1 overflow-y-auto max-h-[calc(100vh-16rem)]">
             <button
               onClick={() => setActiveTab("overview")}
-              className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-xl transition-all ${
+              className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-xl transition-all cursor-pointer ${
                 activeTab === "overview"
-                  ? "bg-emerald-600/10 text-emerald-400 border border-emerald-500/20"
+                  ? "bg-emerald-600/10 text-emerald-400 border border-emerald-500/20 font-semibold"
                   : "text-slate-400 hover:bg-slate-900 hover:text-white"
               }`}
             >
-              <TrendingUp className="h-5 w-5" />
+              <TrendingUp className="h-4.5 w-4.5" />
               Overview
             </button>
             <button
               onClick={() => setActiveTab("leads")}
-              className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-xl transition-all ${
+              className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-xl transition-all cursor-pointer ${
                 activeTab === "leads"
-                  ? "bg-emerald-600/10 text-emerald-400 border border-emerald-500/20"
+                  ? "bg-emerald-600/10 text-emerald-400 border border-emerald-500/20 font-semibold"
                   : "text-slate-400 hover:bg-slate-900 hover:text-white"
               }`}
             >
-              <Users className="h-5 w-5" />
+              <Users className="h-4.5 w-4.5" />
               Leads
             </button>
             <button
               onClick={() => setActiveTab("conversations")}
-              className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-xl transition-all ${
+              className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-xl transition-all cursor-pointer ${
                 activeTab === "conversations"
-                  ? "bg-emerald-600/10 text-emerald-400 border border-emerald-500/20"
+                  ? "bg-emerald-600/10 text-emerald-400 border border-emerald-500/20 font-semibold"
                   : "text-slate-400 hover:bg-slate-900 hover:text-white"
               }`}
             >
-              <MessageSquare className="h-5 w-5" />
-              Conversations
+              <MessageSquare className="h-4.5 w-4.5" />
+              Live Inbox
             </button>
             <button
               onClick={() => setActiveTab("appointments")}
-              className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-xl transition-all ${
+              className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-xl transition-all cursor-pointer ${
                 activeTab === "appointments"
-                  ? "bg-emerald-600/10 text-emerald-400 border border-emerald-500/20"
+                  ? "bg-emerald-600/10 text-emerald-400 border border-emerald-500/20 font-semibold"
                   : "text-slate-400 hover:bg-slate-900 hover:text-white"
               }`}
             >
-              <Calendar className="h-5 w-5" />
+              <Calendar className="h-4.5 w-4.5" />
               Appointments
             </button>
             <button
               onClick={() => setActiveTab("kb")}
-              className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-xl transition-all ${
+              className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-xl transition-all cursor-pointer ${
                 activeTab === "kb"
-                  ? "bg-emerald-600/10 text-emerald-400 border border-emerald-500/20"
+                  ? "bg-emerald-600/10 text-emerald-400 border border-emerald-500/20 font-semibold"
                   : "text-slate-400 hover:bg-slate-900 hover:text-white"
               }`}
             >
-              <BookOpen className="h-5 w-5" />
+              <BookOpen className="h-4.5 w-4.5" />
               Knowledge Base
             </button>
+            
+            {/* V2 Extensions Tabs */}
             <button
-              onClick={() => setActiveTab("widget")}
-              className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-xl transition-all ${
-                activeTab === "widget"
-                  ? "bg-emerald-600/10 text-emerald-400 border border-emerald-500/20"
+              onClick={() => setActiveTab("visitor")}
+              className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-xl transition-all cursor-pointer ${
+                activeTab === "visitor"
+                  ? "bg-emerald-600/10 text-emerald-400 border border-emerald-500/20 font-semibold"
                   : "text-slate-400 hover:bg-slate-900 hover:text-white"
               }`}
             >
-              <Code className="h-5 w-5" />
-              Widget Installation
+              <MapPin className="h-4.5 w-4.5" />
+              Visitor Activity
+            </button>
+            <button
+              onClick={() => setActiveTab("competitor")}
+              className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-xl transition-all cursor-pointer ${
+                activeTab === "competitor"
+                  ? "bg-emerald-600/10 text-emerald-400 border border-emerald-500/20 font-semibold"
+                  : "text-slate-400 hover:bg-slate-900 hover:text-white"
+              }`}
+            >
+              <Compass className="h-4.5 w-4.5" />
+              Competitor Insights
+            </button>
+            <button
+              onClick={() => setActiveTab("integrations")}
+              className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-xl transition-all cursor-pointer ${
+                activeTab === "integrations"
+                  ? "bg-emerald-600/10 text-emerald-400 border border-emerald-500/20 font-semibold"
+                  : "text-slate-400 hover:bg-slate-900 hover:text-white"
+              }`}
+            >
+              <Radio className="h-4.5 w-4.5" />
+              Integrations settings
+            </button>
+
+            <button
+              onClick={() => setActiveTab("widget")}
+              className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-xl transition-all cursor-pointer ${
+                activeTab === "widget"
+                  ? "bg-emerald-600/10 text-emerald-400 border border-emerald-500/20 font-semibold"
+                  : "text-slate-400 hover:bg-slate-900 hover:text-white"
+              }`}
+            >
+              <Code className="h-4.5 w-4.5" />
+              Widget Code
             </button>
           </nav>
         </div>
@@ -666,7 +1052,7 @@ export default function DashboardPage() {
           </div>
           <button
             onClick={handleLogout}
-            className="w-full flex items-center gap-3 px-4 py-2.5 text-xs font-semibold rounded-xl text-red-400 hover:bg-red-500/5 hover:text-red-300 border border-transparent hover:border-red-500/10 transition-all"
+            className="w-full flex items-center gap-3 px-4 py-2.5 text-xs font-semibold rounded-xl text-red-400 hover:bg-red-500/5 hover:text-red-300 border border-transparent hover:border-red-500/10 transition-all cursor-pointer"
           >
             <LogOut className="h-4.5 w-4.5" />
             Sign Out
@@ -679,12 +1065,18 @@ export default function DashboardPage() {
         {/* Top bar */}
         <header className="h-16 border-b border-slate-900 bg-slate-900/10 flex items-center justify-between px-8 shrink-0">
           <div className="flex items-center gap-3">
-            <h2 className="text-lg font-bold capitalize text-white">{activeTab === "kb" ? "Knowledge Base" : activeTab}</h2>
+            <h2 className="text-lg font-bold capitalize text-white">
+              {activeTab === "kb" ? "Knowledge Base" : 
+               activeTab === "visitor" ? "Visitor Activity Tracking" :
+               activeTab === "competitor" ? "Competitor Analysis Audit" :
+               activeTab === "integrations" ? "Multi-Channel Settings" :
+               activeTab}
+            </h2>
             {dataLoading && <RefreshCw className="h-4 w-4 animate-spin text-emerald-400" />}
           </div>
           <button
             onClick={refreshData}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg text-slate-400 hover:bg-slate-900 hover:text-white border border-slate-800/80 transition-all"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg text-slate-400 hover:bg-slate-900 hover:text-white border border-slate-800/80 transition-all cursor-pointer"
           >
             <RefreshCw className="h-3.5 w-3.5" />
             Refresh
@@ -700,7 +1092,7 @@ export default function DashboardPage() {
               <div className="rounded-3xl bg-gradient-to-r from-emerald-600/20 to-teal-500/5 border border-emerald-500/20 p-8">
                 <h3 className="text-2xl font-extrabold text-white">Hey {user?.name}!</h3>
                 <p className="mt-1 text-slate-400 text-sm max-w-xl">
-                  Your Sales Agent is active on the widget. Here is an overview of how your leads and visitor conversations are progressing.
+                  Your Sales Agent is active on your site. Here is an overview of how your leads and visitor conversations are progressing.
                 </p>
               </div>
 
@@ -745,6 +1137,42 @@ export default function DashboardPage() {
                     </div>
                   </div>
                 </div>
+              </div>
+
+              {/* Recommendations Engine Section */}
+              <div className="rounded-2xl border border-slate-900 bg-slate-900/30 p-6 space-y-4">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-bold text-sm uppercase tracking-wider text-slate-400 flex items-center gap-2">
+                    <Brain className="h-4.5 w-4.5 text-emerald-400" />
+                    AI Action Recommendations
+                  </h4>
+                  <span className="text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/25 px-2 py-0.5 rounded font-black tracking-wide">
+                    FEED LIVE
+                  </span>
+                </div>
+                
+                {recommendations.length === 0 ? (
+                  <p className="text-xs text-slate-500 text-center py-4">No active recommendations. Setup your knowledge base and capture leads to get AI prioritized actions.</p>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {recommendations.map((rec, idx) => (
+                      <div key={idx} className="p-4 rounded-xl bg-slate-950 border border-slate-900 space-y-2 relative group hover:border-emerald-500/30 transition-all">
+                        <div className="flex items-center justify-between">
+                          <span className={`text-[9px] font-black px-1.5 py-0.5 rounded tracking-wider ${
+                            rec.priority === 'HIGH' ? 'bg-red-500/10 text-red-400 border border-red-500/20' :
+                            rec.priority === 'MEDIUM' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' :
+                            'bg-blue-500/10 text-blue-400 border border-blue-500/20'
+                          }`}>
+                            {rec.priority} PRIORITY
+                          </span>
+                          <span className="text-[10px] text-slate-500 font-semibold uppercase">{rec.category}</span>
+                        </div>
+                        <h5 className="text-sm font-bold text-slate-200">{rec.title}</h5>
+                        <p className="text-xs text-slate-400 leading-relaxed">{rec.content}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* Quick Leads / Appointments Grid */}
@@ -820,6 +1248,7 @@ export default function DashboardPage() {
                       <th className="px-6 py-4">Email</th>
                       <th className="px-6 py-4">Phone</th>
                       <th className="px-6 py-4">Budget</th>
+                      <th className="px-6 py-4">Source</th>
                       <th className="px-6 py-4">Status</th>
                       <th className="px-6 py-4">Date Captured</th>
                     </tr>
@@ -827,7 +1256,7 @@ export default function DashboardPage() {
                   <tbody className="divide-y divide-slate-900/60">
                     {leads.length === 0 ? (
                       <tr>
-                        <td colSpan={6} className="px-6 py-12 text-center text-slate-500">
+                        <td colSpan={7} className="px-6 py-12 text-center text-slate-500">
                           No leads captured yet. Run a chat in the Widget tab to generate test leads!
                         </td>
                       </tr>
@@ -845,19 +1274,29 @@ export default function DashboardPage() {
                           <td className="px-6 py-4 text-slate-300">{l.phone || "—"}</td>
                           <td className="px-6 py-4 text-slate-300">{l.budget || "—"}</td>
                           <td className="px-6 py-4">
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                              l.source === "WHATSAPP" ? "bg-green-500/10 text-green-400 border border-green-500/20" :
+                              l.source === "INSTAGRAM" ? "bg-pink-500/10 text-pink-400 border border-pink-500/20" :
+                              l.source === "EMAIL" ? "bg-indigo-500/10 text-indigo-400 border border-indigo-500/20" :
+                              "bg-slate-500/10 text-slate-400 border border-slate-500/20"
+                            }`}>
+                              {l.source}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4">
                             <select
-                              value={l.status}
-                              onChange={(e) => handleUpdateLeadStatus(l.id, e.target.value)}
-                              className={`rounded-lg border border-transparent px-2.5 py-1 text-xs font-bold focus:outline-none transition-all ${
-                                l.status === "HOT" ? "bg-red-500/10 text-red-400 border-red-500/20" :
-                                l.status === "WARM" ? "bg-amber-500/10 text-amber-400 border-amber-500/20" :
-                                "bg-blue-500/10 text-blue-400 border-blue-500/20"
-                              }`}
-                            >
-                              <option value="HOT" className="bg-slate-950 text-red-400">HOT</option>
-                              <option value="WARM" className="bg-slate-950 text-amber-400">WARM</option>
-                              <option value="COLD" className="bg-slate-950 text-blue-400">COLD</option>
-                            </select>
+                                value={l.status}
+                                onChange={(e) => handleUpdateLeadStatus(l.id, e.target.value)}
+                                className={`rounded-lg border border-transparent px-2.5 py-1 text-xs font-bold focus:outline-none transition-all cursor-pointer ${
+                                  l.status === "HOT" ? "bg-red-500/10 text-red-400 border-red-500/20" :
+                                  l.status === "WARM" ? "bg-amber-500/10 text-amber-400 border-amber-500/20" :
+                                  "bg-blue-500/10 text-blue-400 border-blue-500/20"
+                                }`}
+                              >
+                                <option value="HOT" className="bg-slate-950 text-red-400">HOT</option>
+                                <option value="WARM" className="bg-slate-950 text-amber-400">WARM</option>
+                                <option value="COLD" className="bg-slate-950 text-blue-400">COLD</option>
+                              </select>
                           </td>
                           <td className="px-6 py-4 text-xs text-slate-500">
                             {new Date(l.createdAt).toLocaleDateString()}
@@ -893,12 +1332,18 @@ export default function DashboardPage() {
                         <button
                           key={c.id}
                           onClick={() => setSelectedConv(c)}
-                          className={`w-full text-left p-4 hover:bg-slate-900/30 transition-all ${
+                          className={`w-full text-left p-4 hover:bg-slate-900/30 transition-all cursor-pointer ${
                             isSelected ? "bg-slate-900/50 border-l-2 border-emerald-500" : ""
                           }`}
                         >
                           <div className="flex justify-between items-start">
-                            <span className="font-bold text-sm text-slate-200 truncate pr-2">
+                            <span className="font-bold text-sm text-slate-200 truncate pr-2 flex items-center gap-1.5">
+                              {c.channel !== "WIDGET" && (
+                                <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${
+                                  c.channel === "WHATSAPP" ? "bg-green-400" :
+                                  c.channel === "INSTAGRAM" ? "bg-pink-400" : "bg-indigo-400"
+                                }`}></span>
+                              )}
                               {leadName === "Anonymous Visitor" ? (
                                 <span className="italic font-normal text-slate-500">Anonymous</span>
                               ) : (
@@ -924,25 +1369,60 @@ export default function DashboardPage() {
                     {/* Header */}
                     <div className="px-6 py-4 border-b border-slate-900 flex items-center justify-between">
                       <div>
-                        <h4 className="font-bold text-sm text-white">
-                          {selectedConv.lead?.name || "Anonymous Visitor"}
-                        </h4>
+                        <div className="flex items-center gap-2">
+                          <h4 className="font-bold text-sm text-white">
+                            {selectedConv.lead?.name || "Anonymous Visitor"}
+                          </h4>
+                          <span className={`px-2 py-0.5 rounded text-[9px] font-black ${
+                            selectedConv.channel === "WHATSAPP" ? "bg-green-500/10 text-green-400 border border-green-500/20" :
+                            selectedConv.channel === "INSTAGRAM" ? "bg-pink-500/10 text-pink-400 border border-pink-500/20" :
+                            selectedConv.channel === "EMAIL" ? "bg-indigo-500/10 text-indigo-400 border border-indigo-500/20" :
+                            "bg-slate-500/10 text-slate-400 border border-slate-500/20"
+                          }`}>
+                            {selectedConv.channel}
+                          </span>
+                        </div>
                         <p className="text-xs text-slate-500 mt-0.5">
                           {selectedConv.lead?.email ? `${selectedConv.lead.email} • ` : ""}
                           {selectedConv.lead?.phone ? `${selectedConv.lead.phone} • ` : ""}
                           {selectedConv.lead?.budget ? `Budget: ${selectedConv.lead.budget}` : ""}
                         </p>
                       </div>
-                      {selectedConv.lead?.status && (
-                        <span className={`px-2.5 py-1 rounded-full text-[10px] font-black ${
-                          selectedConv.lead.status === "HOT" ? "bg-red-500/10 text-red-400 border border-red-500/20" :
-                          selectedConv.lead.status === "WARM" ? "bg-amber-500/10 text-amber-400 border border-amber-500/20" :
-                          "bg-blue-500/10 text-blue-400 border border-blue-500/20"
-                        }`}>
-                          {selectedConv.lead.status}
-                        </span>
-                      )}
+                      
+                      {/* Takeover Control buttons */}
+                      <div className="flex items-center gap-3">
+                        <button
+                          onClick={handleToggleTakeover}
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
+                            selectedConv.isHumanTakeover
+                              ? "bg-red-500/15 text-red-400 border-red-500/25 hover:bg-red-500/20"
+                              : "bg-emerald-600/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-600/20"
+                          }`}
+                        >
+                          <ShieldAlert className="h-4 w-4" />
+                          {selectedConv.isHumanTakeover ? "Release to AI" : "Take Over Chat"}
+                        </button>
+
+                        {selectedConv.lead?.status && (
+                          <span className={`px-2.5 py-1 rounded-full text-[10px] font-black ${
+                            selectedConv.lead.status === "HOT" ? "bg-red-500/10 text-red-400 border border-red-500/20" :
+                            selectedConv.lead.status === "WARM" ? "bg-amber-500/10 text-amber-400 border border-amber-500/20" :
+                            "bg-blue-500/10 text-blue-400 border border-blue-500/20"
+                          }`}>
+                            {selectedConv.lead.status}
+                          </span>
+                        )}
+                      </div>
                     </div>
+
+                    {/* Takeover Alert banner */}
+                    {selectedConv.isHumanTakeover && (
+                      <div className="px-6 py-2 bg-red-500/10 border-b border-red-500/20 text-xs text-red-400 font-semibold flex items-center gap-2">
+                        <ShieldAlert className="h-4 w-4 text-red-400 shrink-0" />
+                        <span>Takeover Active. AI is currently paused. Use the message panel below to chat manually.</span>
+                      </div>
+                    )}
+
                     {/* Chat Bubble List */}
                     <div className="flex-1 p-6 overflow-y-auto space-y-4">
                       {selectedConv.messages.map((m, idx) => {
@@ -972,6 +1452,33 @@ export default function DashboardPage() {
                           </div>
                         );
                       })}
+                    </div>
+
+                    {/* Manual Messaging Input Panel (only allowed when takeover is active) */}
+                    <div className="p-4 border-t border-slate-900 bg-slate-950">
+                      {selectedConv.isHumanTakeover ? (
+                        <form onSubmit={handleSendOperatorReply} className="flex gap-2">
+                          <input
+                            type="text"
+                            value={operatorReply}
+                            onChange={(e) => setOperatorReply(e.target.value)}
+                            placeholder="Type a manual response to user..."
+                            className="flex-1 rounded-xl bg-slate-900 border border-slate-800 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-red-500/50"
+                          />
+                          <button
+                            type="submit"
+                            disabled={!operatorReply.trim() || operatorSending}
+                            className="bg-red-600 hover:bg-red-500 text-white font-semibold rounded-xl px-5 py-2.5 text-sm flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                          >
+                            <Send className="h-4 w-4" />
+                            Send
+                          </button>
+                        </form>
+                      ) : (
+                        <p className="text-center text-xs text-slate-500 py-2">
+                          💡 Click <strong>Take Over Chat</strong> at the top to pause AI and message this visitor manually.
+                        </p>
+                      )}
                     </div>
                   </>
                 ) : (
@@ -1027,13 +1534,13 @@ export default function DashboardPage() {
                         <div className="flex gap-2">
                           <button
                             onClick={() => handleUpdateApptStatus(a.id, "CONFIRMED")}
-                            className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg py-2 text-xs font-semibold transition-all shadow-sm"
+                            className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg py-2 text-xs font-semibold transition-all shadow-sm cursor-pointer"
                           >
                             Approve
                           </button>
                           <button
                             onClick={() => handleUpdateApptStatus(a.id, "CANCELLED")}
-                            className="flex-1 bg-slate-900 border border-slate-800 text-slate-300 hover:text-white rounded-lg py-2 text-xs font-semibold transition-all"
+                            className="flex-1 bg-slate-900 border border-slate-800 text-slate-300 hover:text-white rounded-lg py-2 text-xs font-semibold transition-all cursor-pointer"
                           >
                             Decline
                           </button>
@@ -1052,6 +1559,52 @@ export default function DashboardPage() {
               <div>
                 <h3 className="text-xl font-bold text-white">Company FAQs & Knowledge Base</h3>
                 <p className="text-xs text-slate-500 mt-1">Upload answers, instructions, and services so the AI sales agent can reference them.</p>
+              </div>
+
+              {/* V3: Auto Website Learning Scraper Container */}
+              <div className="rounded-2xl border border-slate-900 bg-slate-900/30 p-6 space-y-4">
+                <h4 className="font-bold text-sm uppercase tracking-wider text-slate-400 flex items-center gap-2">
+                  <Globe className="h-4.5 w-4.5 text-emerald-400 animate-pulse" />
+                  Auto Website Learning (Instant RAG Scraper)
+                </h4>
+                <p className="text-xs text-slate-500">
+                  Enter any website URL. Beacon will crawl the pages, extract FAQs/services, and automatically generate Knowledge Base articles using Gemini context extraction.
+                </p>
+
+                <form onSubmit={handleStartScrape} className="flex gap-3">
+                  <input
+                    type="url"
+                    required
+                    value={scraperUrl}
+                    onChange={(e) => setScraperUrl(e.target.value)}
+                    placeholder="e.g. https://theirwebsite.com"
+                    className="flex-1 rounded-xl bg-slate-900 border border-slate-800 px-4 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500/50"
+                  />
+                  <button
+                    type="submit"
+                    disabled={scraperLoading || !scraperUrl}
+                    className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-xl px-5 py-2.5 text-sm flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                  >
+                    {scraperLoading ? (
+                      <RefreshCw className="h-4.5 w-4.5 animate-spin" />
+                    ) : (
+                      <ArrowRight className="h-4.5 w-4.5" />
+                    )}
+                    Crawl Website
+                  </button>
+                </form>
+
+                {/* Scraper Logs Console */}
+                {scraperLogs.length > 0 && (
+                  <div className="rounded-xl bg-slate-950 border border-slate-900 p-4 font-mono text-[11px] text-emerald-500 space-y-1 overflow-y-auto max-h-40 leading-relaxed shadow-inner">
+                    {scraperLogs.map((log, i) => (
+                      <div key={i} className="flex gap-2">
+                        <span className="text-emerald-800 shrink-0">[{i+1}]</span>
+                        <span>{log}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* Add FAQ form */}
@@ -1084,7 +1637,7 @@ export default function DashboardPage() {
                     <button
                       type="submit"
                       disabled={faqLoading || !faqTitle || !faqContent}
-                      className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl px-4 py-2.5 text-sm font-semibold transition-all shadow-md disabled:opacity-50"
+                      className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl px-4 py-2.5 text-sm font-semibold transition-all shadow-md disabled:opacity-50 cursor-pointer"
                     >
                       <Plus className="h-4.5 w-4.5" />
                       Add to Knowledge Base
@@ -1110,7 +1663,7 @@ export default function DashboardPage() {
                         </div>
                         <button
                           onClick={() => handleDeleteFAQ(faq.id)}
-                          className="text-slate-600 hover:text-red-400 rounded-lg p-1.5 self-start transition-colors"
+                          className="text-slate-600 hover:text-red-400 rounded-lg p-1.5 self-start transition-colors cursor-pointer"
                         >
                           <Trash2 className="h-4.5 w-4.5" />
                         </button>
@@ -1122,7 +1675,384 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {/* TAB 6: WIDGET INSTALLATION */}
+          {/* TAB 6: VISITOR ACTIVITY TRACKING */}
+          {activeTab === "visitor" && (
+            <div className="space-y-6">
+              <div>
+                <h3 className="text-xl font-bold text-white">Live Visitor Tracking</h3>
+                <p className="text-xs text-slate-500 mt-1">Geographic parameters, pages viewed, and stay duration recorded by Beacon script triggers</p>
+              </div>
+
+              <div className="overflow-hidden border border-slate-900 rounded-2xl bg-slate-900/10">
+                <table className="w-full border-collapse text-left text-sm">
+                  <thead className="bg-slate-900/50 border-b border-slate-900 text-xs font-semibold uppercase text-slate-400">
+                    <tr>
+                      <th className="px-6 py-4">Location</th>
+                      <th className="px-6 py-4">Pages Viewed</th>
+                      <th className="px-6 py-4">Stay Duration</th>
+                      <th className="px-6 py-4">Log Timestamp</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-900/60">
+                    {visitorTracks.length === 0 ? (
+                      <tr>
+                        <td colSpan={4} className="px-6 py-12 text-center text-slate-500">
+                          No visitor activities tracked yet. Open the Widget Sandbox preview to register test logs automatically.
+                        </td>
+                      </tr>
+                    ) : (
+                      visitorTracks.map((vt) => (
+                        <tr key={vt.id} className="hover:bg-slate-900/20 transition-colors">
+                          <td className="px-6 py-4 font-semibold text-slate-200 flex items-center gap-2">
+                            <MapPin className="h-4 w-4 text-red-400 shrink-0" />
+                            {vt.location}
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="flex flex-wrap gap-1.5">
+                              {vt.pagesViewed.map((page, i) => (
+                                <span key={i} className="px-2 py-0.5 rounded bg-slate-950 border border-slate-900 text-[10px] text-slate-400 font-mono">
+                                  {page}
+                                </span>
+                              ))}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 text-slate-300">
+                            {Math.floor(vt.duration / 60)}m {vt.duration % 60}s
+                          </td>
+                          <td className="px-6 py-4 text-xs text-slate-500">
+                            {new Date(vt.createdAt).toLocaleTimeString()} ({new Date(vt.createdAt).toLocaleDateString()})
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 7: COMPETITOR INSIGHTS AUDIT */}
+          {activeTab === "competitor" && (
+            <div className="space-y-8">
+              <div>
+                <h3 className="text-xl font-bold text-white">Competitor Domain Intelligence</h3>
+                <p className="text-xs text-slate-500 mt-1">Audit competitor sites to map comparative services, offering gaps, and content optimization opportunities.</p>
+              </div>
+
+              {/* Form Input */}
+              <div className="rounded-2xl border border-slate-900 bg-slate-900/30 p-6 space-y-4">
+                <h4 className="font-bold text-sm uppercase tracking-wider text-slate-400 flex items-center gap-2">
+                  <Compass className="h-4.5 w-4.5 text-emerald-400" />
+                  Analyze Competitor website
+                </h4>
+                <form onSubmit={handleStartCompetitor} className="flex gap-3">
+                  <input
+                    type="url"
+                    required
+                    value={competitorUrl}
+                    onChange={(e) => setCompetitorUrl(e.target.value)}
+                    placeholder="e.g. https://competitor.com"
+                    className="flex-1 rounded-xl bg-slate-900 border border-slate-800 px-4 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500/50"
+                  />
+                  <button
+                    type="submit"
+                    disabled={competitorLoading || !competitorUrl}
+                    className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-xl px-5 py-2.5 text-sm flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                  >
+                    {competitorLoading ? (
+                      <RefreshCw className="h-4.5 w-4.5 animate-spin" />
+                    ) : (
+                      <Share2 className="h-4.5 w-4.5" />
+                    )}
+                    Analyze Domain
+                  </button>
+                </form>
+
+                {competitorLogs.length > 0 && (
+                  <div className="rounded-xl bg-slate-950 border border-slate-900 p-4 font-mono text-[11px] text-emerald-500 space-y-1 overflow-y-auto max-h-40 leading-relaxed shadow-inner">
+                    {competitorLogs.map((log, i) => (
+                      <div key={i} className="flex gap-2">
+                        <span className="text-emerald-800 shrink-0">[{i+1}]</span>
+                        <span>{log}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Analysis Display */}
+              {competitorAnalyses.length > 0 ? (
+                <div className="space-y-8">
+                  {competitorAnalyses.map((ca) => (
+                    <div key={ca.id} className="rounded-2xl border border-slate-900 bg-slate-900/10 p-6 space-y-6">
+                      <div className="flex justify-between items-center border-b border-slate-900 pb-4">
+                        <h4 className="font-bold text-sm text-white">
+                          Target: <span className="text-emerald-400">{ca.competitorUrl}</span>
+                        </h4>
+                        <span className="text-xs text-slate-500">
+                          Audited: {new Date(ca.createdAt).toLocaleString()}
+                        </span>
+                      </div>
+
+                      {/* Service Comparison Matrix */}
+                      <div className="space-y-3">
+                        <h5 className="font-bold text-xs uppercase tracking-wider text-slate-400 flex items-center gap-2">
+                          <Check className="h-4 w-4 text-emerald-400" />
+                          Service Comparison Matrix
+                        </h5>
+                        <div className="overflow-hidden border border-slate-900 rounded-xl bg-slate-950">
+                          <table className="w-full border-collapse text-left text-xs">
+                            <thead className="bg-slate-900/50 border-b border-slate-900 font-bold uppercase text-slate-400">
+                              <tr>
+                                <th className="px-4 py-3">Feature</th>
+                                <th className="px-4 py-3">Us ({business.companyName})</th>
+                                <th className="px-4 py-3">Competitor</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-900/60">
+                              {ca.analysis.serviceCompare.map((sc, i) => (
+                                <tr key={i} className="hover:bg-slate-900/20">
+                                  <td className="px-4 py-3 font-semibold text-slate-200">{sc.feature}</td>
+                                  <td className="px-4 py-3 text-emerald-400">{sc.us}</td>
+                                  <td className="px-4 py-3 text-slate-400">{sc.competitor}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {/* Missing offerings */}
+                        <div className="space-y-3">
+                          <h5 className="font-bold text-xs uppercase tracking-wider text-slate-400 flex items-center gap-2">
+                            <ShieldAlert className="h-4 w-4 text-amber-500" />
+                            Our Missing Offerings
+                          </h5>
+                          <ul className="space-y-2.5 p-4 rounded-xl bg-slate-950 border border-slate-900">
+                            {ca.analysis.missingOfferings.map((mo, i) => (
+                              <li key={i} className="text-xs text-slate-300 flex items-start gap-2 leading-relaxed">
+                                <span className="h-1.5 w-1.5 rounded-full bg-amber-500 shrink-0 mt-1.5"></span>
+                                <span>{mo}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+
+                        {/* Content Gaps */}
+                        <div className="space-y-3">
+                          <h5 className="font-bold text-xs uppercase tracking-wider text-slate-400 flex items-center gap-2">
+                            <Share2 className="h-4 w-4 text-blue-400" />
+                            SEO Keyword / Content Gaps
+                          </h5>
+                          <ul className="space-y-2.5 p-4 rounded-xl bg-slate-950 border border-slate-900">
+                            {ca.analysis.contentGaps.map((cg, i) => (
+                              <li key={i} className="text-xs text-slate-300 flex items-start gap-2 leading-relaxed">
+                                <span className="h-1.5 w-1.5 rounded-full bg-blue-400 shrink-0 mt-1.5"></span>
+                                <span>{cg}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="border border-slate-900 border-dashed rounded-2xl p-12 text-center text-slate-500 text-sm">
+                  No competitor audits run yet. Enter competitor domain above to evaluate market gaps.
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* TAB 8: MULTI-CHANNEL SETTINGS & SIMULATOR */}
+          {activeTab === "integrations" && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              {/* Integration Toggles Panel */}
+              <div className="space-y-6">
+                <div>
+                  <h3 className="text-xl font-bold text-white">Multi-Channel Connect Setup</h3>
+                  <p className="text-xs text-slate-500 mt-1">Configure connections API keys to enable automatic lead qualifications across channels</p>
+                </div>
+
+                <form onSubmit={handleSaveConnections} className="rounded-2xl border border-slate-900 bg-slate-900/30 p-6 space-y-6">
+                  {/* WhatsApp */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-sm text-slate-200">WhatsApp Business API Connection</span>
+                      <input
+                        type="checkbox"
+                        checked={whatsappEnabled}
+                        onChange={(e) => setWhatsappEnabled(e.target.checked)}
+                        className="h-4 w-4 text-emerald-600 bg-slate-900 rounded focus:ring-emerald-500 cursor-pointer"
+                      />
+                    </div>
+                    {whatsappEnabled && (
+                      <input
+                        type="text"
+                        value={whatsappApiKey}
+                        onChange={(e) => setWhatsappApiKey(e.target.value)}
+                        placeholder="WhatsApp Api Access Key / Token"
+                        className="w-full rounded-xl bg-slate-900 border border-slate-800 px-4 py-2.5 text-xs text-white"
+                      />
+                    )}
+                  </div>
+
+                  {/* Instagram */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-sm text-slate-200">Instagram Messaging API Connection</span>
+                      <input
+                        type="checkbox"
+                        checked={instagramEnabled}
+                        onChange={(e) => setInstagramEnabled(e.target.checked)}
+                        className="h-4 w-4 text-emerald-600 bg-slate-900 rounded focus:ring-emerald-500 cursor-pointer"
+                      />
+                    </div>
+                    {instagramEnabled && (
+                      <input
+                        type="text"
+                        value={instagramAccountId}
+                        onChange={(e) => setInstagramAccountId(e.target.value)}
+                        placeholder="Instagram Account ID / Access Token"
+                        className="w-full rounded-xl bg-slate-900 border border-slate-800 px-4 py-2.5 text-xs text-white"
+                      />
+                    )}
+                  </div>
+
+                  {/* Email */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-sm text-slate-200">Email SMTP Connection</span>
+                      <input
+                        type="checkbox"
+                        checked={emailEnabled}
+                        onChange={(e) => setEmailEnabled(e.target.checked)}
+                        className="h-4 w-4 text-emerald-600 bg-slate-900 rounded focus:ring-emerald-500 cursor-pointer"
+                      />
+                    </div>
+                    {emailEnabled && (
+                      <input
+                        type="text"
+                        value={emailSmtp}
+                        onChange={(e) => setEmailSmtp(e.target.value)}
+                        placeholder="SMTP Connection URL (e.g. smtp.mailgun.org:587)"
+                        className="w-full rounded-xl bg-slate-900 border border-slate-800 px-4 py-2.5 text-xs text-white"
+                      />
+                    )}
+                  </div>
+
+                  <div className="flex justify-end">
+                    <button
+                      type="submit"
+                      disabled={connectionSaving}
+                      className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-xl px-5 py-2.5 text-xs flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <Check className="h-4 w-4" />
+                      Save configurations
+                    </button>
+                  </div>
+                </form>
+              </div>
+
+              {/* Interactive incoming simulator panel */}
+              <div className="flex flex-col border border-slate-900 rounded-2xl overflow-hidden bg-slate-900/10">
+                <div className="p-4 border-b border-slate-900 bg-slate-900/30 flex items-center gap-2">
+                  <Radio className="h-4.5 w-4.5 text-emerald-400 animate-pulse animate-duration-1000" />
+                  <span className="font-semibold text-xs uppercase tracking-wider text-slate-500">Interactive Incoming Channel Simulator</span>
+                </div>
+
+                <form onSubmit={handleSimulateMessage} className="p-6 space-y-4 flex-1 flex flex-col justify-between">
+                  <div className="space-y-4">
+                    <p className="text-xs text-slate-500">
+                      Simulate a customer texting your business via WhatsApp, Instagram, or Email. Beacon qualifies the lead, scores it, and populates the unified Live Inbox.
+                    </p>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Select Channel</label>
+                        <select
+                          value={simChannel}
+                          onChange={(e) => setSimChannel(e.target.value)}
+                          className="mt-1 w-full rounded-xl bg-slate-900 border border-slate-800 px-3 py-2 text-xs text-white focus:outline-none"
+                        >
+                          <option value="WHATSAPP">WhatsApp</option>
+                          <option value="INSTAGRAM">Instagram</option>
+                          <option value="EMAIL">Email</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Customer Name</label>
+                        <input
+                          type="text"
+                          required
+                          value={simLeadName}
+                          onChange={(e) => setSimLeadName(e.target.value)}
+                          placeholder="e.g. John Doe"
+                          className="mt-1 w-full rounded-xl bg-slate-900 border border-slate-800 px-3 py-2 text-xs text-white focus:outline-none"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Phone (WhatsApp ID)</label>
+                        <input
+                          type="text"
+                          value={simLeadPhone}
+                          onChange={(e) => setSimLeadPhone(e.target.value)}
+                          placeholder="e.g. +12345678"
+                          className="mt-1 w-full rounded-xl bg-slate-900 border border-slate-800 px-3 py-2 text-xs text-white focus:outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Email Address</label>
+                        <input
+                          type="email"
+                          value={simLeadEmail}
+                          onChange={(e) => setSimLeadEmail(e.target.value)}
+                          placeholder="e.g. john@email.com"
+                          className="mt-1 w-full rounded-xl bg-slate-900 border border-slate-800 px-3 py-2 text-xs text-white focus:outline-none"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Message Content</label>
+                      <textarea
+                        required
+                        value={simMessage}
+                        onChange={(e) => setSimMessage(e.target.value)}
+                        rows={3}
+                        placeholder="Type customer simulated message here..."
+                        className="mt-1 w-full rounded-xl bg-slate-900 border border-slate-800 px-3 py-2.5 text-xs text-white focus:outline-none resize-none"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-4 pt-4 border-t border-slate-900">
+                    <button
+                      type="submit"
+                      disabled={simLoading || !simMessage || !simLeadName}
+                      className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl py-2.5 text-xs flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 shadow-md"
+                    >
+                      <Send className="h-4 w-4" />
+                      Simulate Incoming Message
+                    </button>
+
+                    {simStatus && (
+                      <div className="rounded-xl bg-slate-950 border border-slate-900 p-3 font-mono text-[10px] text-emerald-400">
+                        {simStatus}
+                      </div>
+                    )}
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 9: WIDGET INSTALLATION */}
           {activeTab === "widget" && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
               {/* Instructions Panel */}
