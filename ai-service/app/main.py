@@ -1,6 +1,9 @@
 import os
-from fastapi import FastAPI, HTTPException
+import time
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import JSONResponse
 from pydantic import BaseModel, Field
 from typing import List, Dict, Any, Optional
 from app.services.agent import (
@@ -15,11 +18,50 @@ load_dotenv()
 
 app = FastAPI(title="Beacon AI Sales Agent - AI Service", version="1.0.0")
 
-# Enable CORS for frontend and backend access
+# Custom Rate Limiter Middleware to mitigate DoS
+class RateLimitMiddleware(BaseHTTPMiddleware):
+    def __init__(self, app, limit: int = 100, window: int = 60):
+        super().__init__(app)
+        self.limit = limit
+        self.window = window
+        self.cache = {} # IP -> (count, reset_time)
+
+    async def dispatch(self, request: Request, call_next):
+        ip = "unknown"
+        if request.client:
+            ip = request.client.host
+        x_forwarded_for = request.headers.get("x-forwarded-for")
+        if x_forwarded_for:
+            ip = x_forwarded_for.split(",")[0].strip()
+            
+        now = time.time()
+        
+        if ip in self.cache:
+            count, reset_time = self.cache[ip]
+            if now > reset_time:
+                self.cache[ip] = (1, now + self.window)
+            elif count >= self.limit:
+                return JSONResponse(
+                    status_code=429,
+                    content={"detail": "Too many requests. Please try again later."}
+                )
+            else:
+                self.cache[ip] = (count + 1, reset_time)
+        else:
+            self.cache[ip] = (1, now + self.window)
+            
+        return await call_next(request)
+
+app.add_middleware(RateLimitMiddleware, limit=100, window=60)
+
+# Secure CORS: Allow specific origins, disable credentials
+allowed_origins_str = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:4000")
+allowed_origins = [origin.strip() for origin in allowed_origins_str.split(",") if origin.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=allowed_origins,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -28,11 +70,24 @@ class ChatMessage(BaseModel):
     role: str
     content: str
 
+# Strict Input Validation Models
+class BusinessInfoModel(BaseModel):
+    companyName: str
+    website: str
+    industry: str
+    description: str
+
+class LeadModel(BaseModel):
+    name: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    budget: Optional[str] = None
+
 class ChatPayload(BaseModel):
     messages: List[ChatMessage]
-    business_info: Dict[str, Any]
+    business_info: BusinessInfoModel
     faqs: List[Dict[str, Any]]
-    current_lead: Dict[str, Any]
+    current_lead: LeadModel
 
 class ExtractFAQsPayload(BaseModel):
     url: str
@@ -100,6 +155,6 @@ def competitor_analysis_endpoint(payload: CompetitorAnalysisPayload):
 
 if __name__ == "__main__":
     import uvicorn
-    port = int(os.getenv("PORT", 8000))
+    port = int(os.getenv("PORT", os.getenv("AI_PORT", 8000)))
     host = os.getenv("HOST", "0.0.0.0")
     uvicorn.run(app, host=host, port=port)

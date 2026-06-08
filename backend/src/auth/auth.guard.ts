@@ -16,7 +16,13 @@ export class AuthGuard implements CanActivate {
     
     try {
       const payload = await this.jwtService.verifyAsync(token, {
-        secret: process.env.JWT_SECRET || 'super-secret-key-change-me-in-production',
+        secret: (() => {
+          const secret = process.env.JWT_SECRET;
+          if (!secret && process.env.NODE_ENV === 'production') {
+            throw new Error('FATAL: JWT_SECRET environment variable is required in production!');
+          }
+          return secret || 'super-secret-key-change-me-in-production';
+        })(),
       });
       request['user'] = payload;
     } catch (err) {

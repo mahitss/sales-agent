@@ -7,7 +7,13 @@ import { AuthController } from './auth.controller';
   imports: [
     JwtModule.register({
       global: true,
-      secret: process.env.JWT_SECRET || 'super-secret-key-change-me-in-production',
+      secret: (() => {
+        const secret = process.env.JWT_SECRET;
+        if (!secret && process.env.NODE_ENV === 'production') {
+          throw new Error('FATAL: JWT_SECRET environment variable is required in production!');
+        }
+        return secret || 'super-secret-key-change-me-in-production';
+      })(),
       signOptions: { expiresIn: '1d' },
     }),
   ],

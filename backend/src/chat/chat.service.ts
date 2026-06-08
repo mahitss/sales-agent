@@ -51,7 +51,7 @@ export class ChatService {
     }
 
     // --- Human Takeover Bypass ---
-    if (conversation.isHumanTakeover) {
+    if (conversation?.isHumanTakeover) {
       const messageHistory = JSON.parse(conversation.messages);
       messageHistory.push({ role: 'user', content: message });
       
@@ -116,7 +116,7 @@ export class ChatService {
       const response = await axios.post(`${aiServiceUrl}/chat`, payload);
       aiResponse = response.data;
     } catch (err) {
-      console.error('Failed to communicate with AI Service:', err.message);
+      console.error('Failed to communicate with AI Service:', err instanceof Error ? err.message : String(err));
       // Fallback response
       aiResponse = {
         response: "I'm experiencing connectivity issues. May I get your name and email so our human agent can reach out?",

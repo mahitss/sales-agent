@@ -127,6 +127,11 @@ interface DashboardStats {
   conversionRate: number;
 }
 
+const sanitizeHtml = (str: string): string => {
+  if (!str) return "";
+  return str.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+};
+
 export default function DashboardPage() {
   // Authentication & Profile States
   const [token, setToken] = useState<string | null>(null);
@@ -1043,7 +1048,7 @@ export default function DashboardPage() {
         <div className="p-4 border-t border-slate-900 space-y-3">
           <div className="flex items-center gap-3 px-2">
             <div className="h-9 w-9 rounded-full bg-slate-800 border border-slate-700/50 flex items-center justify-center font-bold text-emerald-400">
-              {user?.name.charAt(0).toUpperCase()}
+              {user?.name?.charAt(0)?.toUpperCase() || 'U'}
             </div>
             <div className="overflow-hidden">
               <p className="text-xs font-bold text-white truncate">{user?.name}</p>
@@ -2043,7 +2048,7 @@ export default function DashboardPage() {
 
                     {simStatus && (
                       <div className="rounded-xl bg-slate-950 border border-slate-900 p-3 font-mono text-[10px] text-emerald-400">
-                        {simStatus}
+                        {sanitizeHtml(simStatus)}
                       </div>
                     )}
                   </div>
@@ -2065,7 +2070,7 @@ export default function DashboardPage() {
                 <div className="space-y-4">
                   <div className="rounded-2xl bg-slate-950 border border-slate-900 p-5 font-mono text-xs overflow-x-auto text-emerald-400 select-all leading-relaxed relative group">
                     <code>
-                      {`<script\n  src="${API_URL}/widget/logicra-widget.js"\n  data-business-id="${business.id}"\n  data-frontend-url="${typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000'}"\n></script>`}
+                      {`<script\n  src="${API_URL}/widget-assets/logicra-widget.js"\n  data-business-id="${business.id}"\n  data-frontend-url="${typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000'}"\n></script>`}
                     </code>
                   </div>
                   <div className="p-4 bg-emerald-500/5 border border-emerald-500/10 rounded-xl space-y-2 text-xs leading-relaxed text-slate-300">

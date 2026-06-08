@@ -1,8 +1,7 @@
 import os
 from typing import List, Dict, Any, Optional
 from pydantic import BaseModel, Field
-from google import genai
-from google.genai import types
+from google.genai import Client, types
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -68,7 +67,7 @@ class AIAgentService:
             self.client = None
             print("WARNING: GEMINI_API_KEY not set. Running in Mock Mode.")
         else:
-            self.client = genai.Client()
+            self.client = Client()
 
     def process_chat(
         self,

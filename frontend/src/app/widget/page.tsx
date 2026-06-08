@@ -38,6 +38,7 @@ function WidgetContent() {
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [lead, setLead] = useState<Lead | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [historyLoading, setHistoryLoading] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -58,17 +59,27 @@ function WidgetContent() {
       .then((data) => {
         setBusiness(data);
         
-        // Retrieve session storage if exists
-        const savedLeadId = sessionStorage.getItem(`leadId_${businessId}`);
-        const savedConvId = sessionStorage.getItem(`convId_${businessId}`);
+        // Retrieve session storage if exists with exception safety
+        let savedLeadId: string | null = null;
+        let savedConvId: string | null = null;
+        try {
+          savedLeadId = sessionStorage.getItem(`leadId_${businessId}`);
+          savedConvId = sessionStorage.getItem(`convId_${businessId}`);
+        } catch (e) {
+          console.error("sessionStorage access blocked:", e);
+        }
 
         if (savedLeadId && savedConvId) {
           setLeadId(savedLeadId);
           setConversationId(savedConvId);
+          setHistoryLoading(true);
           
           // Fetch existing conversation history
           fetch(`${apiUrl}/conversations/${savedConvId}`)
-            .then((r) => r.json())
+            .then((r) => {
+              if (!r.ok) throw new Error("Conversation fetch failed");
+              return r.json();
+            })
             .then((cData) => {
               if (cData && cData.messages) {
                 setMessages(cData.messages);
@@ -77,7 +88,8 @@ function WidgetContent() {
                 setLead(cData.lead);
               }
             })
-            .catch(console.error);
+            .catch(console.error)
+            .finally(() => setHistoryLoading(false));
         } else {
           // Add initial welcome message
           setMessages([
@@ -185,14 +197,18 @@ function WidgetContent() {
 
       setMessages((prev) => [...prev, { role: "model", content: data.response }]);
       
-      // Save session info
-      if (data.leadId) {
-        setLeadId(data.leadId);
-        sessionStorage.setItem(`leadId_${businessId}`, data.leadId);
-      }
-      if (data.conversationId) {
-        setConversationId(data.conversationId);
-        sessionStorage.setItem(`convId_${businessId}`, data.conversationId);
+      // Save session info with exception safety
+      try {
+        if (data.leadId) {
+          setLeadId(data.leadId);
+          sessionStorage.setItem(`leadId_${businessId}`, data.leadId);
+        }
+        if (data.conversationId) {
+          setConversationId(data.conversationId);
+          sessionStorage.setItem(`convId_${businessId}`, data.conversationId);
+        }
+      } catch (e) {
+        console.error("Failed to write to sessionStorage:", e);
       }
       if (data.lead) {
         setLead(data.lead);
@@ -258,35 +274,42 @@ function WidgetContent() {
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-thin scrollbar-thumb-slate-800 scrollbar-track-transparent">
-        {messages.map((msg, index) => {
-          const isUser = msg.role === "user";
-          return (
-            <div
-              key={index}
-              className={`flex items-start gap-2.5 ${isUser ? "justify-end" : "justify-start"}`}
-            >
-              {!isUser && (
-                <div className="flex h-7.5 w-7.5 shrink-0 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                  <Bot className="h-4.5 w-4.5" />
-                </div>
-              )}
+        {historyLoading ? (
+          <div className="flex h-full flex-col items-center justify-center text-slate-400 min-h-[200px]">
+            <div className="h-6 w-6 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent"></div>
+            <p className="mt-2 text-xs">Loading chat history...</p>
+          </div>
+        ) : (
+          messages.map((msg, index) => {
+            const isUser = msg.role === "user";
+            return (
               <div
-                className={`max-w-[75%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed shadow-sm ${
-                  isUser
-                    ? "bg-emerald-600 text-white rounded-tr-none"
-                    : "bg-slate-900/90 text-slate-200 border border-slate-800/80 rounded-tl-none"
-                }`}
+                key={index}
+                className={`flex items-start gap-2.5 ${isUser ? "justify-end" : "justify-start"}`}
               >
-                {msg.content}
-              </div>
-              {isUser && (
-                <div className="flex h-7.5 w-7.5 shrink-0 items-center justify-center rounded-lg bg-slate-800 text-slate-400 border border-slate-700/50">
-                  <User className="h-4.5 w-4.5" />
+                {!isUser && (
+                  <div className="flex h-7.5 w-7.5 shrink-0 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                    <Bot className="h-4.5 w-4.5" />
+                  </div>
+                )}
+                <div
+                  className={`max-w-[75%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed shadow-sm ${
+                    isUser
+                      ? "bg-emerald-600 text-white rounded-tr-none"
+                      : "bg-slate-900/90 text-slate-200 border border-slate-800/80 rounded-tl-none"
+                  }`}
+                >
+                  {msg.content}
                 </div>
-              )}
-            </div>
-          );
-        })}
+                {isUser && (
+                  <div className="flex h-7.5 w-7.5 shrink-0 items-center justify-center rounded-lg bg-slate-800 text-slate-400 border border-slate-700/50">
+                    <User className="h-4.5 w-4.5" />
+                  </div>
+                )}
+              </div>
+            );
+          })
+        )}
 
         {loading && (
           <div className="flex items-start gap-2.5 justify-start">
