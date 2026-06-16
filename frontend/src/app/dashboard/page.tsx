@@ -76,6 +76,8 @@ interface Lead {
   budget: string;
   source: string;
   status: string; // HOT, WARM, COLD
+  sentiment?: string;
+  engagementScore?: number;
   createdAt: string;
 }
 
@@ -138,6 +140,7 @@ export default function DashboardPage() {
   const [user, setUser] = useState<UserInfo | null>(null);
   const [business, setBusiness] = useState<BusinessInfo | null>(null);
   const [isLogin, setIsLogin] = useState(true);
+  const [businessLoading, setBusinessLoading] = useState(true);
 
   // Auth Form State
   const [authEmail, setAuthEmail] = useState("");
@@ -216,6 +219,22 @@ export default function DashboardPage() {
   const [emailSmtp, setEmailSmtp] = useState("");
   const [connectionSaving, setConnectionSaving] = useState(false);
 
+  // Personalized Agent branding Settings
+  const [themeColor, setThemeColor] = useState("#10B981");
+  const [agentTone, setAgentTone] = useState("PROFESSIONAL");
+  const [agentPrompt, setAgentPrompt] = useState("");
+
+  // Leads Filtering & Searching
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filterStatus, setFilterStatus] = useState("ALL");
+  const [filterSource, setFilterSource] = useState("ALL");
+  const [filterSentiment, setFilterSentiment] = useState("ALL");
+
+  // KB File Upload States
+  const [kbProgress, setKbProgress] = useState(0);
+  const [kbUploading, setKbUploading] = useState(false);
+  const [kbFileName, setKbFileName] = useState("");
+
   // Global Loading States
   const [dataLoading, setDataLoading] = useState(false);
 
@@ -228,6 +247,8 @@ export default function DashboardPage() {
     if (savedToken && savedUser) {
       setToken(savedToken);
       setUser(JSON.parse(savedUser));
+    } else {
+      setBusinessLoading(false);
     }
   }, []);
 
@@ -302,10 +323,15 @@ export default function DashboardPage() {
           setWhatsappApiKey(data.whatsappApiKey || "");
           setInstagramAccountId(data.instagramAccountId || "");
           setEmailSmtp(data.emailSmtp || "");
+          setThemeColor(data.themeColor || "#10B981");
+          setAgentTone(data.agentTone || "PROFESSIONAL");
+          setAgentPrompt(data.agentPrompt || "");
         }
       }
     } catch (err) {
       console.error("Fetch business failed", err);
+    } finally {
+      setBusinessLoading(false);
     }
   };
 
@@ -379,6 +405,7 @@ export default function DashboardPage() {
 
       localStorage.setItem("beacon_token", data.token);
       localStorage.setItem("beacon_user", JSON.stringify(data.user));
+      setBusinessLoading(true);
       setToken(data.token);
       setUser(data.user);
     } catch (err: any) {
@@ -395,6 +422,7 @@ export default function DashboardPage() {
     setUser(null);
     setBusiness(null);
     setSelectedConv(null);
+    setBusinessLoading(true);
   };
 
   // Onboarding Handler
@@ -415,11 +443,30 @@ export default function DashboardPage() {
           description: compDesc,
         }),
       });
-      if (!res.ok) throw new Error("Failed to create profile");
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.message || "Failed to create profile");
+      }
       const data = await res.json();
       setBusiness(data);
-    } catch (err) {
+      if (data) {
+        setCompName(data.companyName);
+        setCompWeb(data.website);
+        setCompInd(data.industry);
+        setCompDesc(data.description);
+        setWhatsappEnabled(data.whatsappEnabled);
+        setInstagramEnabled(data.instagramEnabled);
+        setEmailEnabled(data.emailEnabled);
+        setWhatsappApiKey(data.whatsappApiKey || "");
+        setInstagramAccountId(data.instagramAccountId || "");
+        setEmailSmtp(data.emailSmtp || "");
+        setThemeColor(data.themeColor || "#10B981");
+        setAgentTone(data.agentTone || "PROFESSIONAL");
+        setAgentPrompt(data.agentPrompt || "");
+      }
+    } catch (err: any) {
       console.error(err);
+      alert(err.message || "An error occurred during onboarding");
     } finally {
       setOnboardLoading(false);
     }
@@ -449,6 +496,11 @@ export default function DashboardPage() {
     } finally {
       setFaqLoading(false);
     }
+  };
+
+  const handleExportLeads = () => {
+    if (!business) return;
+    window.open(`${API_URL}/leads/business/${business.id}/export`, '_blank');
   };
 
   // Delete FAQ Handler
@@ -529,13 +581,16 @@ export default function DashboardPage() {
           emailEnabled,
           whatsappApiKey,
           instagramAccountId,
-          emailSmtp
+          emailSmtp,
+          themeColor,
+          agentTone,
+          agentPrompt
         })
       });
       if (res.ok) {
         const data = await res.json();
         setBusiness(data);
-        alert("Connectivity configurations saved successfully.");
+        alert("Branding and connectivity configurations saved successfully.");
       }
     } catch (e) {
       console.error(e);
@@ -633,6 +688,65 @@ export default function DashboardPage() {
         setScraperLoading(false);
       }, 3000);
     }
+  };
+
+  const handleStartFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!business || !file) return;
+
+    setKbFileName(file.name);
+    setKbUploading(true);
+    setKbProgress(0);
+
+    const interval = setInterval(() => {
+      setKbProgress((prev) => {
+        if (prev >= 95) {
+          clearInterval(interval);
+          return 95;
+        }
+        return prev + 15;
+      });
+    }, 150);
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      const text = event.target?.result as string;
+      try {
+        const res = await fetch(`${API_URL}/business/${business.id}/import-text`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`
+          },
+          body: JSON.stringify({ title: file.name, text })
+        });
+        
+        clearInterval(interval);
+        setKbProgress(100);
+
+        if (res.ok) {
+          const data = await res.json();
+          setTimeout(() => {
+            alert(`Document imported: AI generated ${data.count} FAQ items directly from "${file.name}"!`);
+            setKbUploading(false);
+            setKbFileName("");
+            setKbProgress(0);
+            refreshData();
+          }, 500);
+        } else {
+          throw new Error();
+        }
+      } catch (err) {
+        clearInterval(interval);
+        setTimeout(() => {
+          alert("Failed to process document content. Please try another file.");
+          setKbUploading(false);
+          setKbFileName("");
+          setKbProgress(0);
+        }, 500);
+      }
+    };
+    reader.readAsText(file);
   };
 
   // Run competitor analysis scraper
@@ -820,6 +934,18 @@ export default function DashboardPage() {
               {isLogin ? "Need a portal account? Register here" : "Already have an account? Sign in"}
             </button>
           </div>
+        </div>
+      </div>
+    );
+  }
+
+  // RENDER: Loading Gate (If authenticated but business profile query is in flight)
+  if (token && businessLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-950 text-white">
+        <div className="flex flex-col items-center gap-3">
+          <RefreshCw className="h-8 w-8 animate-spin text-emerald-400" />
+          <p className="text-sm text-slate-400">Loading Business Profile...</p>
         </div>
       </div>
     );
@@ -1180,54 +1306,122 @@ export default function DashboardPage() {
                 )}
               </div>
 
-              {/* Quick Leads / Appointments Grid */}
+              {/* Funnel Chart & Channel Distribution Grid */}
               <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
-                <div className="rounded-2xl border border-slate-900 bg-slate-900/30 p-6 space-y-4">
-                  <h4 className="font-bold text-sm uppercase tracking-wider text-slate-400">Lead Health breakdown</h4>
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs text-slate-400 flex items-center gap-2">
-                        <span className="h-2 w-2 rounded-full bg-red-500"></span> Hot Leads
-                      </span>
-                      <span className="text-sm font-semibold text-white">{stats.hotLeads}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs text-slate-400 flex items-center gap-2">
-                        <span className="h-2 w-2 rounded-full bg-amber-500"></span> Warm Leads
-                      </span>
-                      <span className="text-sm font-semibold text-white">{stats.warmLeads}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs text-slate-400 flex items-center gap-2">
-                        <span className="h-2 w-2 rounded-full bg-blue-500"></span> Cold Leads
-                      </span>
-                      <span className="text-sm font-semibold text-white">{stats.coldLeads}</span>
-                    </div>
+                {/* Stage Funnel Chart */}
+                <div className="rounded-2xl border border-slate-900 bg-slate-900/30 p-6 space-y-6">
+                  <div>
+                    <h4 className="font-bold text-sm uppercase tracking-wider text-slate-400">Sales Conversion Funnel</h4>
+                    <p className="text-[11px] text-slate-500 mt-0.5">Flow of visitor traffic to scheduled callbacks</p>
                   </div>
+                  
+                  {(() => {
+                    const totalVisitors = stats.totalLeads * 3 + 28;
+                    const visitorsPct = 100;
+                    const leadsPct = totalVisitors > 0 ? Math.round((stats.totalLeads / totalVisitors) * 100) : 0;
+                    const qualPct = totalVisitors > 0 ? Math.round((stats.qualifiedLeads / totalVisitors) * 100) : 0;
+                    const apptPct = totalVisitors > 0 ? Math.round((stats.appointments / totalVisitors) * 100) : 0;
+                    
+                    return (
+                      <div className="space-y-4">
+                        {/* Stage 1: Traffic */}
+                        <div className="space-y-1">
+                          <div className="flex justify-between text-xs font-semibold text-slate-400">
+                            <span>1. Total Traffic (Simulated)</span>
+                            <span>{totalVisitors} sessions ({visitorsPct}%)</span>
+                          </div>
+                          <div className="h-7 w-full rounded-lg bg-slate-900 overflow-hidden relative border border-slate-800">
+                            <div className="h-full rounded-lg bg-gradient-to-r from-emerald-700/50 to-teal-500/50" style={{ width: `${visitorsPct}%` }}></div>
+                          </div>
+                        </div>
+
+                        {/* Stage 2: Lead Capture */}
+                        <div className="space-y-1">
+                          <div className="flex justify-between text-xs font-semibold text-slate-400">
+                            <span>2. Captured Leads</span>
+                            <span>{stats.totalLeads} users ({leadsPct}%)</span>
+                          </div>
+                          <div className="h-7 w-full rounded-lg bg-slate-900 overflow-hidden relative border border-slate-800">
+                            <div className="h-full rounded-lg bg-gradient-to-r from-emerald-600/50 to-teal-400/50" style={{ width: `${leadsPct}%` }}></div>
+                          </div>
+                        </div>
+
+                        {/* Stage 3: Qualified leads */}
+                        <div className="space-y-1">
+                          <div className="flex justify-between text-xs font-semibold text-slate-400">
+                            <span>3. Qualified Leads (HOT/WARM)</span>
+                            <span>{stats.qualifiedLeads} users ({qualPct}%)</span>
+                          </div>
+                          <div className="h-7 w-full rounded-lg bg-slate-900 overflow-hidden relative border border-slate-800">
+                            <div className="h-full rounded-lg bg-gradient-to-r from-emerald-500/60 to-emerald-400/60" style={{ width: `${qualPct}%` }}></div>
+                          </div>
+                        </div>
+
+                        {/* Stage 4: Appointment Booked */}
+                        <div className="space-y-1">
+                          <div className="flex justify-between text-xs font-semibold text-slate-400">
+                            <span>4. Booked Appointments</span>
+                            <span>{stats.appointments} calls ({apptPct}%)</span>
+                          </div>
+                          <div className="h-7 w-full rounded-lg bg-slate-900 overflow-hidden relative border border-slate-800">
+                            <div className="h-full rounded-lg bg-gradient-to-r from-teal-500 to-emerald-400" style={{ width: `${apptPct}%` }}></div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
 
-                <div className="rounded-2xl border border-slate-900 bg-slate-900/30 p-6 space-y-4">
-                  <h4 className="font-bold text-sm uppercase tracking-wider text-slate-400">System Integration Checklist</h4>
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-3">
-                      <CheckCircle2 className="h-4.5 w-4.5 text-emerald-400 shrink-0" />
-                      <span className="text-xs text-slate-300">Register business portal account</span>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <CheckCircle2 className="h-4.5 w-4.5 text-emerald-400 shrink-0" />
-                      <span className="text-xs text-slate-300">Set up business profile info</span>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <div className="h-4.5 w-4.5 rounded-full border border-slate-800 flex items-center justify-center shrink-0">
-                        <div className="h-2.5 w-2.5 rounded-full bg-slate-800"></div>
+                {/* Channel Distribution & Integrations Checklist */}
+                <div className="rounded-2xl border border-slate-900 bg-slate-900/30 p-6 space-y-6 flex flex-col justify-between">
+                  <div>
+                    <h4 className="font-bold text-sm uppercase tracking-wider text-slate-400">Conversations By Channel</h4>
+                    <p className="text-[11px] text-slate-500 mt-0.5">Interaction density comparison</p>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-900 flex flex-col justify-between gap-2">
+                      <span className="text-[10px] uppercase font-bold text-slate-500">Website Chat</span>
+                      <div className="flex items-baseline justify-between mt-1">
+                        <span className="text-xl font-bold text-white">WIDGET</span>
+                        <span className="text-xs text-slate-400 font-semibold">Active</span>
                       </div>
-                      <span className="text-xs text-slate-400">Configure target custom FAQs in Knowledge Base</span>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <div className="h-4.5 w-4.5 rounded-full border border-slate-800 flex items-center justify-center shrink-0">
-                        <div className="h-2.5 w-2.5 rounded-full bg-slate-800"></div>
+                      <div className="w-full bg-slate-900 h-1.5 rounded-full overflow-hidden mt-1">
+                        <div className="h-full rounded-full bg-emerald-500" style={{ width: "65%" }}></div>
                       </div>
-                      <span className="text-xs text-slate-400">Install logicra-widget script on your site</span>
+                    </div>
+
+                    <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-900 flex flex-col justify-between gap-2">
+                      <span className="text-[10px] uppercase font-bold text-slate-500">WhatsApp</span>
+                      <div className="flex items-baseline justify-between mt-1">
+                        <span className="text-xl font-bold text-white">WHATSAPP</span>
+                        <span className="text-xs text-slate-400 font-semibold">{whatsappEnabled ? "Connected" : "Inactive"}</span>
+                      </div>
+                      <div className="w-full bg-slate-900 h-1.5 rounded-full overflow-hidden mt-1">
+                        <div className="h-full rounded-full bg-green-500" style={{ width: whatsappEnabled ? "25%" : "0%" }}></div>
+                      </div>
+                    </div>
+
+                    <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-900 flex flex-col justify-between gap-2">
+                      <span className="text-[10px] uppercase font-bold text-slate-500">Instagram</span>
+                      <div className="flex items-baseline justify-between mt-1">
+                        <span className="text-xl font-bold text-white">INSTAGRAM</span>
+                        <span className="text-xs text-slate-400 font-semibold">{instagramEnabled ? "Connected" : "Inactive"}</span>
+                      </div>
+                      <div className="w-full bg-slate-900 h-1.5 rounded-full overflow-hidden mt-1">
+                        <div className="h-full rounded-full bg-pink-500" style={{ width: instagramEnabled ? "15%" : "0%" }}></div>
+                      </div>
+                    </div>
+
+                    <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-900 flex flex-col justify-between gap-2">
+                      <span className="text-[10px] uppercase font-bold text-slate-500">Email SMTP</span>
+                      <div className="flex items-baseline justify-between mt-1">
+                        <span className="text-xl font-bold text-white">EMAIL</span>
+                        <span className="text-xs text-slate-400 font-semibold">{emailEnabled ? "Connected" : "Inactive"}</span>
+                      </div>
+                      <div className="w-full bg-slate-900 h-1.5 rounded-full overflow-hidden mt-1">
+                        <div className="h-full rounded-full bg-indigo-500" style={{ width: emailEnabled ? "10%" : "0%" }}></div>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1238,10 +1432,72 @@ export default function DashboardPage() {
           {/* TAB 2: LEADS */}
           {activeTab === "leads" && (
             <div className="space-y-6">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
                   <h3 className="text-xl font-bold text-white">Leads Log</h3>
                   <p className="text-xs text-slate-500 mt-1">Visitors qualified and captured by the AI agent</p>
+                </div>
+                <button
+                  onClick={handleExportLeads}
+                  className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-xl px-5 py-2.5 text-xs flex items-center gap-1.5 cursor-pointer shadow-md self-start md:self-auto"
+                >
+                  <FileText className="h-4 w-4" />
+                  Export Leads (CSV)
+                </button>
+              </div>
+
+              {/* Filters container */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 p-4 rounded-2xl border border-slate-900 bg-slate-900/10">
+                <div>
+                  <label className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Search Visitor</label>
+                  <input
+                    type="text"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    placeholder="Name, email or phone..."
+                    className="mt-1 w-full rounded-xl bg-slate-950 border border-slate-900 px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500/50 placeholder-slate-700"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Status</label>
+                  <select
+                    value={filterStatus}
+                    onChange={(e) => setFilterStatus(e.target.value)}
+                    className="mt-1 w-full rounded-xl bg-slate-950 border border-slate-900 px-3 py-2 text-xs text-white focus:outline-none"
+                  >
+                    <option value="ALL">All Statuses</option>
+                    <option value="HOT">HOT</option>
+                    <option value="WARM">WARM</option>
+                    <option value="COLD">COLD</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Source Channel</label>
+                  <select
+                    value={filterSource}
+                    onChange={(e) => setFilterSource(e.target.value)}
+                    className="mt-1 w-full rounded-xl bg-slate-950 border border-slate-900 px-3 py-2 text-xs text-white focus:outline-none"
+                  >
+                    <option value="ALL">All Channels</option>
+                    <option value="WIDGET">WIDGET</option>
+                    <option value="WHATSAPP">WHATSAPP</option>
+                    <option value="INSTAGRAM">INSTAGRAM</option>
+                    <option value="EMAIL">EMAIL</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Sentiment</label>
+                  <select
+                    value={filterSentiment}
+                    onChange={(e) => setFilterSentiment(e.target.value)}
+                    className="mt-1 w-full rounded-xl bg-slate-950 border border-slate-900 px-3 py-2 text-xs text-white focus:outline-none"
+                  >
+                    <option value="ALL">All Sentiments</option>
+                    <option value="Positive">Positive</option>
+                    <option value="Neutral">Neutral</option>
+                    <option value="Negative">Negative</option>
+                    <option value="Inquisitive">Inquisitive</option>
+                  </select>
                 </div>
               </div>
 
@@ -1255,41 +1511,72 @@ export default function DashboardPage() {
                       <th className="px-6 py-4">Budget</th>
                       <th className="px-6 py-4">Source</th>
                       <th className="px-6 py-4">Status</th>
+                      <th className="px-6 py-4">Sentiment</th>
+                      <th className="px-6 py-4">Engagement</th>
                       <th className="px-6 py-4">Date Captured</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-900/60">
-                    {leads.length === 0 ? (
-                      <tr>
-                        <td colSpan={7} className="px-6 py-12 text-center text-slate-500">
-                          No leads captured yet. Run a chat in the Widget tab to generate test leads!
-                        </td>
-                      </tr>
-                    ) : (
-                      leads.map((l) => (
-                        <tr key={l.id} className="hover:bg-slate-900/20 transition-colors">
-                          <td className="px-6 py-4 font-semibold text-slate-200">
-                            {l.name === "Anonymous Visitor" ? (
-                              <span className="italic text-slate-500">Anonymous Visitor</span>
-                            ) : (
-                              l.name
-                            )}
-                          </td>
-                          <td className="px-6 py-4 text-slate-300">{l.email || "—"}</td>
-                          <td className="px-6 py-4 text-slate-300">{l.phone || "—"}</td>
-                          <td className="px-6 py-4 text-slate-300">{l.budget || "—"}</td>
-                          <td className="px-6 py-4">
-                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                              l.source === "WHATSAPP" ? "bg-green-500/10 text-green-400 border border-green-500/20" :
-                              l.source === "INSTAGRAM" ? "bg-pink-500/10 text-pink-400 border border-pink-500/20" :
-                              l.source === "EMAIL" ? "bg-indigo-500/10 text-indigo-400 border border-indigo-500/20" :
-                              "bg-slate-500/10 text-slate-400 border border-slate-500/20"
-                            }`}>
-                              {l.source}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4">
-                            <select
+                    {(() => {
+                      const filteredLeads = leads.filter(l => {
+                        const matchesSearch = !searchTerm || 
+                          (l.name && l.name.toLowerCase().includes(searchTerm.toLowerCase())) || 
+                          (l.email && l.email.toLowerCase().includes(searchTerm.toLowerCase())) ||
+                          (l.phone && l.phone.includes(searchTerm));
+                        const matchesStatus = filterStatus === "ALL" || l.status === filterStatus;
+                        const matchesSource = filterSource === "ALL" || l.source === filterSource;
+                        const matchesSentiment = filterSentiment === "ALL" || (l.sentiment || "Neutral") === filterSentiment;
+                        return matchesSearch && matchesStatus && matchesSource && matchesSentiment;
+                      });
+
+                      if (filteredLeads.length === 0) {
+                        return (
+                          <tr>
+                            <td colSpan={9} className="px-6 py-12 text-center text-slate-500">
+                              No matching leads found. Try adjusting your search filters!
+                            </td>
+                          </tr>
+                        );
+                      }
+
+                      return filteredLeads.map((l) => {
+                        const sentiment = l.sentiment || "Neutral";
+                        const sentimentBadge = 
+                          sentiment === "Positive" ? "bg-green-500/10 text-green-400 border border-green-500/20" :
+                          sentiment === "Negative" ? "bg-red-500/10 text-red-400 border border-red-500/20" :
+                          sentiment === "Inquisitive" ? "bg-blue-500/10 text-blue-400 border border-blue-500/20" :
+                          "bg-slate-500/10 text-slate-400 border border-slate-500/20";
+                        
+                        const score = l.engagementScore !== undefined && l.engagementScore !== null ? l.engagementScore : 15;
+                        const scoreColor = 
+                          score >= 70 ? "bg-emerald-500" :
+                          score >= 40 ? "bg-amber-500" :
+                          "bg-red-500";
+
+                        return (
+                          <tr key={l.id} className="hover:bg-slate-900/20 transition-colors">
+                            <td className="px-6 py-4 font-semibold text-slate-200">
+                              {l.name === "Anonymous Visitor" ? (
+                                <span className="italic text-slate-500">Anonymous Visitor</span>
+                              ) : (
+                                l.name
+                              )}
+                            </td>
+                            <td className="px-6 py-4 text-slate-300">{l.email || "—"}</td>
+                            <td className="px-6 py-4 text-slate-300">{l.phone || "—"}</td>
+                            <td className="px-6 py-4 text-slate-300">{l.budget || "—"}</td>
+                            <td className="px-6 py-4">
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                l.source === "WHATSAPP" ? "bg-green-500/10 text-green-400 border border-green-500/20" :
+                                l.source === "INSTAGRAM" ? "bg-pink-500/10 text-pink-400 border border-pink-500/20" :
+                                l.source === "EMAIL" ? "bg-indigo-500/10 text-indigo-400 border border-indigo-500/20" :
+                                "bg-slate-500/10 text-slate-400 border border-slate-500/20"
+                              }`}>
+                                {l.source}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4">
+                              <select
                                 value={l.status}
                                 onChange={(e) => handleUpdateLeadStatus(l.id, e.target.value)}
                                 className={`rounded-lg border border-transparent px-2.5 py-1 text-xs font-bold focus:outline-none transition-all cursor-pointer ${
@@ -1302,13 +1589,30 @@ export default function DashboardPage() {
                                 <option value="WARM" className="bg-slate-950 text-amber-400">WARM</option>
                                 <option value="COLD" className="bg-slate-950 text-blue-400">COLD</option>
                               </select>
-                          </td>
-                          <td className="px-6 py-4 text-xs text-slate-500">
-                            {new Date(l.createdAt).toLocaleDateString()}
-                          </td>
-                        </tr>
-                      ))
-                    )}
+                            </td>
+                            <td className="px-6 py-4">
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${sentimentBadge}`}>
+                                {sentiment === "Positive" ? "🟢 Positive" :
+                                 sentiment === "Negative" ? "🔴 Negative" :
+                                 sentiment === "Inquisitive" ? "🔵 Inquisitive" :
+                                 "⚪ Neutral"}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4">
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-bold text-slate-300 w-8">{score}%</span>
+                                <div className="w-16 bg-slate-900 h-2 rounded-full overflow-hidden">
+                                  <div className={`h-full rounded-full ${scoreColor}`} style={{ width: `${score}%` }}></div>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 text-xs text-slate-500">
+                              {new Date(l.createdAt).toLocaleDateString()}
+                            </td>
+                          </tr>
+                        );
+                      });
+                    })()}
                   </tbody>
                 </table>
               </div>
@@ -1566,50 +1870,90 @@ export default function DashboardPage() {
                 <p className="text-xs text-slate-500 mt-1">Upload answers, instructions, and services so the AI sales agent can reference them.</p>
               </div>
 
-              {/* V3: Auto Website Learning Scraper Container */}
-              <div className="rounded-2xl border border-slate-900 bg-slate-900/30 p-6 space-y-4">
-                <h4 className="font-bold text-sm uppercase tracking-wider text-slate-400 flex items-center gap-2">
-                  <Globe className="h-4.5 w-4.5 text-emerald-400 animate-pulse" />
-                  Auto Website Learning (Instant RAG Scraper)
-                </h4>
-                <p className="text-xs text-slate-500">
-                  Enter any website URL. Beacon will crawl the pages, extract FAQs/services, and automatically generate Knowledge Base articles using Gemini context extraction.
-                </p>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                {/* V3: Auto Website Learning Scraper Container */}
+                <div className="rounded-2xl border border-slate-900 bg-slate-900/30 p-6 space-y-4">
+                  <h4 className="font-bold text-sm uppercase tracking-wider text-slate-400 flex items-center gap-2">
+                    <Globe className="h-4.5 w-4.5 text-emerald-400 animate-pulse" />
+                    Auto Website Learning (Instant RAG Scraper)
+                  </h4>
+                  <p className="text-xs text-slate-500">
+                    Enter any website URL. Beacon will crawl the pages, extract FAQs/services, and automatically generate Knowledge Base articles using Gemini context extraction.
+                  </p>
 
-                <form onSubmit={handleStartScrape} className="flex gap-3">
-                  <input
-                    type="url"
-                    required
-                    value={scraperUrl}
-                    onChange={(e) => setScraperUrl(e.target.value)}
-                    placeholder="e.g. https://theirwebsite.com"
-                    className="flex-1 rounded-xl bg-slate-900 border border-slate-800 px-4 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500/50"
-                  />
-                  <button
-                    type="submit"
-                    disabled={scraperLoading || !scraperUrl}
-                    className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-xl px-5 py-2.5 text-sm flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-                  >
-                    {scraperLoading ? (
-                      <RefreshCw className="h-4.5 w-4.5 animate-spin" />
-                    ) : (
-                      <ArrowRight className="h-4.5 w-4.5" />
-                    )}
-                    Crawl Website
-                  </button>
-                </form>
+                  <form onSubmit={handleStartScrape} className="flex gap-3">
+                    <input
+                      type="url"
+                      required
+                      value={scraperUrl}
+                      onChange={(e) => setScraperUrl(e.target.value)}
+                      placeholder="e.g. https://theirwebsite.com"
+                      className="flex-1 rounded-xl bg-slate-900 border border-slate-800 px-4 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500/50 placeholder-slate-700"
+                    />
+                    <button
+                      type="submit"
+                      disabled={scraperLoading || !scraperUrl}
+                      className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-xl px-5 py-2.5 text-sm flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                    >
+                      {scraperLoading ? (
+                        <RefreshCw className="h-4.5 w-4.5 animate-spin" />
+                      ) : (
+                        <ArrowRight className="h-4.5 w-4.5" />
+                      )}
+                      Crawl Website
+                    </button>
+                  </form>
 
-                {/* Scraper Logs Console */}
-                {scraperLogs.length > 0 && (
-                  <div className="rounded-xl bg-slate-950 border border-slate-900 p-4 font-mono text-[11px] text-emerald-500 space-y-1 overflow-y-auto max-h-40 leading-relaxed shadow-inner">
-                    {scraperLogs.map((log, i) => (
-                      <div key={i} className="flex gap-2">
-                        <span className="text-emerald-800 shrink-0">[{i+1}]</span>
-                        <span>{log}</span>
-                      </div>
-                    ))}
+                  {/* Scraper Logs Console */}
+                  {scraperLogs.length > 0 && (
+                    <div className="rounded-xl bg-slate-950 border border-slate-900 p-4 font-mono text-[11px] text-emerald-500 space-y-1 overflow-y-auto max-h-40 leading-relaxed shadow-inner">
+                      {scraperLogs.map((log, i) => (
+                        <div key={i} className="flex gap-2">
+                          <span className="text-emerald-800 shrink-0">[{i+1}]</span>
+                          <span>{log}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* PDF/Text Document RAG Upload Container */}
+                <div className="rounded-2xl border border-slate-900 bg-slate-900/30 p-6 space-y-4">
+                  <h4 className="font-bold text-sm uppercase tracking-wider text-slate-400 flex items-center gap-2">
+                    <FileText className="h-4.5 w-4.5 text-emerald-400" />
+                    RAG Knowledge Document Upload
+                  </h4>
+                  <p className="text-xs text-slate-500">
+                    Upload service lists, catalogs, or context files (.txt, .csv, .json) to extract and inject FAQ items into your AI agent's memory.
+                  </p>
+
+                  <div className="border border-dashed border-slate-800 rounded-xl p-6 flex flex-col items-center justify-center bg-slate-950/20 relative hover:bg-slate-950/40 transition-colors">
+                    <input
+                      type="file"
+                      accept=".txt,.csv,.json"
+                      onChange={handleStartFileUpload}
+                      disabled={kbUploading}
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:pointer-events-none"
+                    />
+                    <FileText className={`h-8 w-8 text-slate-600 mb-2 ${kbUploading ? 'animate-bounce' : ''}`} />
+                    <p className="text-xs text-slate-400 text-center">
+                      {kbUploading ? `Reading and extracting "${kbFileName}"...` : 'Drag and drop or click to upload knowledge document'}
+                    </p>
+                    <p className="text-[10px] text-slate-600 mt-1">Supports UTF-8 text files up to 2MB</p>
                   </div>
-                )}
+
+                  {kbUploading && (
+                    <div className="space-y-2">
+                      <div className="flex justify-between text-[10px] font-mono text-emerald-400">
+                        <span>Uploading...</span>
+                        <span>{kbProgress}%</span>
+                      </div>
+                      <div className="w-full bg-slate-900 h-1.5 rounded-full overflow-hidden">
+                        <div className="h-full rounded-full bg-emerald-500 transition-all duration-300" style={{ width: `${kbProgress}%` }}></div>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Add FAQ form */}
@@ -1946,6 +2290,68 @@ export default function DashboardPage() {
                         className="w-full rounded-xl bg-slate-900 border border-slate-800 px-4 py-2.5 text-xs text-white"
                       />
                     )}
+                  </div>
+
+                  {/* Brand Branding Customizations */}
+                  <div className="space-y-4 pt-4 border-t border-slate-900/60">
+                    <h4 className="font-bold text-xs uppercase tracking-wider text-emerald-400">AI Personalization Branding</h4>
+
+                    {/* Chat widget Theme Color */}
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold uppercase tracking-wider text-slate-400">Widget Theme Color</label>
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="color"
+                          value={themeColor}
+                          onChange={(e) => setThemeColor(e.target.value)}
+                          className="h-8 w-8 rounded-lg bg-transparent border-0 cursor-pointer overflow-hidden"
+                        />
+                        <input
+                          type="text"
+                          value={themeColor}
+                          onChange={(e) => setThemeColor(e.target.value)}
+                          className="rounded-xl bg-slate-900 border border-slate-800/80 px-3 py-2 text-xs text-white focus:outline-none w-28 uppercase font-mono"
+                        />
+                        <div className="flex gap-1.5 ml-2">
+                          {["#10B981", "#3B82F6", "#EC4899", "#8B5CF6", "#F59E0B"].map((c) => (
+                            <button
+                              key={c}
+                              type="button"
+                              onClick={() => setThemeColor(c)}
+                              className="h-5.5 w-5.5 rounded-full border border-slate-950 transition-all hover:scale-110 cursor-pointer"
+                              style={{ backgroundColor: c, border: themeColor === c ? '2px solid white' : 'none' }}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Conversational Tone */}
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold uppercase tracking-wider text-slate-400">Conversational AI Tone</label>
+                      <select
+                        value={agentTone}
+                        onChange={(e) => setAgentTone(e.target.value)}
+                        className="w-full rounded-xl bg-slate-900 border border-slate-800/80 px-3 py-2 text-xs text-white focus:outline-none"
+                      >
+                        <option value="FRIENDLY">Friendly & Approachable</option>
+                        <option value="PROFESSIONAL">Professional & Corporate</option>
+                        <option value="PERSUASIVE">Persuasive & Sales-driven</option>
+                        <option value="BOLD">Bold & High-energy</option>
+                      </select>
+                    </div>
+
+                    {/* Custom Prompt Directives */}
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold uppercase tracking-wider text-slate-400">Agent Custom Instructions (Prompt Overrides)</label>
+                      <textarea
+                        value={agentPrompt}
+                        onChange={(e) => setAgentPrompt(e.target.value)}
+                        rows={3}
+                        placeholder="e.g. Focus on scheduling demo calls first. Offer details on price packages if they ask. Never say we support custom refunds."
+                        className="w-full rounded-xl bg-slate-900 border border-slate-800/80 px-4 py-2.5 text-xs text-white placeholder-slate-600 focus:border-emerald-500/50 focus:outline-none resize-none"
+                      />
+                    </div>
                   </div>
 
                   <div className="flex justify-end">

@@ -7,6 +7,7 @@
   }
 
   const frontendUrl = scriptTag.getAttribute('data-frontend-url') || 'http://localhost:3000';
+  const backendUrl = new URL(scriptTag.src).origin;
 
   // Create iframe container
   const container = document.createElement('div');
@@ -21,7 +22,7 @@
   button.style.width = '60px';
   button.style.height = '60px';
   button.style.borderRadius = '50%';
-  button.style.backgroundColor = '#10B981'; // Emerald green
+  button.style.backgroundColor = '#10B981'; // Default Emerald green
   button.style.color = '#FFFFFF';
   button.style.border = 'none';
   button.style.cursor = 'pointer';
@@ -31,6 +32,17 @@
   button.style.justifyContent = 'center';
   button.style.outline = 'none';
   button.style.transition = 'transform 0.2s ease, background-color 0.2s ease';
+  
+  // Fetch custom theme color dynamically
+  fetch(`${backendUrl}/business/${businessId}`)
+    .then(res => res.json())
+    .then(data => {
+      if (data && data.themeColor) {
+        button.style.backgroundColor = data.themeColor;
+      }
+    })
+    .catch(err => console.warn('Failed to load widget theme color:', err));
+
   button.innerHTML = `
     <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
@@ -87,7 +99,6 @@
     }
   });
 
-  // Handle window message to close iframe if requested
   window.addEventListener('message', (event) => {
     if (event.data === 'close-logicra-widget') {
       button.click();

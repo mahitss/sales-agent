@@ -15,6 +15,7 @@ interface BusinessInfo {
   website: string;
   industry: string;
   description: string;
+  themeColor?: string;
 }
 
 interface Lead {
@@ -41,6 +42,41 @@ function WidgetContent() {
   const [historyLoading, setHistoryLoading] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const lastMessageCountRef = useRef(0);
+
+  // Play premium notification chime using Web Audio API
+  const playNotificationSound = () => {
+    try {
+      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const oscillator = audioCtx.createOscillator();
+      const gainNode = audioCtx.createGain();
+      
+      oscillator.connect(gainNode);
+      gainNode.connect(audioCtx.destination);
+      
+      oscillator.type = "sine";
+      oscillator.frequency.setValueAtTime(587.33, audioCtx.currentTime); // D5 chord
+      gainNode.gain.setValueAtTime(0.08, audioCtx.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.25);
+      
+      oscillator.start();
+      oscillator.frequency.setValueAtTime(880, audioCtx.currentTime + 0.1); // A5 chime
+      oscillator.stop(audioCtx.currentTime + 0.26);
+    } catch (e) {
+      console.warn("Audio chime block bypass:", e);
+    }
+  };
+
+  // Sound triggers on incoming messages
+  useEffect(() => {
+    if (messages.length > lastMessageCountRef.current) {
+      const lastMsg = messages[messages.length - 1];
+      if (lastMsg && lastMsg.role === "model" && lastMessageCountRef.current > 0) {
+        playNotificationSound();
+      }
+      lastMessageCountRef.current = messages.length;
+    }
+  }, [messages]);
 
   // Load business info
   useEffect(() => {
@@ -250,18 +286,20 @@ function WidgetContent() {
     );
   }
 
+  const themeColor = business.themeColor || "#10B981";
+
   return (
     <div className="flex h-screen flex-col bg-slate-950 text-white font-sans overflow-hidden border border-slate-800/80 rounded-2xl">
       {/* Header */}
       <div className="flex items-center justify-between border-b border-slate-800/80 bg-slate-900/60 px-4 py-3 backdrop-blur-md">
         <div className="flex items-center gap-3">
-          <div className="relative flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 shadow-md">
+          <div className="relative flex h-10 w-10 items-center justify-center rounded-xl shadow-md" style={{ background: `linear-gradient(135deg, ${themeColor}, #0F172A)` }}>
             <Bot className="h-5.5 w-5.5 text-white" />
-            <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-slate-950 bg-green-400"></span>
+            <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-slate-950" style={{ backgroundColor: themeColor }}></span>
           </div>
           <div>
             <h2 className="font-bold text-sm leading-tight text-slate-100">{business.companyName}</h2>
-            <p className="text-xs text-emerald-400 font-medium">AI Agent Online</p>
+            <p className="text-xs font-semibold" style={{ color: themeColor }}>AI Agent Online</p>
           </div>
         </div>
         <button
@@ -276,7 +314,7 @@ function WidgetContent() {
       <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-thin scrollbar-thumb-slate-800 scrollbar-track-transparent">
         {historyLoading ? (
           <div className="flex h-full flex-col items-center justify-center text-slate-400 min-h-[200px]">
-            <div className="h-6 w-6 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent"></div>
+            <div className="h-6 w-6 animate-spin rounded-full border-2 border-t-transparent" style={{ borderColor: themeColor }}></div>
             <p className="mt-2 text-xs">Loading chat history...</p>
           </div>
         ) : (
@@ -288,16 +326,17 @@ function WidgetContent() {
                 className={`flex items-start gap-2.5 ${isUser ? "justify-end" : "justify-start"}`}
               >
                 {!isUser && (
-                  <div className="flex h-7.5 w-7.5 shrink-0 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                  <div className="flex h-7.5 w-7.5 shrink-0 items-center justify-center rounded-lg border" style={{ backgroundColor: `${themeColor}1A`, color: themeColor, borderColor: `${themeColor}33` }}>
                     <Bot className="h-4.5 w-4.5" />
                   </div>
                 )}
                 <div
                   className={`max-w-[75%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed shadow-sm ${
                     isUser
-                      ? "bg-emerald-600 text-white rounded-tr-none"
+                      ? "text-white rounded-tr-none"
                       : "bg-slate-900/90 text-slate-200 border border-slate-800/80 rounded-tl-none"
                   }`}
+                  style={isUser ? { backgroundColor: themeColor } : {}}
                 >
                   {msg.content}
                 </div>
@@ -313,7 +352,7 @@ function WidgetContent() {
 
         {loading && (
           <div className="flex items-start gap-2.5 justify-start">
-            <div className="flex h-7.5 w-7.5 shrink-0 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+            <div className="flex h-7.5 w-7.5 shrink-0 items-center justify-center rounded-lg border" style={{ backgroundColor: `${themeColor}1A`, color: themeColor, borderColor: `${themeColor}33` }}>
               <Bot className="h-4.5 w-4.5" />
             </div>
             <div className="bg-slate-900/90 border border-slate-800/80 rounded-2xl rounded-tl-none px-4 py-3 shadow-sm">
@@ -332,7 +371,7 @@ function WidgetContent() {
       {lead && (lead.name || lead.email || lead.phone || lead.budget) && (
         <div className="mx-4 mb-2 p-2 rounded-xl bg-slate-900/40 border border-slate-800/60 flex items-center justify-between text-[11px] text-slate-400">
           <div className="flex items-center gap-1.5">
-            <UserCheck className="h-3.5 w-3.5 text-emerald-400" />
+            <UserCheck className="h-3.5 w-3.5" style={{ color: themeColor }} />
             <span>Profile Sync:</span>
             {lead.name && lead.name !== "Anonymous Visitor" && <span className="font-semibold text-slate-200">Name</span>}
             {lead.email && <span className="font-semibold text-slate-200">• Email</span>}
@@ -360,12 +399,14 @@ function WidgetContent() {
             onChange={(e) => setInput(e.target.value)}
             disabled={loading}
             placeholder="Type your message..."
-            className="flex-1 rounded-xl bg-slate-900 border border-slate-800/80 px-4 py-2.5 text-sm text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/30 disabled:opacity-50 transition-all"
+            className="flex-1 rounded-xl bg-slate-900 border border-slate-800/80 px-4 py-2.5 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-1 disabled:opacity-50 transition-all"
+            style={{ "--tw-ring-color": themeColor } as any}
           />
           <button
             type="submit"
             disabled={loading || !input.trim()}
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-600 text-white hover:bg-emerald-500 active:scale-95 disabled:opacity-50 disabled:hover:bg-emerald-600 disabled:active:scale-100 transition-all shadow-md"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-white active:scale-95 disabled:opacity-50 transition-all shadow-md cursor-pointer"
+            style={{ backgroundColor: themeColor }}
           >
             <Send className="h-4.5 w-4.5" />
           </button>

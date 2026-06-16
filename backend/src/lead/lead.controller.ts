@@ -1,7 +1,8 @@
-import { Controller, Post, Get, Put, Body, Param, UseGuards } from '@nestjs/common';
+import { Controller, Post, Get, Put, Body, Param, UseGuards, Res } from '@nestjs/common';
 import { LeadService } from './lead.service';
 import { CreateLeadDto, UpdateLeadDto } from './dto/lead.dto';
 import { AuthGuard } from '../auth/auth.guard';
+import * as express from 'express';
 
 @Controller('leads')
 export class LeadController {
@@ -22,6 +23,15 @@ export class LeadController {
   @Get('stats/:businessId')
   async getStats(@Param('businessId') businessId: string) {
     return this.leadService.getStats(businessId);
+  }
+
+  @UseGuards(AuthGuard)
+  @Get('business/:businessId/export')
+  async exportLeads(@Param('businessId') businessId: string, @Res() res: express.Response) {
+    const csv = await this.leadService.exportLeadsToCsv(businessId);
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename=leads-${businessId}.csv`);
+    return res.status(200).send(csv);
   }
 
   @UseGuards(AuthGuard)

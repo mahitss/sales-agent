@@ -69,4 +69,32 @@ export class LeadService {
       conversionRate,
     };
   }
+
+  async exportLeadsToCsv(businessId: string): Promise<string> {
+    const leads = await this.prisma.lead.findMany({
+      where: { businessId },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const headers = ['ID', 'Name', 'Email', 'Phone', 'Budget', 'Source', 'Status', 'Sentiment', 'Engagement Score', 'Created At'];
+    const rows = leads.map((l) => [
+      l.id,
+      l.name || 'Anonymous Visitor',
+      l.email || '',
+      l.phone || '',
+      l.budget || '',
+      l.source,
+      l.status,
+      l.sentiment || 'Neutral',
+      l.engagementScore !== null && l.engagementScore !== undefined ? String(l.engagementScore) : '—',
+      l.createdAt.toISOString(),
+    ]);
+
+    const csvContent = [
+      headers.join(','),
+      ...rows.map((row) => row.map((val) => `"${val.replace(/"/g, '""')}"`).join(',')),
+    ].join('\n');
+
+    return csvContent;
+  }
 }

@@ -97,6 +97,8 @@ export class ChatService {
         website: business.website,
         industry: business.industry,
         description: business.description,
+        agentTone: business.agentTone,
+        agentPrompt: business.agentPrompt,
       },
       faqs: business.knowledgeBases.map((kb) => ({
         title: kb.title,
@@ -128,6 +130,8 @@ export class ChatService {
         extracted_appointment_date: null,
         extracted_appointment_time: null,
         lead_score: 'COLD',
+        lead_sentiment: 'Neutral',
+        engagement_score: 10,
       };
     }
 
@@ -147,6 +151,12 @@ export class ChatService {
     }
     if (aiResponse.lead_score) {
       updateData.status = aiResponse.lead_score;
+    }
+    if (aiResponse.lead_sentiment) {
+      updateData.sentiment = aiResponse.lead_sentiment;
+    }
+    if (aiResponse.engagement_score !== undefined && aiResponse.engagement_score !== null) {
+      updateData.engagementScore = aiResponse.engagement_score;
     }
 
     if (Object.keys(updateData).length > 0) {

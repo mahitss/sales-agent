@@ -37,3 +37,19 @@ services:
           type: web
           name: beacon-ai-service
           property: host
+
+  # 3. Next.js Frontend
+  - type: web
+    name: beacon-frontend
+    env: node
+    plan: free
+    buildCommand: npm run build
+    startCommand: npm run start
+    rootDir: frontend
+    envVars:
+      - key: NEXT_PUBLIC_API_URL
+        fromService:
+          type: web
+          name: beacon-backend
+          property: host
+

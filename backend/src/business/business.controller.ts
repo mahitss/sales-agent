@@ -69,6 +69,17 @@ export class BusinessController {
     return this.businessService.scrapeWebsite(id, url);
   }
 
+  // --- Document Import / Learn Text ---
+  @UseGuards(AuthGuard)
+  @Post(':id/import-text')
+  async importText(
+    @Param('id') id: string,
+    @Request() req,
+    @Body() body: { title: string; text: string }
+  ) {
+    return this.businessService.importText(id, req.user.sub, body);
+  }
+
   // --- Competitor Analysis Endpoints ---
   @UseGuards(AuthGuard)
   @Post(':id/competitor-analysis')

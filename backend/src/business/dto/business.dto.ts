@@ -40,6 +40,18 @@ export class CreateBusinessDto {
   @IsOptional()
   @IsString()
   emailSmtp?: string;
+
+  @IsOptional()
+  @IsString()
+  themeColor?: string;
+
+  @IsOptional()
+  @IsString()
+  agentTone?: string;
+
+  @IsOptional()
+  @IsString()
+  agentPrompt?: string;
 }
 
 export class CreateFAQDto {

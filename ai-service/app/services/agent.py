@@ -35,6 +35,12 @@ class AgentResponse(BaseModel):
     lead_score: Optional[str] = Field(
         None, description="Score the lead: HOT (provided most contact info & clear intent), WARM (interested, but incomplete info or low budget), COLD (no interest/spam)."
     )
+    lead_sentiment: Optional[str] = Field(
+        None, description="The customer's sentiment in their message: Positive, Neutral, Negative, or Inquisitive."
+    )
+    engagement_score: Optional[int] = Field(
+        None, description="A rating of customer engagement from 0 (completely uninterested) to 100 (ready to purchase/extremely active)."
+    )
 
 
 # FAQ Extraction Models
@@ -91,9 +97,13 @@ class AIAgentService:
             f"- Budget: {current_lead.get('budget') or 'Not provided yet'}\n"
         )
 
+        tone = business_info.get('agentTone') or 'PROFESSIONAL'
+        custom_instructions = business_info.get('agentPrompt') or ''
+
         # Formulate instructions
         system_instruction = (
             f"You are a premium AI Sales Agent for the business '{business_info.get('companyName')}' on their website.\n"
+            f"Adopt a {tone} conversational sales tone at all times.\n"
             f"Business Details:\n"
             f"- Website: {business_info.get('website')}\n"
             f"- Industry: {business_info.get('industry')}\n"
@@ -104,11 +114,13 @@ class AIAgentService:
             f"You must qualify the visitor and capture these details: Name, Email, Phone, and Budget.\n"
             f"{lead_progress}\n\n"
             f"Rules:\n"
-            f"1. Be friendly, polite, and helpful.\n"
+            f"1. Conversational Tone: Maintain a {tone} tone.\n"
             f"2. Use the Knowledge Base to answer visitor questions accurately. If you don't know, say so and offer to log their details for a call back.\n"
             f"3. If the visitor shows interest, lead-qualify them. Ask for missing details one at a time. Do not ask for all 4 at once (that feels like a form).\n"
             f"4. If they ask to schedule a call/appointment, invite them to state a date/time and confirm you'll book it. Capture that date/time in the fields.\n"
-            f"5. You must return your response according to the JSON schema. Analyze the user's latest input, extract any parameters they provided, update the lead_score if appropriate, and write your next text response.\n"
+            f"5. Analyze the user's latest input and determine lead_sentiment (Positive, Neutral, Negative, or Inquisitive) and compute an engagement_score (0-100) based on their interest level.\n"
+            f"6. Custom Prompts / Rules: {custom_instructions}\n\n"
+            f"You must return your response according to the JSON schema. Analyze the user's latest input, extract any parameters they provided, update the lead_score, lead_sentiment, and engagement_score, and write your next text response.\n"
         )
 
         if not self.client:
@@ -148,7 +160,9 @@ class AIAgentService:
             return AgentResponse(
                 response="I'm having a little trouble connecting to my systems right now. Could you please share your name and email so I can have our team follow up with you directly?",
                 intent="Support",
-                lead_score="COLD"
+                lead_score="COLD",
+                lead_sentiment="Neutral",
+                engagement_score=10
             )
 
     def _mock_response(self, latest_message: str, current_lead: Dict[str, Any]) -> AgentResponse:
@@ -209,6 +223,27 @@ class AIAgentService:
         if name and email and budget:
             score = "HOT"
 
+        # Sentiment detection
+        sentiment = "Neutral"
+        if any(w in msg_lower for w in ["yes", "great", "awesome", "perfect", "good", "love", "thanks", "thank you"]):
+            sentiment = "Positive"
+        elif any(w in msg_lower for w in ["bad", "wrong", "no", "hate", "issue", "error", "broken", "fail"]):
+            sentiment = "Negative"
+        elif "?" in latest_message or any(w in msg_lower for w in ["what", "how", "why", "who", "when"]):
+            sentiment = "Inquisitive"
+
+        # Engagement score computation
+        engagement = 15
+        if name:
+            engagement += 20
+        if email:
+            engagement += 30
+        if budget:
+            engagement += 20
+        if "schedule" in msg_lower or "book" in msg_lower:
+            engagement += 15
+        engagement = min(100, engagement)
+
         return AgentResponse(
             response=response_text,
             intent=intent,
@@ -218,7 +253,9 @@ class AIAgentService:
             extracted_budget=extracted_budget,
             extracted_appointment_date=extracted_date,
             extracted_appointment_time=extracted_time,
-            lead_score=score
+            lead_score=score,
+            lead_sentiment=sentiment,
+            engagement_score=engagement
         )
 
     # --- Auto Website Learning (FAQ extract) Service ---

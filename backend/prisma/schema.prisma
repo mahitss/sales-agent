@@ -32,6 +32,9 @@ model Business {
   whatsappApiKey     String?
   instagramAccountId String?
   emailSmtp          String?
+  themeColor         String               @default("#10B981")
+  agentTone          String               @default("PROFESSIONAL")
+  agentPrompt        String?
   createdAt          DateTime             @default(now())
   updatedAt          DateTime             @updatedAt
   leads              Lead[]
@@ -54,17 +57,19 @@ model KnowledgeBase {
 }
 
 model Lead {
-  id           String         @id @default(uuid())
-  businessId   String
-  business     Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  name         String?
-  email        String?
-  phone        String?
-  budget       String?
-  source       String         @default("WIDGET") // WIDGET, WHATSAPP, INSTAGRAM, EMAIL
-  status       String         @default("COLD") // HOT, WARM, COLD
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime       @updatedAt
+  id              String         @id @default(uuid())
+  businessId      String
+  business        Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  name            String?
+  email           String?
+  phone           String?
+  budget          String?
+  source          String         @default("WIDGET") // WIDGET, WHATSAPP, INSTAGRAM, EMAIL
+  status          String         @default("COLD") // HOT, WARM, COLD
+  sentiment       String?
+  engagementScore Int?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
   conversations Conversation[]
   appointments Appointment[]
 }

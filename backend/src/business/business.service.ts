@@ -21,6 +21,9 @@ export class BusinessService {
         whatsappApiKey: dto.whatsappApiKey,
         instagramAccountId: dto.instagramAccountId,
         emailSmtp: dto.emailSmtp,
+        themeColor: dto.themeColor ?? '#10B981',
+        agentTone: dto.agentTone ?? 'PROFESSIONAL',
+        agentPrompt: dto.agentPrompt,
       },
     });
   }
@@ -68,6 +71,9 @@ export class BusinessService {
         whatsappApiKey: dto.whatsappApiKey,
         instagramAccountId: dto.instagramAccountId,
         emailSmtp: dto.emailSmtp,
+        themeColor: dto.themeColor ?? '#10B981',
+        agentTone: dto.agentTone ?? 'PROFESSIONAL',
+        agentPrompt: dto.agentPrompt,
       },
     });
   }
@@ -179,6 +185,50 @@ export class BusinessService {
         {
           title: `Why choose ${business.companyName}?`,
           content: `We focus on delivering premium, customized results for our clients. Learn more by browsing our portal or starting a live conversation with us.`
+        }
+      ];
+    }
+
+    const createdFAQs: any[] = [];
+    for (const faq of faqList) {
+      const created = await this.prisma.knowledgeBase.create({
+        data: {
+          businessId,
+          title: faq.title,
+          content: faq.content,
+        },
+      });
+      createdFAQs.push(created);
+    }
+
+    return { count: createdFAQs.length, faqs: createdFAQs };
+  }
+
+  async importText(businessId: string, ownerId: string, body: { title: string; text: string }) {
+    const business = await this.prisma.business.findFirst({
+      where: { id: businessId, ownerId },
+    });
+    if (!business) {
+      throw new NotFoundException('Business profile not found or access denied');
+    }
+
+    let faqList: Array<{ title: string; content: string }> = [];
+    try {
+      const aiServiceUrl = process.env.AI_SERVICE_URL || 'http://localhost:8000';
+      const response = await axios.post(`${aiServiceUrl}/extract-faqs`, {
+        url: 'Document Upload: ' + body.title,
+        scraped_text: body.text,
+        company_name: business.companyName,
+        industry: business.industry,
+        description: business.description,
+      });
+      faqList = response.data.faqs;
+    } catch (err) {
+      console.warn(`AI document extraction failed, generating fallback FAQ: ${err.message}`);
+      faqList = [
+        {
+          title: `What is detailed in the uploaded document "${body.title}"?`,
+          content: body.text.substring(0, 400) + '...'
         }
       ];
     }

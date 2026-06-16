@@ -1,0 +1,16 @@
+{
+  "name": "sales-agent-ai",
+  "version": "1.0.0",
+  "description": "Sales agent AI Monorepo",
+  "private": true,
+  "scripts": {
+    "install:all": "npm install --prefix backend && npm install --prefix frontend",
+    "dev:backend": "npm run start:dev --prefix backend",
+    "dev:frontend": "npm run dev --prefix frontend",
+    "dev:ai": "cd ai-service && venv\\Scripts\\python -m app.main",
+    "dev": "npx concurrently -k -p \"[{name}]\" -n \"backend,frontend,ai-service\" -c \"cyan,magenta,yellow\" \"npm run dev:backend\" \"npm run dev:frontend\" \"npm run dev:ai\""
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
