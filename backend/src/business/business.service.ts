@@ -92,6 +92,17 @@ export class BusinessService {
     });
   }
 
+  private sanitizeHtml(text: string): string {
+    if (!text) return '';
+    return text
+      .replace(/<script[^>]*>([\s\S]*?)<\/script>/gi, '')
+      .replace(/<style[^>]*>([\s\S]*?)<\/style>/gi, '')
+      .replace(/<iframe[^>]*>([\s\S]*?)<\/iframe>/gi, '')
+      .replace(/on\w+\s*=\s*"[^"]*"/gi, '')
+      .replace(/on\w+\s*=\s*'[^']*'/gi, '')
+      .replace(/javascript:[^"']*/gi, '');
+  }
+
   async createFAQ(businessId: string, ownerId: string, dto: CreateFAQDto) {
     const business = await this.prisma.business.findFirst({
       where: { id: businessId, ownerId },
@@ -103,8 +114,8 @@ export class BusinessService {
     return this.prisma.knowledgeBase.create({
       data: {
         businessId,
-        title: dto.title,
-        content: dto.content,
+        title: this.sanitizeHtml(dto.title),
+        content: this.sanitizeHtml(dto.content),
       },
     });
   }
@@ -229,6 +240,9 @@ export class BusinessService {
       throw new NotFoundException('Business profile not found or access denied');
     }
 
+    const sanitizedText = this.sanitizeHtml(body.text);
+    const sanitizedTitle = this.sanitizeHtml(body.title);
+
     let faqList: Array<{ title: string; content: string }> = [];
     try {
       let aiServiceUrl = process.env.AI_SERVICE_URL || 'http://localhost:8000';
@@ -236,8 +250,8 @@ export class BusinessService {
         aiServiceUrl = `http://${aiServiceUrl}`;
       }
       const response = await axios.post(`${aiServiceUrl}/extract-faqs`, {
-        url: 'Document Upload: ' + body.title,
-        scraped_text: body.text,
+        url: 'Document Upload: ' + sanitizedTitle,
+        scraped_text: sanitizedText,
         company_name: business.companyName,
         industry: business.industry,
         description: business.description,
@@ -247,8 +261,8 @@ export class BusinessService {
       console.warn(`AI document extraction failed, generating fallback FAQ: ${err?.message || String(err)}`);
       faqList = [
         {
-          title: `What is detailed in the uploaded document "${body.title}"?`,
-          content: body.text.substring(0, 400) + '...'
+          title: `What is detailed in the uploaded document "${sanitizedTitle}"?`,
+          content: sanitizedText.substring(0, 400) + '...'
         }
       ];
     }
@@ -258,8 +272,8 @@ export class BusinessService {
       const created = await this.prisma.knowledgeBase.create({
         data: {
           businessId,
-          title: faq.title,
-          content: faq.content,
+          title: this.sanitizeHtml(faq.title),
+          content: this.sanitizeHtml(faq.content),
         },
       });
       createdFAQs.push(created);

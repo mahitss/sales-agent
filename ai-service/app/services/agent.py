@@ -72,9 +72,13 @@ class CompetitorAnalysisResponse(BaseModel):
 class AIAgentService:
     def __init__(self):
         self.api_key = os.getenv("GEMINI_API_KEY")
-        if not self.api_key or self.api_key.strip() == "":
+        if (
+            not self.api_key 
+            or self.api_key.strip() == "" 
+            or self.api_key.strip() == "your-google-gemini-api-key-here"
+        ):
             self.client = None
-            logger.warning("WARNING: GEMINI_API_KEY not set. Running in Mock Mode.")
+            logger.warning("WARNING: GEMINI_API_KEY not set or placeholder detected. Running in Mock Mode.")
         else:
             self.client = Client(api_key=self.api_key)
 

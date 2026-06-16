@@ -329,6 +329,7 @@ function WidgetContent() {
         </div>
         <button
           onClick={closeWidget}
+          aria-label="Close chat assistant"
           className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-white transition-colors"
         >
           <X className="h-5 w-5" />
@@ -336,7 +337,12 @@ function WidgetContent() {
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-thin scrollbar-thumb-slate-800 scrollbar-track-transparent">
+      <div 
+        role="log" 
+        aria-live="polite" 
+        aria-label="Chat transcript"
+        className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-thin scrollbar-thumb-slate-800 scrollbar-track-transparent"
+      >
         {historyLoading ? (
           <div className="flex h-full flex-col items-center justify-center text-slate-400 min-h-[200px]">
             <div className="h-6 w-6 animate-spin rounded-full border-2 border-t-transparent" style={{ borderColor: themeColor }}></div>
@@ -424,12 +430,14 @@ function WidgetContent() {
             onChange={(e) => setInput(e.target.value)}
             disabled={loading}
             placeholder="Type your message..."
+            aria-label="Chat message input"
             className="flex-1 rounded-xl bg-slate-900 border border-slate-800/80 px-4 py-2.5 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-1 disabled:opacity-50 transition-all"
             style={{ "--tw-ring-color": themeColor } as any}
           />
           <button
             type="submit"
             disabled={loading || !input.trim()}
+            aria-label="Send message"
             className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-white active:scale-95 disabled:opacity-50 transition-all shadow-md cursor-pointer"
             style={{ backgroundColor: themeColor }}
           >
