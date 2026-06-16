@@ -18,6 +18,8 @@ model User {
   createdAt  DateTime   @default(now())
   updatedAt  DateTime   @updatedAt
   businesses Business[]
+
+  @@index([businessId])
 }
 
 model Business {
@@ -57,6 +59,8 @@ model KnowledgeBase {
   content    String
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
+
+  @@index([businessId])
 }
 
 model Lead {
@@ -75,6 +79,8 @@ model Lead {
   updatedAt       DateTime       @updatedAt
   conversations Conversation[]
   appointments Appointment[]
+
+  @@index([businessId])
 }
 
 model Conversation {
@@ -88,6 +94,9 @@ model Conversation {
   isHumanTakeover Boolean   @default(false)
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
+
+  @@index([businessId])
+  @@index([leadId])
 }
 
 model Appointment {
@@ -101,6 +110,9 @@ model Appointment {
   status     String   @default("PENDING") // PENDING, CONFIRMED, CANCELLED
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
+
+  @@index([businessId])
+  @@index([leadId])
 }
 
 model VisitorTrack {
@@ -112,6 +124,8 @@ model VisitorTrack {
   duration    Int      @default(0)     // in seconds
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
+  @@index([businessId])
 }
 
 model CompetitorAnalysis {
@@ -122,6 +136,8 @@ model CompetitorAnalysis {
   analysis      String   @default("{}") // JSON string of serviceCompare, missingOfferings, contentGaps
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+
+  @@index([businessId])
 }
 
 model Recommendation {
@@ -134,4 +150,6 @@ model Recommendation {
   category   String   @default("LEAD")   // LEAD, COMPETITOR, KB
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
+
+  @@index([businessId])
 }

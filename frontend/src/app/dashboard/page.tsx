@@ -1,43 +1,35 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import Link from "next/link";
 import {
   Users,
   MessageSquare,
   Calendar,
   BookOpen,
-  Settings,
   Code,
   LogOut,
   TrendingUp,
-  Award,
-  CalendarDays,
-  CheckCircle2,
-  Trash2,
-  Plus,
-  Send,
-  User,
-  Activity,
-  ArrowRight,
-  ShieldCheck,
   RefreshCw,
   Building,
   Globe,
   Briefcase,
   FileText,
-  Bot,
   MapPin,
-  Eye,
   Compass,
   Radio,
-  Share2,
-  Brain,
-  ShieldAlert,
-  ArrowUpRight,
-  Flame,
-  Check
+  Activity
 } from "lucide-react";
+
+import { OverviewTab } from "./components/OverviewTab";
+import { LeadsTab } from "./components/LeadsTab";
+import { ConversationsTab } from "./components/ConversationsTab";
+import { AppointmentsTab } from "./components/AppointmentsTab";
+import { KnowledgeBaseTab } from "./components/KnowledgeBaseTab";
+import { VisitorTracksTab } from "./components/VisitorTracksTab";
+import { CompetitorTab } from "./components/CompetitorTab";
+import { TeamTab } from "./components/TeamTab";
+import { WidgetTab } from "./components/WidgetTab";
+import { IntegrationsTab } from "./components/IntegrationsTab";
 
 interface UserInfo {
   id: string;
@@ -129,12 +121,9 @@ interface DashboardStats {
   conversionRate: number;
 }
 
-const sanitizeHtml = (str: string): string => {
-  if (!str) return "";
-  return str.replace(/</g, "&lt;").replace(/>/g, "&gt;");
-};
-
 export default function DashboardPage() {
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+
   // Authentication & Profile States
   const [token, setToken] = useState<string | null>(null);
   const [user, setUser] = useState<UserInfo | null>(null);
@@ -247,14 +236,33 @@ export default function DashboardPage() {
   const [employeeError, setEmployeeError] = useState("");
   const [employeeSuccess, setEmployeeSuccess] = useState("");
 
+  // Refs for upload interval unmount safety
+  const uploadIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Wrapper fetch to support credentials/cookies and authorization header fallback
+  const authenticatedFetch = (url: string, options: RequestInit = {}) => {
+    const headers = {
+      ...options.headers,
+    } as any;
+    
+    const savedToken = localStorage.getItem("beacon_token");
+    if (savedToken) {
+      headers["Authorization"] = `Bearer ${savedToken}`;
+    }
+    
+    return fetch(url, {
+      ...options,
+      headers,
+      credentials: "include",
+    });
+  };
+
   const handleUnauthorized = () => {
     handleLogout();
     alert("Your session has expired. Please sign in again.");
   };
 
-  const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
-
-  // Check LocalStorage for Auth Session
+  // Check Session on mount
   useEffect(() => {
     const savedToken = localStorage.getItem("beacon_token");
     const savedUser = localStorage.getItem("beacon_user");
@@ -280,13 +288,19 @@ export default function DashboardPage() {
     }
   }, [business, activeTab]);
 
-  // Poll current chat conversation details when takeover chat is selected
+  // Poll current chat conversation details when takeover chat is selected (with AbortController protection)
   useEffect(() => {
     if (!token || !selectedConv || activeTab !== "conversations") return;
 
+    const controller = new AbortController();
+    const { signal } = controller;
+
     const interval = setInterval(() => {
-      fetch(`${API_URL}/conversations/${selectedConv.id}`)
-        .then((res) => res.json())
+      fetch(`${API_URL}/conversations/${selectedConv.id}`, { signal })
+        .then((res) => {
+          if (!res.ok) throw new Error("Conversation not found");
+          return res.json();
+        })
         .then((data) => {
           if (data && data.messages) {
             setSelectedConv((prev) => {
@@ -299,7 +313,6 @@ export default function DashboardPage() {
               }
               return prev;
             });
-            // Update in list too
             setConversations((prev) =>
               prev.map((c) =>
                 c.id === data.id ? { ...c, messages: data.messages, isHumanTakeover: data.isHumanTakeover } : c
@@ -307,17 +320,31 @@ export default function DashboardPage() {
             );
           }
         })
-        .catch(console.error);
+        .catch((err) => {
+          if (err.name !== "AbortError") {
+            console.error(err);
+          }
+        });
     }, 3000);
 
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      controller.abort();
+    };
   }, [token, selectedConv, activeTab]);
+
+  // Clear upload interval on unmount
+  useEffect(() => {
+    return () => {
+      if (uploadIntervalRef.current) {
+        clearInterval(uploadIntervalRef.current);
+      }
+    };
+  }, []);
 
   const fetchBusiness = async () => {
     try {
-      const res = await fetch(`${API_URL}/business`, {
-        headers: { Authorization: `Bearer ${localStorage.getItem("beacon_token")}` },
-      });
+      const res = await authenticatedFetch(`${API_URL}/business`);
       if (res.status === 401) {
         handleUnauthorized();
         return;
@@ -357,32 +384,29 @@ export default function DashboardPage() {
     if (!business) return;
     setDataLoading(true);
     try {
-      const headers = { Authorization: `Bearer ${localStorage.getItem("beacon_token")}` };
-      
-      let res;
       if (activeTab === "overview") {
-        const statsRes = await fetch(`${API_URL}/leads/stats/${business.id}`, { headers });
+        const statsRes = await authenticatedFetch(`${API_URL}/leads/stats/${business.id}`);
         if (statsRes.status === 401) {
           handleUnauthorized();
           return;
         }
         if (statsRes.ok) setStats(await statsRes.json());
         
-        const recsRes = await fetch(`${API_URL}/business/${business.id}/recommendations`, { headers });
+        const recsRes = await authenticatedFetch(`${API_URL}/business/${business.id}/recommendations`);
         if (recsRes.status === 401) {
           handleUnauthorized();
           return;
         }
         if (recsRes.ok) setRecommendations(await recsRes.json());
       } else if (activeTab === "leads") {
-        res = await fetch(`${API_URL}/leads/business/${business.id}`, { headers });
+        const res = await authenticatedFetch(`${API_URL}/leads/business/${business.id}`);
         if (res.status === 401) {
           handleUnauthorized();
           return;
         }
         if (res.ok) setLeads(await res.json());
       } else if (activeTab === "conversations") {
-        res = await fetch(`${API_URL}/conversations/business/${business.id}`, { headers });
+        const res = await authenticatedFetch(`${API_URL}/conversations/business/${business.id}`);
         if (res.status === 401) {
           handleUnauthorized();
           return;
@@ -396,24 +420,24 @@ export default function DashboardPage() {
           }
         }
       } else if (activeTab === "appointments") {
-        res = await fetch(`${API_URL}/appointments/business/${business.id}`, { headers });
+        const res = await authenticatedFetch(`${API_URL}/appointments/business/${business.id}`);
         if (res.status === 401) {
           handleUnauthorized();
           return;
         }
         if (res.ok) setAppointments(await res.json());
       } else if (activeTab === "kb") {
-        res = await fetch(`${API_URL}/business/${business.id}/faq`);
+        const res = await authenticatedFetch(`${API_URL}/business/${business.id}/faq`);
         if (res.ok) setFaqs(await res.json());
       } else if (activeTab === "visitor") {
-        res = await fetch(`${API_URL}/business/${business.id}/visitor-tracks`, { headers });
+        const res = await authenticatedFetch(`${API_URL}/business/${business.id}/visitor-tracks`);
         if (res.status === 401) {
           handleUnauthorized();
           return;
         }
         if (res.ok) setVisitorTracks(await res.json());
       } else if (activeTab === "competitor") {
-        res = await fetch(`${API_URL}/business/${business.id}/competitor-analysis`, { headers });
+        const res = await authenticatedFetch(`${API_URL}/business/${business.id}/competitor-analysis`);
         if (res.status === 401) {
           handleUnauthorized();
           return;
@@ -432,9 +456,7 @@ export default function DashboardPage() {
   const fetchEmployees = async () => {
     if (!business) return;
     try {
-      const res = await fetch(`${API_URL}/business/${business.id}/employees`, {
-        headers: { Authorization: `Bearer ${localStorage.getItem("beacon_token")}` },
-      });
+      const res = await authenticatedFetch(`${API_URL}/business/${business.id}/employees`);
       if (res.status === 401) {
         handleUnauthorized();
         return;
@@ -454,11 +476,10 @@ export default function DashboardPage() {
     setEmployeeError("");
     setEmployeeSuccess("");
     try {
-      const res = await fetch(`${API_URL}/business/${business.id}/employees`, {
+      const res = await authenticatedFetch(`${API_URL}/business/${business.id}/employees`, {
         method: "POST",
         headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${localStorage.getItem("beacon_token")}`
+          "Content-Type": "application/json"
         },
         body: JSON.stringify({
           email: employeeEmail,
@@ -476,7 +497,7 @@ export default function DashboardPage() {
       setEmployeePassword("");
       fetchEmployees();
     } catch (err: any) {
-      setEmployeeError(err.message || "Failed to create employee");
+      setEmployeeError(err?.message || String(err) || "Failed to create employee");
     } finally {
       setEmployeeLoading(false);
     }
@@ -511,13 +532,15 @@ export default function DashboardPage() {
       setToken(data.token);
       setUser(data.user);
     } catch (err: any) {
-      setAuthError(err.message || "An error occurred");
+      setAuthError(err?.message || String(err) || "An error occurred");
     } finally {
       setAuthLoading(false);
     }
   };
 
   function handleLogout() {
+    // Clear cookies on backend side
+    authenticatedFetch(`${API_URL}/auth/logout`, { method: "POST" }).catch(() => {});
     localStorage.removeItem("beacon_token");
     localStorage.removeItem("beacon_user");
     setToken(null);
@@ -532,11 +555,10 @@ export default function DashboardPage() {
     e.preventDefault();
     setOnboardLoading(true);
     try {
-      const res = await fetch(`${API_URL}/business`, {
+      const res = await authenticatedFetch(`${API_URL}/business`, {
         method: "POST",
         headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json"
         },
         body: JSON.stringify({
           companyName: compName,
@@ -572,7 +594,7 @@ export default function DashboardPage() {
       }
     } catch (err: any) {
       console.error(err);
-      alert(err.message || "An error occurred during onboarding");
+      alert(err?.message || String(err) || "An error occurred during onboarding");
     } finally {
       setOnboardLoading(false);
     }
@@ -584,11 +606,10 @@ export default function DashboardPage() {
     if (!faqTitle || !faqContent || !business) return;
     setFaqLoading(true);
     try {
-      const res = await fetch(`${API_URL}/business/${business.id}/faq`, {
+      const res = await authenticatedFetch(`${API_URL}/business/${business.id}/faq`, {
         method: "POST",
         headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json"
         },
         body: JSON.stringify({ title: faqTitle, content: faqContent }),
       });
@@ -606,16 +627,15 @@ export default function DashboardPage() {
 
   const handleExportLeads = () => {
     if (!business) return;
-    window.open(`${API_URL}/leads/business/${business.id}/export`, '_blank');
+    window.open(`${API_URL}/leads/business/${business.id}/export`, "_blank");
   };
 
   // Delete FAQ Handler
   const handleDeleteFAQ = async (faqId: string) => {
     if (!confirm("Are you sure you want to delete this FAQ?")) return;
     try {
-      const res = await fetch(`${API_URL}/business/faq/${faqId}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
+      const res = await authenticatedFetch(`${API_URL}/business/faq/${faqId}`, {
+        method: "DELETE"
       });
       if (res.ok) {
         refreshData();
@@ -628,11 +648,10 @@ export default function DashboardPage() {
   // Update Appointment Status
   const handleUpdateApptStatus = async (apptId: string, status: string) => {
     try {
-      const res = await fetch(`${API_URL}/appointments/${apptId}/status`, {
+      const res = await authenticatedFetch(`${API_URL}/appointments/${apptId}/status`, {
         method: "PUT",
         headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json"
         },
         body: JSON.stringify({ status }),
       });
@@ -647,11 +666,10 @@ export default function DashboardPage() {
   // Update Lead Status
   const handleUpdateLeadStatus = async (leadId: string, status: string) => {
     try {
-      const res = await fetch(`${API_URL}/leads/${leadId}`, {
+      const res = await authenticatedFetch(`${API_URL}/leads/${leadId}`, {
         method: "PUT",
         headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json"
         },
         body: JSON.stringify({ status }),
       });
@@ -671,11 +689,10 @@ export default function DashboardPage() {
     if (!business) return;
     setConnectionSaving(true);
     try {
-      const res = await fetch(`${API_URL}/business/${business.id}`, {
+      const res = await authenticatedFetch(`${API_URL}/business/${business.id}`, {
         method: "PUT",
         headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
+          "Content-Type": "application/json"
         },
         body: JSON.stringify({
           companyName: business.companyName,
@@ -718,11 +735,10 @@ export default function DashboardPage() {
     setTimeout(() => setSimStatus("[AI Service] Executing intent scoring & response parsing..."), 1800);
 
     try {
-      const res = await fetch(`${API_URL}/chat/simulate-incoming`, {
+      const res = await authenticatedFetch(`${API_URL}/chat/simulate-incoming`, {
         method: "POST",
         headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
+          "Content-Type": "application/json"
         },
         body: JSON.stringify({
           businessId: business.id,
@@ -766,11 +782,10 @@ export default function DashboardPage() {
     setTimeout(() => setScraperLogs(prev => [...prev, "[AI Service] Querying Gemini for FAQ context extraction..."]), 2400);
 
     try {
-      const res = await fetch(`${API_URL}/business/${business.id}/scrape`, {
+      const res = await authenticatedFetch(`${API_URL}/business/${business.id}/scrape`, {
         method: "POST",
         headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
+          "Content-Type": "application/json"
         },
         body: JSON.stringify({ url: scraperUrl })
       });
@@ -804,10 +819,12 @@ export default function DashboardPage() {
     setKbUploading(true);
     setKbProgress(0);
 
-    const interval = setInterval(() => {
+    if (uploadIntervalRef.current) clearInterval(uploadIntervalRef.current);
+
+    uploadIntervalRef.current = setInterval(() => {
       setKbProgress((prev) => {
         if (prev >= 95) {
-          clearInterval(interval);
+          if (uploadIntervalRef.current) clearInterval(uploadIntervalRef.current);
           return 95;
         }
         return prev + 15;
@@ -818,16 +835,15 @@ export default function DashboardPage() {
     reader.onload = async (event) => {
       const text = event.target?.result as string;
       try {
-        const res = await fetch(`${API_URL}/business/${business.id}/import-text`, {
+        const res = await authenticatedFetch(`${API_URL}/business/${business.id}/import-text`, {
           method: "POST",
           headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`
+            "Content-Type": "application/json"
           },
           body: JSON.stringify({ title: file.name, text })
         });
         
-        clearInterval(interval);
+        if (uploadIntervalRef.current) clearInterval(uploadIntervalRef.current);
         setKbProgress(100);
 
         if (res.ok) {
@@ -843,7 +859,7 @@ export default function DashboardPage() {
           throw new Error();
         }
       } catch (err) {
-        clearInterval(interval);
+        if (uploadIntervalRef.current) clearInterval(uploadIntervalRef.current);
         setTimeout(() => {
           alert("Failed to process document content. Please try another file.");
           setKbUploading(false);
@@ -867,11 +883,10 @@ export default function DashboardPage() {
     setTimeout(() => setCompetitorLogs(prev => [...prev, "[AI Service] Finding missing offerings & content gaps..."]), 2400);
 
     try {
-      const res = await fetch(`${API_URL}/business/${business.id}/competitor-analysis`, {
+      const res = await authenticatedFetch(`${API_URL}/business/${business.id}/competitor-analysis`, {
         method: "POST",
         headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
+          "Content-Type": "application/json"
         },
         body: JSON.stringify({ competitorUrl })
       });
@@ -898,11 +913,10 @@ export default function DashboardPage() {
     if (!selectedConv) return;
     const nextVal = !selectedConv.isHumanTakeover;
     try {
-      const res = await fetch(`${API_URL}/conversations/${selectedConv.id}/takeover`, {
+      const res = await authenticatedFetch(`${API_URL}/conversations/${selectedConv.id}/takeover`, {
         method: "PUT",
         headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
+          "Content-Type": "application/json"
         },
         body: JSON.stringify({ isHumanTakeover: nextVal })
       });
@@ -924,11 +938,10 @@ export default function DashboardPage() {
     if (!selectedConv || !operatorReply.trim() || operatorSending) return;
     setOperatorSending(true);
     try {
-      const res = await fetch(`${API_URL}/chat/operator-reply`, {
+      const res = await authenticatedFetch(`${API_URL}/chat/operator-reply`, {
         method: "POST",
         headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
+          "Content-Type": "application/json"
         },
         body: JSON.stringify({
           conversationId: selectedConv.id,
@@ -938,7 +951,6 @@ export default function DashboardPage() {
       if (res.ok) {
         const data = await res.json();
         setOperatorReply("");
-        // Local state updates
         setSelectedConv(prev => prev ? { ...prev, messages: data.conversation.messages } : null);
         setConversations(prev =>
           prev.map(c => c.id === data.conversation.id ? { ...c, messages: data.conversation.messages } : c)
@@ -1045,7 +1057,7 @@ export default function DashboardPage() {
     );
   }
 
-  // RENDER: Loading Gate (If authenticated but business profile query is in flight)
+  // RENDER: Loading Gate
   if (token && businessLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-950 text-white">
@@ -1057,7 +1069,7 @@ export default function DashboardPage() {
     );
   }
 
-  // RENDER: Onboarding Wizard (If no business created yet)
+  // RENDER: Onboarding Wizard
   if (!business) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-950 px-4 text-white">
@@ -1237,7 +1249,6 @@ export default function DashboardPage() {
               Knowledge Base
             </button>
             
-            {/* V2 Extensions Tabs */}
             <button
               onClick={() => setActiveTab("visitor")}
               className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-xl transition-all cursor-pointer ${
@@ -1250,7 +1261,7 @@ export default function DashboardPage() {
               Visitor Activity
             </button>
 
-            {user?.role === 'ADMIN' && (
+            {user?.role === "ADMIN" && (
               <>
                 <button
                   onClick={() => setActiveTab("competitor")}
@@ -1305,7 +1316,7 @@ export default function DashboardPage() {
         <div className="p-4 border-t border-slate-900 space-y-3">
           <div className="flex items-center gap-3 px-2">
             <div className="h-9 w-9 rounded-full bg-slate-800 border border-slate-700/50 flex items-center justify-center font-bold text-emerald-400">
-              {user?.name?.charAt(0)?.toUpperCase() || 'U'}
+              {user?.name?.charAt(0)?.toUpperCase() || "U"}
             </div>
             <div className="overflow-hidden">
               <p className="text-xs font-bold text-white truncate">{user?.name}</p>
@@ -1348,1432 +1359,156 @@ export default function DashboardPage() {
 
         {/* Dynamic Panels */}
         <div className="flex-1 overflow-y-auto p-8">
-          {/* TAB 1: OVERVIEW */}
           {activeTab === "overview" && (
-            <div className="space-y-8">
-              {/* Header Banner */}
-              <div className="rounded-3xl bg-gradient-to-r from-emerald-600/20 to-teal-500/5 border border-emerald-500/20 p-8">
-                <h3 className="text-2xl font-extrabold text-white">Hey {user?.name}!</h3>
-                <p className="mt-1 text-slate-400 text-sm max-w-xl">
-                  Your Sales Agent is active on your site. Here is an overview of how your leads and visitor conversations are progressing.
-                </p>
-              </div>
-
-              {/* Stats Grid */}
-              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
-                <div className="rounded-2xl border border-slate-900 bg-slate-900/30 p-6 flex flex-col justify-between">
-                  <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Total Leads</span>
-                  <div className="flex items-baseline justify-between mt-4">
-                    <span className="text-4xl font-black text-white">{stats.totalLeads}</span>
-                    <div className="p-2.5 rounded-lg bg-emerald-500/10 text-emerald-400">
-                      <Users className="h-5.5 w-5.5" />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="rounded-2xl border border-slate-900 bg-slate-900/30 p-6 flex flex-col justify-between">
-                  <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Qualified Leads</span>
-                  <div className="flex items-baseline justify-between mt-4">
-                    <span className="text-4xl font-black text-white">{stats.qualifiedLeads}</span>
-                    <div className="p-2.5 rounded-lg bg-emerald-500/10 text-emerald-400">
-                      <Award className="h-5.5 w-5.5" />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="rounded-2xl border border-slate-900 bg-slate-900/30 p-6 flex flex-col justify-between">
-                  <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Booked Calls</span>
-                  <div className="flex items-baseline justify-between mt-4">
-                    <span className="text-4xl font-black text-white">{stats.appointments}</span>
-                    <div className="p-2.5 rounded-lg bg-emerald-500/10 text-emerald-400">
-                      <CalendarDays className="h-5.5 w-5.5" />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="rounded-2xl border border-slate-900 bg-slate-900/30 p-6 flex flex-col justify-between">
-                  <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Conversion Rate</span>
-                  <div className="flex items-baseline justify-between mt-4">
-                    <span className="text-4xl font-black text-emerald-400">{stats.conversionRate}%</span>
-                    <div className="p-2.5 rounded-lg bg-emerald-500/10 text-emerald-400">
-                      <TrendingUp className="h-5.5 w-5.5" />
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Recommendations Engine Section */}
-              <div className="rounded-2xl border border-slate-900 bg-slate-900/30 p-6 space-y-4">
-                <div className="flex items-center justify-between">
-                  <h4 className="font-bold text-sm uppercase tracking-wider text-slate-400 flex items-center gap-2">
-                    <Brain className="h-4.5 w-4.5 text-emerald-400" />
-                    AI Action Recommendations
-                  </h4>
-                  <span className="text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/25 px-2 py-0.5 rounded font-black tracking-wide">
-                    FEED LIVE
-                  </span>
-                </div>
-                
-                {recommendations.length === 0 ? (
-                  <p className="text-xs text-slate-500 text-center py-4">No active recommendations. Setup your knowledge base and capture leads to get AI prioritized actions.</p>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {recommendations.map((rec, idx) => (
-                      <div key={idx} className="p-4 rounded-xl bg-slate-950 border border-slate-900 space-y-2 relative group hover:border-emerald-500/30 transition-all">
-                        <div className="flex items-center justify-between">
-                          <span className={`text-[9px] font-black px-1.5 py-0.5 rounded tracking-wider ${
-                            rec.priority === 'HIGH' ? 'bg-red-500/10 text-red-400 border border-red-500/20' :
-                            rec.priority === 'MEDIUM' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' :
-                            'bg-blue-500/10 text-blue-400 border border-blue-500/20'
-                          }`}>
-                            {rec.priority} PRIORITY
-                          </span>
-                          <span className="text-[10px] text-slate-500 font-semibold uppercase">{rec.category}</span>
-                        </div>
-                        <h5 className="text-sm font-bold text-slate-200">{rec.title}</h5>
-                        <p className="text-xs text-slate-400 leading-relaxed">{rec.content}</p>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Funnel Chart & Channel Distribution Grid */}
-              <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
-                {/* Stage Funnel Chart */}
-                <div className="rounded-2xl border border-slate-900 bg-slate-900/30 p-6 space-y-6">
-                  <div>
-                    <h4 className="font-bold text-sm uppercase tracking-wider text-slate-400">Sales Conversion Funnel</h4>
-                    <p className="text-[11px] text-slate-500 mt-0.5">Flow of visitor traffic to scheduled callbacks</p>
-                  </div>
-                  
-                  {(() => {
-                    const totalVisitors = stats.totalLeads * 3 + 28;
-                    const visitorsPct = 100;
-                    const leadsPct = totalVisitors > 0 ? Math.round((stats.totalLeads / totalVisitors) * 100) : 0;
-                    const qualPct = totalVisitors > 0 ? Math.round((stats.qualifiedLeads / totalVisitors) * 100) : 0;
-                    const apptPct = totalVisitors > 0 ? Math.round((stats.appointments / totalVisitors) * 100) : 0;
-                    
-                    return (
-                      <div className="space-y-4">
-                        {/* Stage 1: Traffic */}
-                        <div className="space-y-1">
-                          <div className="flex justify-between text-xs font-semibold text-slate-400">
-                            <span>1. Total Traffic (Simulated)</span>
-                            <span>{totalVisitors} sessions ({visitorsPct}%)</span>
-                          </div>
-                          <div className="h-7 w-full rounded-lg bg-slate-900 overflow-hidden relative border border-slate-800">
-                            <div className="h-full rounded-lg bg-gradient-to-r from-emerald-700/50 to-teal-500/50" style={{ width: `${visitorsPct}%` }}></div>
-                          </div>
-                        </div>
-
-                        {/* Stage 2: Lead Capture */}
-                        <div className="space-y-1">
-                          <div className="flex justify-between text-xs font-semibold text-slate-400">
-                            <span>2. Captured Leads</span>
-                            <span>{stats.totalLeads} users ({leadsPct}%)</span>
-                          </div>
-                          <div className="h-7 w-full rounded-lg bg-slate-900 overflow-hidden relative border border-slate-800">
-                            <div className="h-full rounded-lg bg-gradient-to-r from-emerald-600/50 to-teal-400/50" style={{ width: `${leadsPct}%` }}></div>
-                          </div>
-                        </div>
-
-                        {/* Stage 3: Qualified leads */}
-                        <div className="space-y-1">
-                          <div className="flex justify-between text-xs font-semibold text-slate-400">
-                            <span>3. Qualified Leads (HOT/WARM)</span>
-                            <span>{stats.qualifiedLeads} users ({qualPct}%)</span>
-                          </div>
-                          <div className="h-7 w-full rounded-lg bg-slate-900 overflow-hidden relative border border-slate-800">
-                            <div className="h-full rounded-lg bg-gradient-to-r from-emerald-500/60 to-emerald-400/60" style={{ width: `${qualPct}%` }}></div>
-                          </div>
-                        </div>
-
-                        {/* Stage 4: Appointment Booked */}
-                        <div className="space-y-1">
-                          <div className="flex justify-between text-xs font-semibold text-slate-400">
-                            <span>4. Booked Appointments</span>
-                            <span>{stats.appointments} calls ({apptPct}%)</span>
-                          </div>
-                          <div className="h-7 w-full rounded-lg bg-slate-900 overflow-hidden relative border border-slate-800">
-                            <div className="h-full rounded-lg bg-gradient-to-r from-teal-500 to-emerald-400" style={{ width: `${apptPct}%` }}></div>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })()}
-                </div>
-
-                {/* Channel Distribution & Integrations Checklist */}
-                <div className="rounded-2xl border border-slate-900 bg-slate-900/30 p-6 space-y-6 flex flex-col justify-between">
-                  <div>
-                    <h4 className="font-bold text-sm uppercase tracking-wider text-slate-400">Conversations By Channel</h4>
-                    <p className="text-[11px] text-slate-500 mt-0.5">Interaction density comparison</p>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-900 flex flex-col justify-between gap-2">
-                      <span className="text-[10px] uppercase font-bold text-slate-500">Website Chat</span>
-                      <div className="flex items-baseline justify-between mt-1">
-                        <span className="text-xl font-bold text-white">WIDGET</span>
-                        <span className="text-xs text-slate-400 font-semibold">Active</span>
-                      </div>
-                      <div className="w-full bg-slate-900 h-1.5 rounded-full overflow-hidden mt-1">
-                        <div className="h-full rounded-full bg-emerald-500" style={{ width: "65%" }}></div>
-                      </div>
-                    </div>
-
-                    <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-900 flex flex-col justify-between gap-2">
-                      <span className="text-[10px] uppercase font-bold text-slate-500">WhatsApp</span>
-                      <div className="flex items-baseline justify-between mt-1">
-                        <span className="text-xl font-bold text-white">WHATSAPP</span>
-                        <span className="text-xs text-slate-400 font-semibold">{whatsappEnabled ? "Connected" : "Inactive"}</span>
-                      </div>
-                      <div className="w-full bg-slate-900 h-1.5 rounded-full overflow-hidden mt-1">
-                        <div className="h-full rounded-full bg-green-500" style={{ width: whatsappEnabled ? "25%" : "0%" }}></div>
-                      </div>
-                    </div>
-
-                    <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-900 flex flex-col justify-between gap-2">
-                      <span className="text-[10px] uppercase font-bold text-slate-500">Instagram</span>
-                      <div className="flex items-baseline justify-between mt-1">
-                        <span className="text-xl font-bold text-white">INSTAGRAM</span>
-                        <span className="text-xs text-slate-400 font-semibold">{instagramEnabled ? "Connected" : "Inactive"}</span>
-                      </div>
-                      <div className="w-full bg-slate-900 h-1.5 rounded-full overflow-hidden mt-1">
-                        <div className="h-full rounded-full bg-pink-500" style={{ width: instagramEnabled ? "15%" : "0%" }}></div>
-                      </div>
-                    </div>
-
-                    <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-900 flex flex-col justify-between gap-2">
-                      <span className="text-[10px] uppercase font-bold text-slate-500">Email SMTP</span>
-                      <div className="flex items-baseline justify-between mt-1">
-                        <span className="text-xl font-bold text-white">EMAIL</span>
-                        <span className="text-xs text-slate-400 font-semibold">{emailEnabled ? "Connected" : "Inactive"}</span>
-                      </div>
-                      <div className="w-full bg-slate-900 h-1.5 rounded-full overflow-hidden mt-1">
-                        <div className="h-full rounded-full bg-indigo-500" style={{ width: emailEnabled ? "10%" : "0%" }}></div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
+            <OverviewTab
+              user={user}
+              stats={stats}
+              recommendations={recommendations}
+              whatsappEnabled={whatsappEnabled}
+              instagramEnabled={instagramEnabled}
+              emailEnabled={emailEnabled}
+              setActiveTab={setActiveTab}
+            />
           )}
 
-          {/* TAB 2: LEADS */}
           {activeTab === "leads" && (
-            <div className="space-y-6">
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div>
-                  <h3 className="text-xl font-bold text-white">Leads Log</h3>
-                  <p className="text-xs text-slate-500 mt-1">Visitors qualified and captured by the AI agent</p>
-                </div>
-                <button
-                  onClick={handleExportLeads}
-                  className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-xl px-5 py-2.5 text-xs flex items-center gap-1.5 cursor-pointer shadow-md self-start md:self-auto"
-                >
-                  <FileText className="h-4 w-4" />
-                  Export Leads (CSV)
-                </button>
-              </div>
-
-              {/* Filters container */}
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 p-4 rounded-2xl border border-slate-900 bg-slate-900/10">
-                <div>
-                  <label className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Search Visitor</label>
-                  <input
-                    type="text"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    placeholder="Name, email or phone..."
-                    className="mt-1 w-full rounded-xl bg-slate-950 border border-slate-900 px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500/50 placeholder-slate-700"
-                  />
-                </div>
-                <div>
-                  <label className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Status</label>
-                  <select
-                    value={filterStatus}
-                    onChange={(e) => setFilterStatus(e.target.value)}
-                    className="mt-1 w-full rounded-xl bg-slate-950 border border-slate-900 px-3 py-2 text-xs text-white focus:outline-none"
-                  >
-                    <option value="ALL">All Statuses</option>
-                    <option value="HOT">HOT</option>
-                    <option value="WARM">WARM</option>
-                    <option value="COLD">COLD</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Source Channel</label>
-                  <select
-                    value={filterSource}
-                    onChange={(e) => setFilterSource(e.target.value)}
-                    className="mt-1 w-full rounded-xl bg-slate-950 border border-slate-900 px-3 py-2 text-xs text-white focus:outline-none"
-                  >
-                    <option value="ALL">All Channels</option>
-                    <option value="WIDGET">WIDGET</option>
-                    <option value="WHATSAPP">WHATSAPP</option>
-                    <option value="INSTAGRAM">INSTAGRAM</option>
-                    <option value="EMAIL">EMAIL</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Sentiment</label>
-                  <select
-                    value={filterSentiment}
-                    onChange={(e) => setFilterSentiment(e.target.value)}
-                    className="mt-1 w-full rounded-xl bg-slate-950 border border-slate-900 px-3 py-2 text-xs text-white focus:outline-none"
-                  >
-                    <option value="ALL">All Sentiments</option>
-                    <option value="Positive">Positive</option>
-                    <option value="Neutral">Neutral</option>
-                    <option value="Negative">Negative</option>
-                    <option value="Inquisitive">Inquisitive</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="overflow-hidden border border-slate-900 rounded-2xl bg-slate-900/10">
-                <table className="w-full border-collapse text-left text-sm">
-                  <thead className="bg-slate-900/50 border-b border-slate-900 text-xs font-semibold uppercase text-slate-400">
-                    <tr>
-                      <th className="px-6 py-4">Name</th>
-                      <th className="px-6 py-4">Email</th>
-                      <th className="px-6 py-4">Phone</th>
-                      <th className="px-6 py-4">Budget</th>
-                      <th className="px-6 py-4">Source</th>
-                      <th className="px-6 py-4">Status</th>
-                      <th className="px-6 py-4">Sentiment</th>
-                      <th className="px-6 py-4">Engagement</th>
-                      <th className="px-6 py-4">Date Captured</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-900/60">
-                    {(() => {
-                      const filteredLeads = leads.filter(l => {
-                        const matchesSearch = !searchTerm || 
-                          (l.name && l.name.toLowerCase().includes(searchTerm.toLowerCase())) || 
-                          (l.email && l.email.toLowerCase().includes(searchTerm.toLowerCase())) ||
-                          (l.phone && l.phone.includes(searchTerm));
-                        const matchesStatus = filterStatus === "ALL" || l.status === filterStatus;
-                        const matchesSource = filterSource === "ALL" || l.source === filterSource;
-                        const matchesSentiment = filterSentiment === "ALL" || (l.sentiment || "Neutral") === filterSentiment;
-                        return matchesSearch && matchesStatus && matchesSource && matchesSentiment;
-                      });
-
-                      if (filteredLeads.length === 0) {
-                        return (
-                          <tr>
-                            <td colSpan={9} className="px-6 py-12 text-center text-slate-500">
-                              No matching leads found. Try adjusting your search filters!
-                            </td>
-                          </tr>
-                        );
-                      }
-
-                      return filteredLeads.map((l) => {
-                        const sentiment = l.sentiment || "Neutral";
-                        const sentimentBadge = 
-                          sentiment === "Positive" ? "bg-green-500/10 text-green-400 border border-green-500/20" :
-                          sentiment === "Negative" ? "bg-red-500/10 text-red-400 border border-red-500/20" :
-                          sentiment === "Inquisitive" ? "bg-blue-500/10 text-blue-400 border border-blue-500/20" :
-                          "bg-slate-500/10 text-slate-400 border border-slate-500/20";
-                        
-                        const score = l.engagementScore !== undefined && l.engagementScore !== null ? l.engagementScore : 15;
-                        const scoreColor = 
-                          score >= 70 ? "bg-emerald-500" :
-                          score >= 40 ? "bg-amber-500" :
-                          "bg-red-500";
-
-                        return (
-                          <tr key={l.id} className="hover:bg-slate-900/20 transition-colors">
-                            <td className="px-6 py-4 font-semibold text-slate-200">
-                              {l.name === "Anonymous Visitor" ? (
-                                <span className="italic text-slate-500">Anonymous Visitor</span>
-                              ) : (
-                                l.name
-                              )}
-                            </td>
-                            <td className="px-6 py-4 text-slate-300">{l.email || "—"}</td>
-                            <td className="px-6 py-4 text-slate-300">{l.phone || "—"}</td>
-                            <td className="px-6 py-4 text-slate-300">{l.budget || "—"}</td>
-                            <td className="px-6 py-4">
-                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                                l.source === "WHATSAPP" ? "bg-green-500/10 text-green-400 border border-green-500/20" :
-                                l.source === "INSTAGRAM" ? "bg-pink-500/10 text-pink-400 border border-pink-500/20" :
-                                l.source === "EMAIL" ? "bg-indigo-500/10 text-indigo-400 border border-indigo-500/20" :
-                                "bg-slate-500/10 text-slate-400 border border-slate-500/20"
-                              }`}>
-                                {l.source}
-                              </span>
-                            </td>
-                            <td className="px-6 py-4">
-                              <select
-                                value={l.status}
-                                onChange={(e) => handleUpdateLeadStatus(l.id, e.target.value)}
-                                className={`rounded-lg border border-transparent px-2.5 py-1 text-xs font-bold focus:outline-none transition-all cursor-pointer ${
-                                  l.status === "HOT" ? "bg-red-500/10 text-red-400 border-red-500/20" :
-                                  l.status === "WARM" ? "bg-amber-500/10 text-amber-400 border-amber-500/20" :
-                                  "bg-blue-500/10 text-blue-400 border-blue-500/20"
-                                }`}
-                              >
-                                <option value="HOT" className="bg-slate-950 text-red-400">HOT</option>
-                                <option value="WARM" className="bg-slate-950 text-amber-400">WARM</option>
-                                <option value="COLD" className="bg-slate-950 text-blue-400">COLD</option>
-                              </select>
-                            </td>
-                            <td className="px-6 py-4">
-                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${sentimentBadge}`}>
-                                {sentiment === "Positive" ? "🟢 Positive" :
-                                 sentiment === "Negative" ? "🔴 Negative" :
-                                 sentiment === "Inquisitive" ? "🔵 Inquisitive" :
-                                 "⚪ Neutral"}
-                              </span>
-                            </td>
-                            <td className="px-6 py-4">
-                              <div className="flex items-center gap-2">
-                                <span className="text-xs font-bold text-slate-300 w-8">{score}%</span>
-                                <div className="w-16 bg-slate-900 h-2 rounded-full overflow-hidden">
-                                  <div className={`h-full rounded-full ${scoreColor}`} style={{ width: `${score}%` }}></div>
-                                </div>
-                              </div>
-                            </td>
-                            <td className="px-6 py-4 text-xs text-slate-500">
-                              {new Date(l.createdAt).toLocaleDateString()}
-                            </td>
-                          </tr>
-                        );
-                      });
-                    })()}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+            <LeadsTab
+              leads={leads}
+              searchTerm={searchTerm}
+              setSearchTerm={setSearchTerm}
+              filterStatus={filterStatus}
+              setFilterStatus={setFilterStatus}
+              filterSource={filterSource}
+              setFilterSource={setFilterSource}
+              filterSentiment={filterSentiment}
+              setFilterSentiment={setFilterSentiment}
+              handleExportLeads={handleExportLeads}
+              handleUpdateLeadStatus={handleUpdateLeadStatus}
+            />
           )}
 
-          {/* TAB 3: CONVERSATIONS */}
           {activeTab === "conversations" && (
-            <div className="flex h-[calc(100vh-12rem)] border border-slate-900 rounded-2xl overflow-hidden bg-slate-900/10">
-              {/* Left pane: conversations list */}
-              <div className="w-1/3 border-r border-slate-900 flex flex-col">
-                <div className="p-4 border-b border-slate-900 font-semibold text-xs uppercase tracking-wider text-slate-500">
-                  All Chats
-                </div>
-                <div className="flex-1 overflow-y-auto divide-y divide-slate-900/40">
-                  {conversations.length === 0 ? (
-                    <div className="p-6 text-center text-slate-500 text-sm">
-                      No conversations log available.
-                    </div>
-                  ) : (
-                    conversations.map((c) => {
-                      const isSelected = selectedConv?.id === c.id;
-                      const leadName = c.lead?.name || "Anonymous Visitor";
-                      const lastMsg = c.messages[c.messages.length - 1]?.content || "";
-                      return (
-                        <button
-                          key={c.id}
-                          onClick={() => setSelectedConv(c)}
-                          className={`w-full text-left p-4 hover:bg-slate-900/30 transition-all cursor-pointer ${
-                            isSelected ? "bg-slate-900/50 border-l-2 border-emerald-500" : ""
-                          }`}
-                        >
-                          <div className="flex justify-between items-start">
-                            <span className="font-bold text-sm text-slate-200 truncate pr-2 flex items-center gap-1.5">
-                              {c.channel !== "WIDGET" && (
-                                <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${
-                                  c.channel === "WHATSAPP" ? "bg-green-400" :
-                                  c.channel === "INSTAGRAM" ? "bg-pink-400" : "bg-indigo-400"
-                                }`}></span>
-                              )}
-                              {leadName === "Anonymous Visitor" ? (
-                                <span className="italic font-normal text-slate-500">Anonymous</span>
-                              ) : (
-                                leadName
-                              )}
-                            </span>
-                            <span className="text-[10px] text-slate-500 shrink-0">
-                              {new Date(c.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                            </span>
-                          </div>
-                          <p className="text-xs text-slate-400 truncate mt-1">{lastMsg}</p>
-                        </button>
-                      );
-                    })
-                  )}
-                </div>
-              </div>
-
-              {/* Right pane: chat viewer */}
-              <div className="flex-1 flex flex-col bg-slate-950">
-                {selectedConv ? (
-                  <>
-                    {/* Header */}
-                    <div className="px-6 py-4 border-b border-slate-900 flex items-center justify-between">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h4 className="font-bold text-sm text-white">
-                            {selectedConv.lead?.name || "Anonymous Visitor"}
-                          </h4>
-                          <span className={`px-2 py-0.5 rounded text-[9px] font-black ${
-                            selectedConv.channel === "WHATSAPP" ? "bg-green-500/10 text-green-400 border border-green-500/20" :
-                            selectedConv.channel === "INSTAGRAM" ? "bg-pink-500/10 text-pink-400 border border-pink-500/20" :
-                            selectedConv.channel === "EMAIL" ? "bg-indigo-500/10 text-indigo-400 border border-indigo-500/20" :
-                            "bg-slate-500/10 text-slate-400 border border-slate-500/20"
-                          }`}>
-                            {selectedConv.channel}
-                          </span>
-                        </div>
-                        <p className="text-xs text-slate-500 mt-0.5">
-                          {selectedConv.lead?.email ? `${selectedConv.lead.email} • ` : ""}
-                          {selectedConv.lead?.phone ? `${selectedConv.lead.phone} • ` : ""}
-                          {selectedConv.lead?.budget ? `Budget: ${selectedConv.lead.budget}` : ""}
-                        </p>
-                      </div>
-                      
-                      {/* Takeover Control buttons */}
-                      <div className="flex items-center gap-3">
-                        <button
-                          onClick={handleToggleTakeover}
-                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
-                            selectedConv.isHumanTakeover
-                              ? "bg-red-500/15 text-red-400 border-red-500/25 hover:bg-red-500/20"
-                              : "bg-emerald-600/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-600/20"
-                          }`}
-                        >
-                          <ShieldAlert className="h-4 w-4" />
-                          {selectedConv.isHumanTakeover ? "Release to AI" : "Take Over Chat"}
-                        </button>
-
-                        {selectedConv.lead?.status && (
-                          <span className={`px-2.5 py-1 rounded-full text-[10px] font-black ${
-                            selectedConv.lead.status === "HOT" ? "bg-red-500/10 text-red-400 border border-red-500/20" :
-                            selectedConv.lead.status === "WARM" ? "bg-amber-500/10 text-amber-400 border border-amber-500/20" :
-                            "bg-blue-500/10 text-blue-400 border border-blue-500/20"
-                          }`}>
-                            {selectedConv.lead.status}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Takeover Alert banner */}
-                    {selectedConv.isHumanTakeover && (
-                      <div className="px-6 py-2 bg-red-500/10 border-b border-red-500/20 text-xs text-red-400 font-semibold flex items-center gap-2">
-                        <ShieldAlert className="h-4 w-4 text-red-400 shrink-0" />
-                        <span>Takeover Active. AI is currently paused. Use the message panel below to chat manually.</span>
-                      </div>
-                    )}
-
-                    {/* Chat Bubble List */}
-                    <div className="flex-1 p-6 overflow-y-auto space-y-4">
-                      {selectedConv.messages.map((m, idx) => {
-                        const isUser = m.role === "user";
-                        return (
-                          <div
-                            key={idx}
-                            className={`flex items-start gap-3 ${isUser ? "justify-end" : "justify-start"}`}
-                          >
-                            {!isUser && (
-                              <div className="h-7.5 w-7.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center justify-center shrink-0">
-                                <Bot className="h-4 w-4" />
-                              </div>
-                            )}
-                            <div className={`max-w-[70%] px-4 py-3 rounded-2xl text-sm leading-relaxed ${
-                              isUser
-                                ? "bg-emerald-600 text-white rounded-tr-none shadow-md"
-                                : "bg-slate-900 text-slate-200 rounded-tl-none border border-slate-800/80 shadow-sm"
-                            }`}>
-                              {m.content}
-                            </div>
-                            {isUser && (
-                              <div className="h-7.5 w-7.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-500 flex items-center justify-center shrink-0">
-                                <User className="h-4 w-4" />
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-
-                    {/* Manual Messaging Input Panel (only allowed when takeover is active) */}
-                    <div className="p-4 border-t border-slate-900 bg-slate-950">
-                      {selectedConv.isHumanTakeover ? (
-                        <form onSubmit={handleSendOperatorReply} className="flex gap-2">
-                          <input
-                            type="text"
-                            value={operatorReply}
-                            onChange={(e) => setOperatorReply(e.target.value)}
-                            placeholder="Type a manual response to user..."
-                            className="flex-1 rounded-xl bg-slate-900 border border-slate-800 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-red-500/50"
-                          />
-                          <button
-                            type="submit"
-                            disabled={!operatorReply.trim() || operatorSending}
-                            className="bg-red-600 hover:bg-red-500 text-white font-semibold rounded-xl px-5 py-2.5 text-sm flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-                          >
-                            <Send className="h-4 w-4" />
-                            Send
-                          </button>
-                        </form>
-                      ) : (
-                        <p className="text-center text-xs text-slate-500 py-2">
-                          💡 Click <strong>Take Over Chat</strong> at the top to pause AI and message this visitor manually.
-                        </p>
-                      )}
-                    </div>
-                  </>
-                ) : (
-                  <div className="flex-1 flex flex-col items-center justify-center text-slate-500">
-                    <MessageSquare className="h-10 w-10 text-slate-700 mb-2" />
-                    <p className="text-sm">Select a conversation from the sidebar to view transcript</p>
-                  </div>
-                )}
-              </div>
-            </div>
+            <ConversationsTab
+              conversations={conversations}
+              selectedConv={selectedConv}
+              setSelectedConv={setSelectedConv}
+              handleToggleTakeover={handleToggleTakeover}
+              operatorReply={operatorReply}
+              setOperatorReply={setOperatorReply}
+              handleSendOperatorReply={handleSendOperatorReply}
+              operatorSending={operatorSending}
+            />
           )}
 
-          {/* TAB 4: APPOINTMENTS */}
           {activeTab === "appointments" && (
-            <div className="space-y-6">
-              <div>
-                <h3 className="text-xl font-bold text-white">Booked Appointments</h3>
-                <p className="text-xs text-slate-500 mt-1">Interactions where the AI extracted and scheduled a callback</p>
-              </div>
-
-              <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-                {appointments.length === 0 ? (
-                  <div className="col-span-full border border-slate-900 border-dashed rounded-2xl p-12 text-center text-slate-500">
-                    No appointments scheduled yet. Let a user ask to schedule a call in the widget simulator!
-                  </div>
-                ) : (
-                  appointments.map((a) => (
-                    <div key={a.id} className="rounded-2xl border border-slate-900 bg-slate-900/30 p-6 space-y-4">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <h4 className="font-bold text-base text-white">{a.lead.name || "Anonymous Lead"}</h4>
-                          <p className="text-xs text-slate-500 mt-0.5">{a.lead.email || "No email"}</p>
-                          <p className="text-xs text-slate-500">{a.lead.phone || "No phone"}</p>
-                        </div>
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                          a.status === "CONFIRMED" ? "bg-green-500/10 text-green-400 border border-green-500/20" :
-                          a.status === "CANCELLED" ? "bg-red-500/10 text-red-400 border border-red-500/20" :
-                          "bg-amber-500/10 text-amber-400 border border-amber-500/20"
-                        }`}>
-                          {a.status}
-                        </span>
-                      </div>
-
-                      <div className="flex items-center gap-2.5 p-3 rounded-xl bg-slate-950 border border-slate-900 text-sm">
-                        <Calendar className="h-4.5 w-4.5 text-emerald-400" />
-                        <div>
-                          <p className="font-semibold text-slate-200">{a.date}</p>
-                          <p className="text-xs text-slate-400">{a.time}</p>
-                        </div>
-                      </div>
-
-                      {a.status === "PENDING" && (
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => handleUpdateApptStatus(a.id, "CONFIRMED")}
-                            className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg py-2 text-xs font-semibold transition-all shadow-sm cursor-pointer"
-                          >
-                            Approve
-                          </button>
-                          <button
-                            onClick={() => handleUpdateApptStatus(a.id, "CANCELLED")}
-                            className="flex-1 bg-slate-900 border border-slate-800 text-slate-300 hover:text-white rounded-lg py-2 text-xs font-semibold transition-all cursor-pointer"
-                          >
-                            Decline
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
+            <AppointmentsTab
+              appointments={appointments}
+              handleUpdateApptStatus={handleUpdateApptStatus}
+            />
           )}
 
-          {/* TAB 5: KNOWLEDGE BASE */}
           {activeTab === "kb" && (
-            <div className="space-y-8">
-              <div>
-                <h3 className="text-xl font-bold text-white">Company FAQs & Knowledge Base</h3>
-                <p className="text-xs text-slate-500 mt-1">Upload answers, instructions, and services so the AI sales agent can reference them.</p>
-              </div>
-
-              {user?.role === 'ADMIN' && (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                  {/* V3: Auto Website Learning Scraper Container */}
-                  <div className="rounded-2xl border border-slate-900 bg-slate-900/30 p-6 space-y-4">
-                    <h4 className="font-bold text-sm uppercase tracking-wider text-slate-400 flex items-center gap-2">
-                      <Globe className="h-4.5 w-4.5 text-emerald-400 animate-pulse" />
-                      Auto Website Learning (Instant RAG Scraper)
-                    </h4>
-                    <p className="text-xs text-slate-500">
-                      Enter any website URL. Beacon will crawl the pages, extract FAQs/services, and automatically generate Knowledge Base articles using Gemini context extraction.
-                    </p>
-
-                    <form onSubmit={handleStartScrape} className="flex gap-3">
-                      <input
-                        type="url"
-                        required
-                        value={scraperUrl}
-                        onChange={(e) => setScraperUrl(e.target.value)}
-                        placeholder="e.g. https://theirwebsite.com"
-                        className="flex-1 rounded-xl bg-slate-900 border border-slate-800 px-4 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500/50 placeholder-slate-700"
-                      />
-                      <button
-                        type="submit"
-                        disabled={scraperLoading || !scraperUrl}
-                        className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-xl px-5 py-2.5 text-sm flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-                      >
-                        {scraperLoading ? (
-                          <RefreshCw className="h-4.5 w-4.5 animate-spin" />
-                        ) : (
-                          <ArrowRight className="h-4.5 w-4.5" />
-                        )}
-                        Crawl Website
-                      </button>
-                    </form>
-
-                    {/* Scraper Logs Console */}
-                    {scraperLogs.length > 0 && (
-                      <div className="rounded-xl bg-slate-950 border border-slate-900 p-4 font-mono text-[11px] text-emerald-500 space-y-1 overflow-y-auto max-h-40 leading-relaxed shadow-inner">
-                        {scraperLogs.map((log, i) => (
-                          <div key={i} className="flex gap-2">
-                            <span className="text-emerald-800 shrink-0">[{i+1}]</span>
-                            <span>{log}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* PDF/Text Document RAG Upload Container */}
-                  <div className="rounded-2xl border border-slate-900 bg-slate-900/30 p-6 space-y-4">
-                    <h4 className="font-bold text-sm uppercase tracking-wider text-slate-400 flex items-center gap-2">
-                      <FileText className="h-4.5 w-4.5 text-emerald-400" />
-                      RAG Knowledge Document Upload
-                    </h4>
-                    <p className="text-xs text-slate-500">
-                      Upload service lists, catalogs, or context files (.txt, .csv, .json) to extract and inject FAQ items into your AI agent's memory.
-                    </p>
-
-                    <div className="border border-dashed border-slate-800 rounded-xl p-6 flex flex-col items-center justify-center bg-slate-950/20 relative hover:bg-slate-950/40 transition-colors">
-                      <input
-                        type="file"
-                        accept=".txt,.csv,.json"
-                        onChange={handleStartFileUpload}
-                        disabled={kbUploading}
-                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:pointer-events-none"
-                      />
-                      <FileText className={`h-8 w-8 text-slate-600 mb-2 ${kbUploading ? 'animate-bounce' : ''}`} />
-                      <p className="text-xs text-slate-400 text-center">
-                        {kbUploading ? `Reading and extracting "${kbFileName}"...` : 'Drag and drop or click to upload knowledge document'}
-                      </p>
-                      <p className="text-[10px] text-slate-600 mt-1">Supports UTF-8 text files up to 2MB</p>
-                    </div>
-
-                    {kbUploading && (
-                      <div className="space-y-2">
-                        <div className="flex justify-between text-[10px] font-mono text-emerald-400">
-                          <span>Uploading...</span>
-                          <span>{kbProgress}%</span>
-                        </div>
-                        <div className="w-full bg-slate-900 h-1.5 rounded-full overflow-hidden">
-                          <div className="h-full rounded-full bg-emerald-500 transition-all duration-300" style={{ width: `${kbProgress}%` }}></div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {user?.role === 'ADMIN' && (
-                /* Add FAQ form */
-                <div className="rounded-2xl border border-slate-900 bg-slate-900/30 p-6">
-                  <h4 className="font-bold text-sm uppercase tracking-wider text-slate-400 mb-4">Add FAQ Question</h4>
-                  <form onSubmit={handleAddFAQ} className="space-y-4">
-                    <div>
-                      <label className="text-xs font-semibold uppercase tracking-wider text-slate-400">Question / Topic Title</label>
-                      <input
-                        type="text"
-                        required
-                        value={faqTitle}
-                        onChange={(e) => setFaqTitle(e.target.value)}
-                        placeholder="e.g. What are your pricing plans for SEO services?"
-                        className="mt-1 w-full rounded-xl bg-slate-900 border border-slate-800/80 px-4 py-2.5 text-sm text-white placeholder-slate-600 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/30 transition-all"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs font-semibold uppercase tracking-wider text-slate-400">Answer / Knowledge Content</label>
-                      <textarea
-                        required
-                        value={faqContent}
-                        onChange={(e) => setFaqContent(e.target.value)}
-                        rows={3}
-                        placeholder="Detail the answer here..."
-                        className="mt-1 w-full rounded-xl bg-slate-900 border border-slate-800/80 px-4 py-2.5 text-sm text-white placeholder-slate-600 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/30 transition-all resize-none"
-                      />
-                    </div>
-                    <div className="flex justify-end">
-                      <button
-                        type="submit"
-                        disabled={faqLoading || !faqTitle || !faqContent}
-                        className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl px-4 py-2.5 text-sm font-semibold transition-all shadow-md disabled:opacity-50 cursor-pointer"
-                      >
-                        <Plus className="h-4.5 w-4.5" />
-                        Add to Knowledge Base
-                      </button>
-                    </div>
-                  </form>
-                </div>
-              )}
-
-              {/* FAQs list */}
-              <div className="space-y-4">
-                <h4 className="font-bold text-sm uppercase tracking-wider text-slate-400">Existing Knowledge Items</h4>
-                {faqs.length === 0 ? (
-                  <div className="border border-slate-900 border-dashed rounded-2xl p-8 text-center text-slate-500 text-sm">
-                    No FAQs uploaded yet.
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 gap-4">
-                    {faqs.map((faq) => (
-                      <div key={faq.id} className="rounded-xl border border-slate-900 bg-slate-900/10 p-5 flex justify-between gap-4">
-                        <div className="space-y-1">
-                          <h5 className="font-bold text-sm text-slate-200">{faq.title}</h5>
-                          <p className="text-xs text-slate-400 leading-relaxed">{faq.content}</p>
-                        </div>
-                        {user?.role === 'ADMIN' && (
-                          <button
-                            onClick={() => handleDeleteFAQ(faq.id)}
-                            className="text-slate-600 hover:text-red-400 rounded-lg p-1.5 self-start transition-colors cursor-pointer"
-                          >
-                            <Trash2 className="h-4.5 w-4.5" />
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
+            <KnowledgeBaseTab
+              user={user}
+              business={business}
+              faqs={faqs}
+              scraperUrl={scraperUrl}
+              setScraperUrl={setScraperUrl}
+              scraperLoading={scraperLoading}
+              scraperLogs={scraperLogs}
+              handleStartScrape={handleStartScrape}
+              kbUploading={kbUploading}
+              kbFileName={kbFileName}
+              kbProgress={kbProgress}
+              handleStartFileUpload={handleStartFileUpload}
+              faqTitle={faqTitle}
+              setFaqTitle={setFaqTitle}
+              faqContent={faqContent}
+              setFaqContent={setFaqContent}
+              faqLoading={faqLoading}
+              handleAddFAQ={handleAddFAQ}
+              handleDeleteFAQ={handleDeleteFAQ}
+            />
           )}
 
-          {/* TAB 6: VISITOR ACTIVITY TRACKING */}
           {activeTab === "visitor" && (
-            <div className="space-y-6">
-              <div>
-                <h3 className="text-xl font-bold text-white">Live Visitor Tracking</h3>
-                <p className="text-xs text-slate-500 mt-1">Geographic parameters, pages viewed, and stay duration recorded by Beacon script triggers</p>
-              </div>
-
-              <div className="overflow-hidden border border-slate-900 rounded-2xl bg-slate-900/10">
-                <table className="w-full border-collapse text-left text-sm">
-                  <thead className="bg-slate-900/50 border-b border-slate-900 text-xs font-semibold uppercase text-slate-400">
-                    <tr>
-                      <th className="px-6 py-4">Location</th>
-                      <th className="px-6 py-4">Pages Viewed</th>
-                      <th className="px-6 py-4">Stay Duration</th>
-                      <th className="px-6 py-4">Log Timestamp</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-900/60">
-                    {visitorTracks.length === 0 ? (
-                      <tr>
-                        <td colSpan={4} className="px-6 py-12 text-center text-slate-500">
-                          No visitor activities tracked yet. Open the Widget Sandbox preview to register test logs automatically.
-                        </td>
-                      </tr>
-                    ) : (
-                      visitorTracks.map((vt) => (
-                        <tr key={vt.id} className="hover:bg-slate-900/20 transition-colors">
-                          <td className="px-6 py-4 font-semibold text-slate-200 flex items-center gap-2">
-                            <MapPin className="h-4 w-4 text-red-400 shrink-0" />
-                            {vt.location}
-                          </td>
-                          <td className="px-6 py-4">
-                            <div className="flex flex-wrap gap-1.5">
-                              {vt.pagesViewed.map((page, i) => (
-                                <span key={i} className="px-2 py-0.5 rounded bg-slate-950 border border-slate-900 text-[10px] text-slate-400 font-mono">
-                                  {page}
-                                </span>
-                              ))}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 text-slate-300">
-                            {Math.floor(vt.duration / 60)}m {vt.duration % 60}s
-                          </td>
-                          <td className="px-6 py-4 text-xs text-slate-500">
-                            {new Date(vt.createdAt).toLocaleTimeString()} ({new Date(vt.createdAt).toLocaleDateString()})
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+            <VisitorTracksTab
+              visitorTracks={visitorTracks}
+            />
           )}
 
-          {/* TAB 7: COMPETITOR INSIGHTS AUDIT */}
           {activeTab === "competitor" && (
-            <div className="space-y-8">
-              <div>
-                <h3 className="text-xl font-bold text-white">Competitor Domain Intelligence</h3>
-                <p className="text-xs text-slate-500 mt-1">Audit competitor sites to map comparative services, offering gaps, and content optimization opportunities.</p>
-              </div>
-
-              {/* Form Input */}
-              <div className="rounded-2xl border border-slate-900 bg-slate-900/30 p-6 space-y-4">
-                <h4 className="font-bold text-sm uppercase tracking-wider text-slate-400 flex items-center gap-2">
-                  <Compass className="h-4.5 w-4.5 text-emerald-400" />
-                  Analyze Competitor website
-                </h4>
-                <form onSubmit={handleStartCompetitor} className="flex gap-3">
-                  <input
-                    type="url"
-                    required
-                    value={competitorUrl}
-                    onChange={(e) => setCompetitorUrl(e.target.value)}
-                    placeholder="e.g. https://competitor.com"
-                    className="flex-1 rounded-xl bg-slate-900 border border-slate-800 px-4 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500/50"
-                  />
-                  <button
-                    type="submit"
-                    disabled={competitorLoading || !competitorUrl}
-                    className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-xl px-5 py-2.5 text-sm flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-                  >
-                    {competitorLoading ? (
-                      <RefreshCw className="h-4.5 w-4.5 animate-spin" />
-                    ) : (
-                      <Share2 className="h-4.5 w-4.5" />
-                    )}
-                    Analyze Domain
-                  </button>
-                </form>
-
-                {competitorLogs.length > 0 && (
-                  <div className="rounded-xl bg-slate-950 border border-slate-900 p-4 font-mono text-[11px] text-emerald-500 space-y-1 overflow-y-auto max-h-40 leading-relaxed shadow-inner">
-                    {competitorLogs.map((log, i) => (
-                      <div key={i} className="flex gap-2">
-                        <span className="text-emerald-800 shrink-0">[{i+1}]</span>
-                        <span>{log}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Analysis Display */}
-              {competitorAnalyses.length > 0 ? (
-                <div className="space-y-8">
-                  {competitorAnalyses.map((ca) => (
-                    <div key={ca.id} className="rounded-2xl border border-slate-900 bg-slate-900/10 p-6 space-y-6">
-                      <div className="flex justify-between items-center border-b border-slate-900 pb-4">
-                        <h4 className="font-bold text-sm text-white">
-                          Target: <span className="text-emerald-400">{ca.competitorUrl}</span>
-                        </h4>
-                        <span className="text-xs text-slate-500">
-                          Audited: {new Date(ca.createdAt).toLocaleString()}
-                        </span>
-                      </div>
-
-                      {/* Service Comparison Matrix */}
-                      <div className="space-y-3">
-                        <h5 className="font-bold text-xs uppercase tracking-wider text-slate-400 flex items-center gap-2">
-                          <Check className="h-4 w-4 text-emerald-400" />
-                          Service Comparison Matrix
-                        </h5>
-                        <div className="overflow-hidden border border-slate-900 rounded-xl bg-slate-950">
-                          <table className="w-full border-collapse text-left text-xs">
-                            <thead className="bg-slate-900/50 border-b border-slate-900 font-bold uppercase text-slate-400">
-                              <tr>
-                                <th className="px-4 py-3">Feature</th>
-                                <th className="px-4 py-3">Us ({business.companyName})</th>
-                                <th className="px-4 py-3">Competitor</th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-900/60">
-                              {ca.analysis.serviceCompare.map((sc, i) => (
-                                <tr key={i} className="hover:bg-slate-900/20">
-                                  <td className="px-4 py-3 font-semibold text-slate-200">{sc.feature}</td>
-                                  <td className="px-4 py-3 text-emerald-400">{sc.us}</td>
-                                  <td className="px-4 py-3 text-slate-400">{sc.competitor}</td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        {/* Missing offerings */}
-                        <div className="space-y-3">
-                          <h5 className="font-bold text-xs uppercase tracking-wider text-slate-400 flex items-center gap-2">
-                            <ShieldAlert className="h-4 w-4 text-amber-500" />
-                            Our Missing Offerings
-                          </h5>
-                          <ul className="space-y-2.5 p-4 rounded-xl bg-slate-950 border border-slate-900">
-                            {ca.analysis.missingOfferings.map((mo, i) => (
-                              <li key={i} className="text-xs text-slate-300 flex items-start gap-2 leading-relaxed">
-                                <span className="h-1.5 w-1.5 rounded-full bg-amber-500 shrink-0 mt-1.5"></span>
-                                <span>{mo}</span>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-
-                        {/* Content Gaps */}
-                        <div className="space-y-3">
-                          <h5 className="font-bold text-xs uppercase tracking-wider text-slate-400 flex items-center gap-2">
-                            <Share2 className="h-4 w-4 text-blue-400" />
-                            SEO Keyword / Content Gaps
-                          </h5>
-                          <ul className="space-y-2.5 p-4 rounded-xl bg-slate-950 border border-slate-900">
-                            {ca.analysis.contentGaps.map((cg, i) => (
-                              <li key={i} className="text-xs text-slate-300 flex items-start gap-2 leading-relaxed">
-                                <span className="h-1.5 w-1.5 rounded-full bg-blue-400 shrink-0 mt-1.5"></span>
-                                <span>{cg}</span>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="border border-slate-900 border-dashed rounded-2xl p-12 text-center text-slate-500 text-sm">
-                  No competitor audits run yet. Enter competitor domain above to evaluate market gaps.
-                </div>
-              )}
-            </div>
+            <CompetitorTab
+              competitorUrl={competitorUrl}
+              setCompetitorUrl={setCompetitorUrl}
+              competitorLoading={competitorLoading}
+              competitorLogs={competitorLogs}
+              handleStartCompetitor={handleStartCompetitor}
+              competitorAnalyses={competitorAnalyses}
+              business={business}
+            />
           )}
 
-          {/* TAB 8: MULTI-CHANNEL SETTINGS & SIMULATOR */}
-          {activeTab === "integrations" && user?.role === 'ADMIN' && (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              {/* Integration Toggles Panel */}
-              <div className="space-y-6">
-                <div>
-                  <h3 className="text-xl font-bold text-white">Multi-Channel Connect Setup</h3>
-                  <p className="text-xs text-slate-500 mt-1">Configure connections API keys to enable automatic lead qualifications across channels</p>
-                </div>
-
-                <form onSubmit={handleSaveConnections} className="rounded-2xl border border-slate-900 bg-slate-900/30 p-6 space-y-6">
-                  {/* WhatsApp */}
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-sm text-slate-200">WhatsApp Business API Connection</span>
-                      <input
-                        type="checkbox"
-                        checked={whatsappEnabled}
-                        onChange={(e) => setWhatsappEnabled(e.target.checked)}
-                        className="h-4 w-4 text-emerald-600 bg-slate-900 rounded focus:ring-emerald-500 cursor-pointer"
-                      />
-                    </div>
-                    {whatsappEnabled && (
-                      <input
-                        type="text"
-                        value={whatsappApiKey}
-                        onChange={(e) => setWhatsappApiKey(e.target.value)}
-                        placeholder="WhatsApp Api Access Key / Token"
-                        className="w-full rounded-xl bg-slate-900 border border-slate-800 px-4 py-2.5 text-xs text-white"
-                      />
-                    )}
-                  </div>
-
-                  {/* Instagram */}
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-sm text-slate-200">Instagram Messaging API Connection</span>
-                      <input
-                        type="checkbox"
-                        checked={instagramEnabled}
-                        onChange={(e) => setInstagramEnabled(e.target.checked)}
-                        className="h-4 w-4 text-emerald-600 bg-slate-900 rounded focus:ring-emerald-500 cursor-pointer"
-                      />
-                    </div>
-                    {instagramEnabled && (
-                      <input
-                        type="text"
-                        value={instagramAccountId}
-                        onChange={(e) => setInstagramAccountId(e.target.value)}
-                        placeholder="Instagram Account ID / Access Token"
-                        className="w-full rounded-xl bg-slate-900 border border-slate-800 px-4 py-2.5 text-xs text-white"
-                      />
-                    )}
-                  </div>
-
-                  {/* Email */}
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-sm text-slate-200">Email SMTP Connection</span>
-                      <input
-                        type="checkbox"
-                        checked={emailEnabled}
-                        onChange={(e) => setEmailEnabled(e.target.checked)}
-                        className="h-4 w-4 text-emerald-600 bg-slate-900 rounded focus:ring-emerald-500 cursor-pointer"
-                      />
-                    </div>
-                    {emailEnabled && (
-                      <input
-                        type="text"
-                        value={emailSmtp}
-                        onChange={(e) => setEmailSmtp(e.target.value)}
-                        placeholder="SMTP Connection URL (e.g. smtp.mailgun.org:587)"
-                        className="w-full rounded-xl bg-slate-900 border border-slate-800 px-4 py-2.5 text-xs text-white"
-                      />
-                    )}
-                  </div>
-
-                  {/* Brand Branding Customizations */}
-                  <div className="space-y-4 pt-4 border-t border-slate-900/60">
-                    <h4 className="font-bold text-xs uppercase tracking-wider text-emerald-400">AI Personalization Branding</h4>
-
-                    {/* Chat widget Theme Color */}
-                    <div className="space-y-2">
-                      <label className="text-xs font-bold uppercase tracking-wider text-slate-400">Widget Theme Color</label>
-                      <div className="flex items-center gap-3">
-                        <input
-                          type="color"
-                          value={themeColor}
-                          onChange={(e) => setThemeColor(e.target.value)}
-                          className="h-8 w-8 rounded-lg bg-transparent border-0 cursor-pointer overflow-hidden"
-                        />
-                        <input
-                          type="text"
-                          value={themeColor}
-                          onChange={(e) => setThemeColor(e.target.value)}
-                          className="rounded-xl bg-slate-900 border border-slate-800/80 px-3 py-2 text-xs text-white focus:outline-none w-28 uppercase font-mono"
-                        />
-                        <div className="flex gap-1.5 ml-2">
-                          {["#10B981", "#3B82F6", "#EC4899", "#8B5CF6", "#F59E0B"].map((c) => (
-                            <button
-                              key={c}
-                              type="button"
-                              onClick={() => setThemeColor(c)}
-                              className="h-5.5 w-5.5 rounded-full border border-slate-950 transition-all hover:scale-110 cursor-pointer"
-                              style={{ backgroundColor: c, border: themeColor === c ? '2px solid white' : 'none' }}
-                            />
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Conversational Tone */}
-                    <div className="space-y-2">
-                      <label className="text-xs font-bold uppercase tracking-wider text-slate-400">Conversational AI Tone</label>
-                      <select
-                        value={agentTone}
-                        onChange={(e) => setAgentTone(e.target.value)}
-                        className="w-full rounded-xl bg-slate-900 border border-slate-800/80 px-3 py-2 text-xs text-white focus:outline-none"
-                      >
-                        <option value="FRIENDLY">Friendly & Approachable</option>
-                        <option value="PROFESSIONAL">Professional & Corporate</option>
-                        <option value="PERSUASIVE">Persuasive & Sales-driven</option>
-                        <option value="BOLD">Bold & High-energy</option>
-                      </select>
-                    </div>
-
-                    {/* Custom Prompt Directives */}
-                    <div className="space-y-2">
-                      <label className="text-xs font-bold uppercase tracking-wider text-slate-400">Agent Custom Instructions (Prompt Overrides)</label>
-                      <textarea
-                        value={agentPrompt}
-                        onChange={(e) => setAgentPrompt(e.target.value)}
-                        rows={3}
-                        placeholder="e.g. Focus on scheduling demo calls first. Offer details on price packages if they ask. Never say we support custom refunds."
-                        className="w-full rounded-xl bg-slate-900 border border-slate-800/80 px-4 py-2.5 text-xs text-white placeholder-slate-600 focus:border-emerald-500/50 focus:outline-none resize-none"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="flex justify-end">
-                    <button
-                      type="submit"
-                      disabled={connectionSaving}
-                      className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-xl px-5 py-2.5 text-xs flex items-center gap-1.5 cursor-pointer"
-                    >
-                      <Check className="h-4 w-4" />
-                      Save configurations
-                    </button>
-                  </div>
-                </form>
-              </div>
-
-              {/* Interactive incoming simulator panel */}
-              <div className="flex flex-col border border-slate-900 rounded-2xl overflow-hidden bg-slate-900/10">
-                <div className="p-4 border-b border-slate-900 bg-slate-900/30 flex items-center gap-2">
-                  <Radio className="h-4.5 w-4.5 text-emerald-400 animate-pulse animate-duration-1000" />
-                  <span className="font-semibold text-xs uppercase tracking-wider text-slate-500">Interactive Incoming Channel Simulator</span>
-                </div>
-
-                <form onSubmit={handleSimulateMessage} className="p-6 space-y-4 flex-1 flex flex-col justify-between">
-                  <div className="space-y-4">
-                    <p className="text-xs text-slate-500">
-                      Simulate a customer texting your business via WhatsApp, Instagram, or Email. Beacon qualifies the lead, scores it, and populates the unified Live Inbox.
-                    </p>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Select Channel</label>
-                        <select
-                          value={simChannel}
-                          onChange={(e) => setSimChannel(e.target.value)}
-                          className="mt-1 w-full rounded-xl bg-slate-900 border border-slate-800 px-3 py-2 text-xs text-white focus:outline-none"
-                        >
-                          <option value="WHATSAPP">WhatsApp</option>
-                          <option value="INSTAGRAM">Instagram</option>
-                          <option value="EMAIL">Email</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Customer Name</label>
-                        <input
-                          type="text"
-                          required
-                          value={simLeadName}
-                          onChange={(e) => setSimLeadName(e.target.value)}
-                          placeholder="e.g. John Doe"
-                          className="mt-1 w-full rounded-xl bg-slate-900 border border-slate-800 px-3 py-2 text-xs text-white focus:outline-none"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Phone (WhatsApp ID)</label>
-                        <input
-                          type="text"
-                          value={simLeadPhone}
-                          onChange={(e) => setSimLeadPhone(e.target.value)}
-                          placeholder="e.g. +12345678"
-                          className="mt-1 w-full rounded-xl bg-slate-900 border border-slate-800 px-3 py-2 text-xs text-white focus:outline-none"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Email Address</label>
-                        <input
-                          type="email"
-                          value={simLeadEmail}
-                          onChange={(e) => setSimLeadEmail(e.target.value)}
-                          placeholder="e.g. john@email.com"
-                          className="mt-1 w-full rounded-xl bg-slate-900 border border-slate-800 px-3 py-2 text-xs text-white focus:outline-none"
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Message Content</label>
-                      <textarea
-                        required
-                        value={simMessage}
-                        onChange={(e) => setSimMessage(e.target.value)}
-                        rows={3}
-                        placeholder="Type customer simulated message here..."
-                        className="mt-1 w-full rounded-xl bg-slate-900 border border-slate-800 px-3 py-2.5 text-xs text-white focus:outline-none resize-none"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-4 pt-4 border-t border-slate-900">
-                    <button
-                      type="submit"
-                      disabled={simLoading || !simMessage || !simLeadName}
-                      className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl py-2.5 text-xs flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 shadow-md"
-                    >
-                      <Send className="h-4 w-4" />
-                      Simulate Incoming Message
-                    </button>
-
-                    {simStatus && (
-                      <div className="rounded-xl bg-slate-950 border border-slate-900 p-3 font-mono text-[10px] text-emerald-400">
-                        {sanitizeHtml(simStatus)}
-                      </div>
-                    )}
-                  </div>
-                </form>
-              </div>
-            </div>
+          {activeTab === "team" && (
+            <TeamTab
+              employees={employees}
+              employeeError={employeeError}
+              employeeSuccess={employeeSuccess}
+              employeeEmail={employeeEmail}
+              setEmployeeEmail={setEmployeeEmail}
+              employeeName={employeeName}
+              setEmployeeName={setEmployeeName}
+              employeePassword={employeePassword}
+              setEmployeePassword={setEmployeePassword}
+              employeeLoading={employeeLoading}
+              handleAddEmployee={handleAddEmployee}
+            />
           )}
 
-          {/* TAB 8.5: TEAM MEMBERS SEATS MANAGEMENT */}
-          {activeTab === "team" && user?.role === 'ADMIN' && (
-            <div className="space-y-8">
-              <div>
-                <h3 className="text-xl font-bold text-white">Team Seats Management</h3>
-                <p className="text-xs text-slate-500 mt-1">Create operator logins for your support agents so they can reply in the Live Inbox.</p>
-              </div>
-
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                {/* Add Operator Form */}
-                <div className="lg:col-span-1 rounded-2xl border border-slate-900 bg-slate-900/30 p-6 space-y-4 h-fit">
-                  <h4 className="font-bold text-sm uppercase tracking-wider text-slate-400 flex items-center gap-2">
-                    <Plus className="h-4.5 w-4.5 text-emerald-400" />
-                    Invite Support Agent
-                  </h4>
-                  
-                  {employeeError && (
-                    <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-3 text-xs text-red-400 text-center">
-                      {employeeError}
-                    </div>
-                  )}
-                  {employeeSuccess && (
-                    <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3 text-xs text-emerald-400 text-center">
-                      {employeeSuccess}
-                    </div>
-                  )}
-
-                  <form onSubmit={handleAddEmployee} className="space-y-4">
-                    <div>
-                      <label className="text-xs font-semibold uppercase tracking-wider text-slate-400">Agent Name</label>
-                      <input
-                        type="text"
-                        required
-                        value={employeeName}
-                        onChange={(e) => setEmployeeName(e.target.value)}
-                        placeholder="e.g. Alice Smith"
-                        className="mt-1 w-full rounded-xl bg-slate-900 border border-slate-800 px-4 py-2 text-xs text-white focus:outline-none"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs font-semibold uppercase tracking-wider text-slate-400">Email Address</label>
-                      <input
-                        type="email"
-                        required
-                        value={employeeEmail}
-                        onChange={(e) => setEmployeeEmail(e.target.value)}
-                        placeholder="e.g. alice@company.com"
-                        className="mt-1 w-full rounded-xl bg-slate-900 border border-slate-800 px-4 py-2 text-xs text-white focus:outline-none"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs font-semibold uppercase tracking-wider text-slate-400">Temporary Password</label>
-                      <input
-                        type="text"
-                        value={employeePassword}
-                        onChange={(e) => setEmployeePassword(e.target.value)}
-                        placeholder="Welcome123! (Defaults if blank)"
-                        className="mt-1 w-full rounded-xl bg-slate-900 border border-slate-800 px-4 py-2 text-xs text-white focus:outline-none"
-                      />
-                    </div>
-
-                    <button
-                      type="submit"
-                      disabled={employeeLoading || !employeeEmail || !employeeName}
-                      className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl py-2.5 text-xs flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
-                    >
-                      {employeeLoading ? (
-                        <RefreshCw className="h-4.5 w-4.5 animate-spin" />
-                      ) : (
-                        <Plus className="h-4.5 w-4.5" />
-                      )}
-                      Create Agent Account
-                    </button>
-                  </form>
-                </div>
-
-                {/* Operator List Table */}
-                <div className="lg:col-span-2 space-y-4">
-                  <h4 className="font-bold text-sm uppercase tracking-wider text-slate-400">Active Operators</h4>
-                  <div className="overflow-hidden border border-slate-900 rounded-2xl bg-slate-900/10">
-                    <table className="w-full border-collapse text-left text-sm">
-                      <thead className="bg-slate-900/50 border-b border-slate-900 text-xs font-semibold uppercase text-slate-400">
-                        <tr>
-                          <th className="px-6 py-4">Name</th>
-                          <th className="px-6 py-4">Email</th>
-                          <th className="px-6 py-4">Role</th>
-                          <th className="px-6 py-4">Joined Date</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-900/60">
-                        {employees.length === 0 ? (
-                          <tr>
-                            <td colSpan={4} className="px-6 py-8 text-center text-slate-500 text-xs">
-                              No employees added yet. Invite your first operator on the left!
-                            </td>
-                          </tr>
-                        ) : (
-                          employees.map((emp) => (
-                            <tr key={emp.id} className="hover:bg-slate-900/20 text-xs transition-colors">
-                              <td className="px-6 py-4 font-semibold text-slate-200">{emp.name}</td>
-                              <td className="px-6 py-4 text-slate-300">{emp.email}</td>
-                              <td className="px-6 py-4">
-                                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-500/10 text-blue-400 border border-blue-500/20">
-                                  {emp.role}
-                                </span>
-                              </td>
-                              <td className="px-6 py-4 text-slate-500">
-                                {new Date(emp.createdAt).toLocaleDateString()}
-                              </td>
-                            </tr>
-                          ))
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* TAB 9: WIDGET INSTALLATION */}
           {activeTab === "widget" && (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              {/* Instructions Panel */}
-              <div className="space-y-6">
-                <div>
-                  <h3 className="text-xl font-bold text-white">Embed Chat Widget</h3>
-                  <p className="text-xs text-slate-500 mt-1">Copy and paste this snippet into the HTML of your website</p>
-                </div>
+            <WidgetTab
+              business={business}
+              API_URL={API_URL}
+            />
+          )}
 
-                <div className="space-y-4">
-                  <div className="rounded-2xl bg-slate-950 border border-slate-900 p-5 font-mono text-xs overflow-x-auto text-emerald-400 select-all leading-relaxed relative group">
-                    <code>
-                      {`<script\n  src="${API_URL}/widget-assets/logicra-widget.js"\n  data-business-id="${business.id}"\n  data-frontend-url="${typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000'}"\n></script>`}
-                    </code>
-                  </div>
-                  <div className="p-4 bg-emerald-500/5 border border-emerald-500/10 rounded-xl space-y-2 text-xs leading-relaxed text-slate-300">
-                    <p className="font-bold text-white">💡 Easy Installation Steps:</p>
-                    <ol className="list-decimal pl-4 space-y-1">
-                      <li>Copy the script snippet above.</li>
-                      <li>Paste it right before the closing <code className="text-emerald-400">&lt;/body&gt;</code> tag of your website's index file.</li>
-                      <li>Save and publish your site. The floating chat bubble will appear automatically!</li>
-                    </ol>
-                  </div>
-                </div>
-
-                {/* Simulated Business Site Mock */}
-                <div className="border border-slate-900 rounded-2xl p-6 bg-slate-900/10 space-y-4">
-                  <h4 className="font-bold text-xs uppercase tracking-wider text-slate-500">Live Simulation</h4>
-                  <p className="text-xs text-slate-400 leading-relaxed">
-                    Test the loader script locally on a simulated environment. The floating green button in the bottom-right of your screen is the active sales widget!
-                  </p>
-                </div>
-              </div>
-
-              {/* Sandbox Panel */}
-              <div className="flex flex-col h-[calc(100vh-12rem)] border border-slate-900 rounded-2xl overflow-hidden bg-slate-900/10">
-                <div className="p-4 border-b border-slate-900 flex justify-between items-center bg-slate-900/30">
-                  <span className="font-semibold text-xs uppercase tracking-wider text-slate-500">Sandbox Preview</span>
-                  <span className="h-2 w-2 rounded-full bg-green-400 animate-ping"></span>
-                </div>
-                
-                {/* Embed the Next.js widget directly into this preview container */}
-                <div className="flex-1 bg-slate-950 relative flex items-center justify-center p-4">
-                  <div className="w-full max-w-sm h-[480px] rounded-2xl border border-slate-800 overflow-hidden shadow-2xl">
-                    <iframe
-                      src={`/widget?id=${business.id}`}
-                      className="w-full h-full border-none bg-slate-950"
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
+          {activeTab === "integrations" && (
+            <IntegrationsTab
+              business={business}
+              whatsappEnabled={whatsappEnabled}
+              setWhatsappEnabled={setWhatsappEnabled}
+              whatsappApiKey={whatsappApiKey}
+              setWhatsappApiKey={setWhatsappApiKey}
+              instagramEnabled={instagramEnabled}
+              setInstagramEnabled={setInstagramEnabled}
+              instagramAccountId={instagramAccountId}
+              setInstagramAccountId={setInstagramAccountId}
+              emailEnabled={emailEnabled}
+              setEmailEnabled={setEmailEnabled}
+              emailSmtp={emailSmtp}
+              setEmailSmtp={setEmailSmtp}
+              themeColor={themeColor}
+              setThemeColor={setThemeColor}
+              agentTone={agentTone}
+              setAgentTone={setAgentTone}
+              agentPrompt={agentPrompt}
+              setAgentPrompt={setAgentPrompt}
+              connectionSaving={connectionSaving}
+              handleSaveConnections={handleSaveConnections}
+              simChannel={simChannel}
+              setSimChannel={setSimChannel}
+              simLeadName={simLeadName}
+              setSimLeadName={setSimLeadName}
+              simLeadPhone={simLeadPhone}
+              setSimLeadPhone={setSimLeadPhone}
+              simLeadEmail={simLeadEmail}
+              setSimLeadEmail={setSimLeadEmail}
+              simMessage={simMessage}
+              setSimMessage={setSimMessage}
+              simLoading={simLoading}
+              simStatus={simStatus}
+              handleSimulateMessage={handleSimulateMessage}
+            />
           )}
         </div>
       </main>

@@ -1,5 +1,6 @@
 import os
 import time
+import logging
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -15,6 +16,13 @@ from app.services.agent import (
 from dotenv import load_dotenv
 
 load_dotenv()
+
+# Setup structured logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+)
+logger = logging.getLogger("ai-service")
 
 app = FastAPI(title="Beacon AI Sales Agent - AI Service", version="1.0.0")
 
@@ -35,6 +43,10 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             ip = x_forwarded_for.split(",")[0].strip()
             
         now = time.time()
+        
+        # Periodic cache cleanup to prevent memory leak
+        if len(self.cache) > 1000:
+            self.cache = {k: v for k, v in self.cache.items() if now <= v[1]}
         
         if ip in self.cache:
             count, reset_time = self.cache[ip]
@@ -123,7 +135,7 @@ def chat_endpoint(payload: ChatPayload):
         )
         return result
     except Exception as e:
-        print(f"Error in chat endpoint: {e}")
+        logger.exception("Error in chat endpoint")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/extract-faqs", response_model=ExtractFAQsResponse)
@@ -137,7 +149,7 @@ def extract_faqs_endpoint(payload: ExtractFAQsPayload):
         )
         return result
     except Exception as e:
-        print(f"Error in extract-faqs endpoint: {e}")
+        logger.exception("Error in extract-faqs endpoint")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/competitor-analysis", response_model=CompetitorAnalysisResponse)
@@ -150,11 +162,12 @@ def competitor_analysis_endpoint(payload: CompetitorAnalysisPayload):
         )
         return result
     except Exception as e:
-        print(f"Error in competitor-analysis endpoint: {e}")
+        logger.exception("Error in competitor-analysis endpoint")
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     import uvicorn
-    port = int(os.getenv("PORT", os.getenv("AI_PORT", 8000)))
-    host = os.getenv("HOST", "0.0.0.0")
+    # Use boolean or logic to handle empty-string environment variables
+    port = int(os.getenv("PORT") or os.getenv("AI_PORT") or 8000)
+    host = os.getenv("HOST") or "0.0.0.0"
     uvicorn.run(app, host=host, port=port)

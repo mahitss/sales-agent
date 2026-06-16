@@ -2,7 +2,7 @@ import { Injectable, ConflictException, UnauthorizedException } from '@nestjs/co
 import { PrismaService } from '../prisma/prisma.service';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
-import { RegisterDto, LoginDto } from './dto/auth.dto';
+import { RegisterDto, LoginDto, VerifyEmailDto, RequestPasswordResetDto, ResetPasswordDto } from './dto/auth.dto';
 
 @Injectable()
 export class AuthService {
@@ -33,6 +33,9 @@ export class AuthService {
     // Generate token
     const token = await this.generateToken(user.id, user.email, user.role);
 
+    // Mock Verification link logging
+    console.log(`User registered: ${user.email}. Verification Token: mock-verify-token-${user.id}`);
+
     return {
       user: {
         id: user.id,
@@ -41,6 +44,7 @@ export class AuthService {
         role: user.role,
       },
       token,
+      verificationToken: `mock-verify-token-${user.id}`,
     };
   }
 
@@ -68,6 +72,58 @@ export class AuthService {
       },
       token,
     };
+  }
+
+  async verifyEmail(dto: VerifyEmailDto) {
+    // Format: mock-verify-token-{userId}
+    const match = dto.token.match(/^mock-verify-token-(.+)$/);
+    if (!match) {
+      throw new UnauthorizedException('Invalid or expired verification token');
+    }
+    const userId = match[1];
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+    if (!user) {
+      throw new UnauthorizedException('Invalid or expired verification token');
+    }
+    return { success: true, message: 'Email address has been successfully verified.' };
+  }
+
+  async requestPasswordReset(dto: RequestPasswordResetDto) {
+    const user = await this.prisma.user.findUnique({
+      where: { email: dto.email },
+    });
+    if (!user) {
+      return { success: true, message: 'If the email exists, a password reset link has been sent.' };
+    }
+    const resetToken = `reset-token-${user.id}`;
+    console.log(`Password reset requested for ${dto.email}. Reset Token: ${resetToken}`);
+    return {
+      success: true,
+      message: 'If the email exists, a password reset link has been sent.',
+      resetToken,
+    };
+  }
+
+  async resetPassword(dto: ResetPasswordDto) {
+    const match = dto.token.match(/^reset-token-(.+)$/);
+    if (!match) {
+      throw new UnauthorizedException('Invalid or expired reset token');
+    }
+    const userId = match[1];
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+    if (!user) {
+      throw new UnauthorizedException('Invalid or expired reset token');
+    }
+    const hashedPassword = await bcrypt.hash(dto.password, 10);
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { password: hashedPassword },
+    });
+    return { success: true, message: 'Password has been reset successfully.' };
   }
 
   private async generateToken(userId: string, email: string, role: string): Promise<string> {

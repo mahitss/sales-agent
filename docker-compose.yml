@@ -1,0 +1,44 @@
+version: '3.8'
+
+services:
+  ai-service:
+    build:
+      context: ./ai-service
+    container_name: beacon-ai-service
+    ports:
+      - "8000:8000"
+    environment:
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - HOST=0.0.0.0
+      - PORT=8000
+    restart: always
+
+  backend:
+    build:
+      context: ./backend
+    container_name: beacon-backend
+    ports:
+      - "4000:4000"
+    environment:
+      - DATABASE_URL=file:./dev.db
+      - JWT_SECRET=super-secret-key-change-me-in-production
+      - JWT_REFRESH_SECRET=super-secret-key-change-me-in-production
+      - JWT_EXPIRATION=1d
+      - JWT_REFRESH_EXPIRATION=7d
+      - AI_SERVICE_URL=http://ai-service:8000
+      - FRONTEND_URL=http://localhost:3000
+    depends_on:
+      - ai-service
+    restart: always
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: beacon-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:4000
+    depends_on:
+      - backend
+    restart: always

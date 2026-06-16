@@ -35,13 +35,19 @@
   
   // Fetch custom theme color dynamically
   fetch(`${backendUrl}/business/${businessId}`)
-    .then(res => res.json())
+    .then(res => {
+      if (!res.ok) throw new Error('Network response was not ok');
+      return res.json();
+    })
     .then(data => {
       if (data && data.themeColor) {
         button.style.backgroundColor = data.themeColor;
       }
     })
-    .catch(err => console.warn('Failed to load widget theme color:', err));
+    .catch(err => {
+      console.warn('Failed to load widget theme color, using fallback:', err);
+      button.style.backgroundColor = '#10B981'; // Fallback Emerald color
+    });
 
   button.innerHTML = `
     <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">

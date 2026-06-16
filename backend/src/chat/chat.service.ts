@@ -89,7 +89,10 @@ export class ChatService {
     }
 
     // Prepare payload for Python AI service
-    const aiServiceUrl = process.env.AI_SERVICE_URL || 'http://localhost:8000';
+    let aiServiceUrl = process.env.AI_SERVICE_URL || 'http://localhost:8000';
+    if (aiServiceUrl && !aiServiceUrl.startsWith('http://') && !aiServiceUrl.startsWith('https://')) {
+      aiServiceUrl = `http://${aiServiceUrl}`;
+    }
     const payload = {
       messages: messageHistory,
       business_info: {
@@ -115,7 +118,7 @@ export class ChatService {
     // 4. Call Python AI Service
     let aiResponse;
     try {
-      const response = await axios.post(`${aiServiceUrl}/chat`, payload);
+      const response = await axios.post(`${aiServiceUrl}/chat`, payload, { timeout: 5000 });
       aiResponse = response.data;
     } catch (err) {
       console.error('Failed to communicate with AI Service:', err instanceof Error ? err.message : String(err));

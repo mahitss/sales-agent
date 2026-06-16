@@ -32,7 +32,22 @@ export class AuthGuard implements CanActivate {
   }
 
   private extractTokenFromHeader(request: Request): string | undefined {
+    // 1. Try to extract bearer token from Authorization header
     const [type, token] = request.headers.authorization?.split(' ') ?? [];
-    return type === 'Bearer' ? token : undefined;
+    if (type === 'Bearer' && token && token !== 'cookie-auth') {
+      return token;
+    }
+    // 2. Try to extract token from cookies
+    const cookieHeader = request.headers.cookie;
+    if (cookieHeader) {
+      const tokenCookie = cookieHeader
+        .split(';')
+        .map(c => c.trim())
+        .find(c => c.startsWith('beacon_token='));
+      if (tokenCookie) {
+        return tokenCookie.substring('beacon_token='.length);
+      }
+    }
+    return undefined;
   }
 }

@@ -6,7 +6,7 @@ export class CreateBusinessDto {
   companyName: string;
 
   @IsNotEmpty({ message: 'Website URL is required' })
-  @IsString()
+  @IsUrl({}, { message: 'Website must be a valid URL' })
   website: string;
 
   @IsNotEmpty({ message: 'Industry is required' })

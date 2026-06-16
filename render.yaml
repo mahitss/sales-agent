@@ -33,10 +33,7 @@ services:
       - key: JWT_REFRESH_EXPIRATION
         value: 7d
       - key: AI_SERVICE_URL
-        fromService:
-          type: web
-          name: beacon-ai-service
-          property: host
+        value: http://beacon-ai-service:8000
 
   # 3. Next.js Frontend
   - type: web

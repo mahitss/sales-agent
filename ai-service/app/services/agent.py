@@ -1,10 +1,15 @@
 import os
+import re
+import logging
 from typing import List, Dict, Any, Optional
 from pydantic import BaseModel, Field
 from google.genai import Client, types
 from dotenv import load_dotenv
 
 load_dotenv()
+
+# Setup logging for this module
+logger = logging.getLogger("ai-service.agent")
 
 # Define the Pydantic structure for Gemini Response
 class AgentResponse(BaseModel):
@@ -66,14 +71,12 @@ class CompetitorAnalysisResponse(BaseModel):
 
 class AIAgentService:
     def __init__(self):
-        # The Client will automatically use GEMINI_API_KEY from environment variables
         self.api_key = os.getenv("GEMINI_API_KEY")
-        if not self.api_key or self.api_key == "your-google-gemini-api-key-here":
-            # If no API key, we will run in mock mode
+        if not self.api_key or self.api_key.strip() == "":
             self.client = None
-            print("WARNING: GEMINI_API_KEY not set. Running in Mock Mode.")
+            logger.warning("WARNING: GEMINI_API_KEY not set. Running in Mock Mode.")
         else:
-            self.client = Client()
+            self.client = Client(api_key=self.api_key)
 
     def process_chat(
         self,
@@ -124,7 +127,6 @@ class AIAgentService:
         )
 
         if not self.client:
-            # Return Mock response if Gemini client is not initialized
             return self._mock_response(messages[-1]["content"] if messages else "", current_lead)
 
         try:
@@ -151,12 +153,10 @@ class AIAgentService:
                 )
             )
 
-            # The response.text contains the JSON string matching AgentResponse structure
             return AgentResponse.model_validate_json(response.text)
 
         except Exception as e:
-            print(f"Error in Gemini call: {e}")
-            # Fallback to a safe mock/parsing mode or simple error response
+            logger.exception("Error in Gemini call")
             return AgentResponse(
                 response="I'm having a little trouble connecting to my systems right now. Could you please share your name and email so I can have our team follow up with you directly?",
                 intent="Support",
@@ -183,19 +183,33 @@ class AIAgentService:
         extracted_date = None
         extracted_time = None
         
-        # Simulated extraction
+        # Simulated email extraction
         if "@" in latest_message and not email:
-            import re
             emails = re.findall(r'[\w\.-]+@[\w\.-]+\.\w+', latest_message)
             if emails:
                 extracted_email = emails[0]
                 email = emails[0]
                 
-        if ("my name is" in msg_lower or "i am" in msg_lower or "call me" in msg_lower) and not name:
-            parts = latest_message.split()
-            if len(parts) > 2:
-                extracted_name = parts[-1].strip(" .!,")
+        # Simulated phone extraction
+        phone_match = re.search(r'(\+?\d[\d\-\s\(\)]{8,15})', latest_message)
+        if phone_match and not phone:
+            extracted_phone = phone_match.group(1).strip()
+            phone = extracted_phone
+
+        # Simulated name extraction (robust regex matching name context)
+        name_match = re.search(r'(?:my name is|i am|call me)\s+([a-zA-Z\s]+)', latest_message, re.IGNORECASE)
+        if name_match and not name:
+            extracted_name = name_match.group(1).strip(" .!,")
+            name_parts = extracted_name.split()
+            if name_parts:
+                extracted_name = " ".join(name_parts[:2])
                 name = extracted_name
+
+        # Simulated budget extraction (detecting currency and numbers dynamically)
+        budget_match = re.search(r'(?:[$₹€]\s*\d+[\d,]*|\d+[\d,]*\s*(?:USD|INR|dollars|rupees|per month|/month|pm|k))', latest_message, re.IGNORECASE)
+        if budget_match and not budget:
+            extracted_budget = budget_match.group(0).strip(" .!,")
+            budget = extracted_budget
 
         if not name:
             response_text = "Hello! Thanks for visiting our site. May I know your name and what you're looking for today?"
@@ -206,7 +220,6 @@ class AIAgentService:
         elif not budget:
             response_text = "Got it! What is your estimated monthly budget for this project? (e.g. ₹20,000/month or $500/month)"
             intent = "LeadQualification"
-            extracted_budget = "₹20,000/month"
         else:
             response_text = f"Awesome! I've noted all your details. Would you like to schedule a call tomorrow at 4 PM to discuss this further?"
             intent = "Booking"
@@ -232,7 +245,7 @@ class AIAgentService:
         elif "?" in latest_message or any(w in msg_lower for w in ["what", "how", "why", "who", "when"]):
             sentiment = "Inquisitive"
 
-        # Engagement score computation
+        # Engagement score computation - capped at 100 without double counting
         engagement = 15
         if name:
             engagement += 20
@@ -240,6 +253,8 @@ class AIAgentService:
             engagement += 30
         if budget:
             engagement += 20
+        if phone:
+            engagement += 10
         if "schedule" in msg_lower or "book" in msg_lower:
             engagement += 15
         engagement = min(100, engagement)
@@ -261,7 +276,6 @@ class AIAgentService:
     # --- Auto Website Learning (FAQ extract) Service ---
     def extract_faqs(self, scraped_text: str, company_name: str, industry: str, description: str) -> ExtractFAQsResponse:
         if not self.client:
-            # Fallback mock FAQs
             return ExtractFAQsResponse(faqs=[
                 FAQItem(title=f"What are the core offerings of {company_name}?", content=f"We provide specialized services in the {industry} sector tailored specifically to user specifications as described in our company profile: {description[:100]}..."),
                 FAQItem(title="Do you provide customizable configurations?", content="Yes, all client widget configurations and integrations are fully custom-built and modular."),
@@ -285,7 +299,7 @@ class AIAgentService:
             )
             return ExtractFAQsResponse.model_validate_json(response.text)
         except Exception as e:
-            print(f"Error in Gemini extract_faqs: {e}")
+            logger.exception("Error in Gemini extract_faqs")
             return ExtractFAQsResponse(faqs=[
                 FAQItem(title=f"What services does {company_name} provide?", content=f"We provide professional services in the {industry} sector."),
                 FAQItem(title="Where can I view pricing?", content="Please contact our sales team by providing your name and email in the chat widget."),
@@ -298,7 +312,6 @@ class AIAgentService:
         my_desc = my_business.get("description", "")
 
         if not self.client:
-            # Fallback mock comparison
             return CompetitorAnalysisResponse(
                 serviceCompare=[
                     ServiceCompareItem(feature="Product Customization", us="Highly customized modular setups", competitor="Standard fixed plans only"),
@@ -334,7 +347,7 @@ class AIAgentService:
             )
             return CompetitorAnalysisResponse.model_validate_json(response.text)
         except Exception as e:
-            print(f"Error in Gemini analyze_competitor: {e}")
+            logger.exception("Error in Gemini analyze_competitor")
             return CompetitorAnalysisResponse(
                 serviceCompare=[
                     ServiceCompareItem(feature="AI Sales Agent", us="Yes (Standard)", competitor="Unknown"),

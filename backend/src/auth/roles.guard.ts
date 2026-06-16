@@ -18,6 +18,10 @@ export class RolesGuard implements CanActivate {
     if (!user || !user.role) {
       throw new ForbiddenException('Access denied: User role is missing');
     }
+    // Admin role has universal access (role hierarchy)
+    if (user.role === 'ADMIN') {
+      return true;
+    }
     const hasRole = requiredRoles.includes(user.role);
     if (!hasRole) {
       throw new ForbiddenException(`Access denied: Required role is ${requiredRoles.join(' or ')}`);

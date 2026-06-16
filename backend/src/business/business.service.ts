@@ -171,12 +171,15 @@ export class BusinessService {
         .replace(/<[^>]+>/g, ' ')
         .replace(/\s+/g, ' ')
         .substring(0, 4000);
-    } catch (err) {
-      console.warn(`Direct crawl failed for ${url}, fallback to mock: ${err.message}`);
+    } catch (err: any) {
+      console.warn(`Direct crawl failed for ${url}, fallback to mock: ${err?.message || String(err)}`);
     }
 
     try {
-      const aiServiceUrl = process.env.AI_SERVICE_URL || 'http://localhost:8000';
+      let aiServiceUrl = process.env.AI_SERVICE_URL || 'http://localhost:8000';
+      if (aiServiceUrl && !aiServiceUrl.startsWith('http://') && !aiServiceUrl.startsWith('https://')) {
+        aiServiceUrl = `http://${aiServiceUrl}`;
+      }
       const response = await axios.post(`${aiServiceUrl}/extract-faqs`, {
         url,
         scraped_text: scrapedText,
@@ -185,8 +188,8 @@ export class BusinessService {
         description: business.description,
       });
       faqList = response.data.faqs;
-    } catch (err) {
-      console.warn(`AI extraction failed, generating fallback FAQs: ${err.message}`);
+    } catch (err: any) {
+      console.warn(`AI extraction failed, generating fallback FAQs: ${err?.message || String(err)}`);
       faqList = [
         {
           title: `What products/services does ${business.companyName} offer?`,
@@ -228,7 +231,10 @@ export class BusinessService {
 
     let faqList: Array<{ title: string; content: string }> = [];
     try {
-      const aiServiceUrl = process.env.AI_SERVICE_URL || 'http://localhost:8000';
+      let aiServiceUrl = process.env.AI_SERVICE_URL || 'http://localhost:8000';
+      if (aiServiceUrl && !aiServiceUrl.startsWith('http://') && !aiServiceUrl.startsWith('https://')) {
+        aiServiceUrl = `http://${aiServiceUrl}`;
+      }
       const response = await axios.post(`${aiServiceUrl}/extract-faqs`, {
         url: 'Document Upload: ' + body.title,
         scraped_text: body.text,
@@ -237,8 +243,8 @@ export class BusinessService {
         description: business.description,
       });
       faqList = response.data.faqs;
-    } catch (err) {
-      console.warn(`AI document extraction failed, generating fallback FAQ: ${err.message}`);
+    } catch (err: any) {
+      console.warn(`AI document extraction failed, generating fallback FAQ: ${err?.message || String(err)}`);
       faqList = [
         {
           title: `What is detailed in the uploaded document "${body.title}"?`,
@@ -277,12 +283,15 @@ export class BusinessService {
         .replace(/<[^>]+>/g, ' ')
         .replace(/\s+/g, ' ')
         .substring(0, 4000);
-    } catch (err) {
-      console.warn(`Competitor direct crawl failed for ${competitorUrl}: ${err.message}`);
+    } catch (err: any) {
+      console.warn(`Competitor direct crawl failed for ${competitorUrl}: ${err?.message || String(err)}`);
     }
 
     try {
-      const aiServiceUrl = process.env.AI_SERVICE_URL || 'http://localhost:8000';
+      let aiServiceUrl = process.env.AI_SERVICE_URL || 'http://localhost:8000';
+      if (aiServiceUrl && !aiServiceUrl.startsWith('http://') && !aiServiceUrl.startsWith('https://')) {
+        aiServiceUrl = `http://${aiServiceUrl}`;
+      }
       const response = await axios.post(`${aiServiceUrl}/competitor-analysis`, {
         competitor_url: competitorUrl,
         scraped_text: scrapedText,
@@ -293,8 +302,8 @@ export class BusinessService {
         },
       });
       analysisResult = response.data;
-    } catch (err) {
-      console.warn(`AI competitor analysis failed: ${err.message}`);
+    } catch (err: any) {
+      console.warn(`AI competitor analysis failed: ${err?.message || String(err)}`);
       analysisResult = {
         serviceCompare: [
           { feature: 'Core Offerings', us: 'Custom ' + business.industry + ' services', competitor: 'Generic solutions' },

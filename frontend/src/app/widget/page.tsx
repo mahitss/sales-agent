@@ -46,8 +46,14 @@ function WidgetContent() {
 
   // Play premium notification chime using Web Audio API
   const playNotificationSound = () => {
+    if (typeof window === "undefined") return;
     try {
-      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const AudioCtxClass = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtxClass) return;
+      const audioCtx = new AudioCtxClass();
+      if (audioCtx.state === "suspended") {
+        return;
+      }
       const oscillator = audioCtx.createOscillator();
       const gainNode = audioCtx.createGain();
       
@@ -147,30 +153,49 @@ function WidgetContent() {
     if (!businessId) return;
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
     
-    // Generate realistic mock tracking parameters for dashboard metrics
-    const locations = ["Mumbai", "New York", "London", "Berlin", "San Francisco", "Sydney", "Tokyo", "Paris", "Toronto"];
-    const randomLocation = locations[Math.floor(Math.random() * locations.length)];
-    
-    const pageOptions = [
-      ["/pricing", "/services"],
-      ["/features", "/pricing"],
-      ["/documentation", "/services", "/pricing"],
-      ["/pricing"],
-      ["/services"],
-      ["/features", "/about", "/pricing"]
-    ];
-    const randomPages = pageOptions[Math.floor(Math.random() * pageOptions.length)];
-    const randomDuration = Math.floor(Math.random() * 400) + 80; // seconds
-    
-    fetch(`${apiUrl}/business/${businessId}/track-visitor`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        location: randomLocation,
-        pagesViewed: randomPages,
-        duration: randomDuration
+    let referrerPath = "/";
+    if (typeof document !== "undefined" && document.referrer) {
+      try {
+        const url = new URL(document.referrer);
+        referrerPath = url.pathname + url.search;
+      } catch (e) {
+        referrerPath = document.referrer || "/";
+      }
+    }
+
+    // Geolocate user using ipapi.co
+    fetch("https://ipapi.co/json/")
+      .then((res) => {
+        if (!res.ok) throw new Error("Geolocation request failed");
+        return res.json();
       })
-    }).catch(console.error);
+      .then((data) => {
+        const location = data.city && data.country_name 
+          ? `${data.city}, ${data.country_name}` 
+          : data.city || data.country_name || "Unknown Location";
+        
+        return fetch(`${apiUrl}/business/${businessId}/track-visitor`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            location: location,
+            pagesViewed: [referrerPath],
+            duration: 120
+          })
+        });
+      })
+      .catch((err) => {
+        console.warn("IP Geolocation lookup failed, using fallback:", err);
+        fetch(`${apiUrl}/business/${businessId}/track-visitor`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            location: "Local Visitor",
+            pagesViewed: [referrerPath],
+            duration: 90
+          })
+        }).catch(console.error);
+      });
   }, [businessId]);
 
   // Poll conversation history for operator takeover replies
