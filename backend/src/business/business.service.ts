@@ -1,7 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateBusinessDto, CreateFAQDto } from './dto/business.dto';
 import axios from 'axios';
+import * as bcrypt from 'bcrypt';
 
 @Injectable()
 export class BusinessService {
@@ -28,11 +29,24 @@ export class BusinessService {
     });
   }
 
-  async getForUser(ownerId: string) {
-    const business = await this.prisma.business.findFirst({
-      where: { ownerId },
-      include: { knowledgeBases: true },
-    });
+  async getForUser(userId: string, role: string) {
+    let business;
+    if (role === 'ADMIN') {
+      business = await this.prisma.business.findFirst({
+        where: { ownerId: userId },
+        include: { knowledgeBases: true },
+      });
+    } else {
+      const employee = await this.prisma.user.findUnique({
+        where: { id: userId },
+      });
+      if (employee && employee.businessId) {
+        business = await this.prisma.business.findUnique({
+          where: { id: employee.businessId },
+          include: { knowledgeBases: true },
+        });
+      }
+    }
     if (!business) {
       return null;
     }
@@ -407,5 +421,78 @@ export class BusinessService {
     }
 
     return recommendations;
+  }
+
+  // --- Employee / Team Seats Management Services ---
+  async createEmployee(businessId: string, ownerId: string, data: { email: string; name: string; password?: string }) {
+    // 1. Verify that requesting user is the owner of the business
+    const business = await this.prisma.business.findFirst({
+      where: { id: businessId, ownerId },
+    });
+    if (!business) {
+      throw new NotFoundException('Business profile not found or access denied');
+    }
+
+    // 2. Check if user already exists
+    const existing = await this.prisma.user.findUnique({
+      where: { email: data.email },
+    });
+    if (existing) {
+      throw new ConflictException('Email already registered');
+    }
+
+    // 3. Hash temporary password
+    const tempPassword = data.password || 'Welcome123!';
+    const hashedPassword = await bcrypt.hash(tempPassword, 10);
+
+    // 4. Create EMPLOYEE user associated with the businessId
+    const employee = await this.prisma.user.create({
+      data: {
+        email: data.email,
+        name: data.name,
+        password: hashedPassword,
+        role: 'EMPLOYEE',
+        businessId,
+      },
+    });
+
+    return {
+      id: employee.id,
+      email: employee.email,
+      name: employee.name,
+      role: employee.role,
+      businessId: employee.businessId,
+    };
+  }
+
+  async getEmployees(businessId: string, userId: string, userRole: string) {
+    // Verify that requesting user is either the owner of the business OR an employee of the business
+    if (userRole === 'ADMIN') {
+      const business = await this.prisma.business.findFirst({
+        where: { id: businessId, ownerId: userId },
+      });
+      if (!business) {
+        throw new NotFoundException('Business profile not found or access denied');
+      }
+    } else {
+      const employee = await this.prisma.user.findFirst({
+        where: { id: userId, businessId },
+      });
+      if (!employee) {
+        throw new NotFoundException('Business profile access denied');
+      }
+    }
+
+    // Return list of employees linked to this business
+    return this.prisma.user.findMany({
+      where: { businessId },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        createdAt: true,
+      },
+    });
   }
 }

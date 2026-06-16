@@ -2,6 +2,8 @@ import { Controller, Post, Get, Put, Body, Param, UseGuards, Res } from '@nestjs
 import { LeadService } from './lead.service';
 import { CreateLeadDto, UpdateLeadDto } from './dto/lead.dto';
 import { AuthGuard } from '../auth/auth.guard';
+import { Roles } from '../auth/roles.decorator';
+import { RolesGuard } from '../auth/roles.guard';
 import * as express from 'express';
 
 @Controller('leads')
@@ -25,7 +27,8 @@ export class LeadController {
     return this.leadService.getStats(businessId);
   }
 
-  @UseGuards(AuthGuard)
+  @UseGuards(AuthGuard, RolesGuard)
+  @Roles('ADMIN')
   @Get('business/:businessId/export')
   async exportLeads(@Param('businessId') businessId: string, @Res() res: express.Response) {
     const csv = await this.leadService.exportLeadsToCsv(businessId);

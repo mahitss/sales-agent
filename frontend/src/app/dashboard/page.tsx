@@ -158,7 +158,7 @@ export default function DashboardPage() {
 
   // Dashboard Active State
   const [activeTab, setActiveTab] = useState<
-    "overview" | "leads" | "conversations" | "appointments" | "kb" | "widget" | "visitor" | "competitor" | "integrations"
+    "overview" | "leads" | "conversations" | "appointments" | "kb" | "widget" | "visitor" | "competitor" | "integrations" | "team"
   >("overview");
 
   // Content Data States
@@ -237,6 +237,15 @@ export default function DashboardPage() {
 
   // Global Loading States
   const [dataLoading, setDataLoading] = useState(false);
+
+  // Team Seats States
+  const [employees, setEmployees] = useState<any[]>([]);
+  const [employeeEmail, setEmployeeEmail] = useState("");
+  const [employeeName, setEmployeeName] = useState("");
+  const [employeePassword, setEmployeePassword] = useState("");
+  const [employeeLoading, setEmployeeLoading] = useState(false);
+  const [employeeError, setEmployeeError] = useState("");
+  const [employeeSuccess, setEmployeeSuccess] = useState("");
 
   const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
 
@@ -372,11 +381,62 @@ export default function DashboardPage() {
       } else if (activeTab === "competitor") {
         const res = await fetch(`${API_URL}/business/${business.id}/competitor-analysis`, { headers });
         if (res.ok) setCompetitorAnalyses(await res.json());
+      } else if (activeTab === "team") {
+        await fetchEmployees();
       }
     } catch (err) {
       console.error("Data refresh failed", err);
     } finally {
       setDataLoading(false);
+    }
+  };
+
+  const fetchEmployees = async () => {
+    if (!business) return;
+    try {
+      const res = await fetch(`${API_URL}/business/${business.id}/employees`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem("beacon_token")}` },
+      });
+      if (res.ok) {
+        setEmployees(await res.json());
+      }
+    } catch (err) {
+      console.error("Failed to fetch employees", err);
+    }
+  };
+
+  const handleAddEmployee = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!employeeEmail || !employeeName || !business) return;
+    setEmployeeLoading(true);
+    setEmployeeError("");
+    setEmployeeSuccess("");
+    try {
+      const res = await fetch(`${API_URL}/business/${business.id}/employees`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("beacon_token")}`
+        },
+        body: JSON.stringify({
+          email: employeeEmail,
+          name: employeeName,
+          password: employeePassword || undefined
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.message || "Failed to create employee");
+      }
+      setEmployeeSuccess(`Created operator credentials! Temporary password: ${employeePassword || 'Welcome123!'}`);
+      setEmployeeEmail("");
+      setEmployeeName("");
+      setEmployeePassword("");
+      fetchEmployees();
+    } catch (err: any) {
+      setEmployeeError(err.message || "Failed to create employee");
+    } finally {
+      setEmployeeLoading(false);
     }
   };
 
@@ -1133,40 +1193,55 @@ export default function DashboardPage() {
               <MapPin className="h-4.5 w-4.5" />
               Visitor Activity
             </button>
-            <button
-              onClick={() => setActiveTab("competitor")}
-              className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-xl transition-all cursor-pointer ${
-                activeTab === "competitor"
-                  ? "bg-emerald-600/10 text-emerald-400 border border-emerald-500/20 font-semibold"
-                  : "text-slate-400 hover:bg-slate-900 hover:text-white"
-              }`}
-            >
-              <Compass className="h-4.5 w-4.5" />
-              Competitor Insights
-            </button>
-            <button
-              onClick={() => setActiveTab("integrations")}
-              className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-xl transition-all cursor-pointer ${
-                activeTab === "integrations"
-                  ? "bg-emerald-600/10 text-emerald-400 border border-emerald-500/20 font-semibold"
-                  : "text-slate-400 hover:bg-slate-900 hover:text-white"
-              }`}
-            >
-              <Radio className="h-4.5 w-4.5" />
-              Integrations settings
-            </button>
 
-            <button
-              onClick={() => setActiveTab("widget")}
-              className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-xl transition-all cursor-pointer ${
-                activeTab === "widget"
-                  ? "bg-emerald-600/10 text-emerald-400 border border-emerald-500/20 font-semibold"
-                  : "text-slate-400 hover:bg-slate-900 hover:text-white"
-              }`}
-            >
-              <Code className="h-4.5 w-4.5" />
-              Widget Code
-            </button>
+            {user?.role === 'ADMIN' && (
+              <>
+                <button
+                  onClick={() => setActiveTab("competitor")}
+                  className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-xl transition-all cursor-pointer ${
+                    activeTab === "competitor"
+                      ? "bg-emerald-600/10 text-emerald-400 border border-emerald-500/20 font-semibold"
+                      : "text-slate-400 hover:bg-slate-900 hover:text-white"
+                  }`}
+                >
+                  <Compass className="h-4.5 w-4.5" />
+                  Competitor Insights
+                </button>
+                <button
+                  onClick={() => setActiveTab("team")}
+                  className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-xl transition-all cursor-pointer ${
+                    activeTab === "team"
+                      ? "bg-emerald-600/10 text-emerald-400 border border-emerald-500/20 font-semibold"
+                      : "text-slate-400 hover:bg-slate-900 hover:text-white"
+                  }`}
+                >
+                  <Users className="h-4.5 w-4.5" />
+                  Team Members
+                </button>
+                <button
+                  onClick={() => setActiveTab("integrations")}
+                  className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-xl transition-all cursor-pointer ${
+                    activeTab === "integrations"
+                      ? "bg-emerald-600/10 text-emerald-400 border border-emerald-500/20 font-semibold"
+                      : "text-slate-400 hover:bg-slate-900 hover:text-white"
+                  }`}
+                >
+                  <Radio className="h-4.5 w-4.5" />
+                  Integrations settings
+                </button>
+                <button
+                  onClick={() => setActiveTab("widget")}
+                  className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-xl transition-all cursor-pointer ${
+                    activeTab === "widget"
+                      ? "bg-emerald-600/10 text-emerald-400 border border-emerald-500/20 font-semibold"
+                      : "text-slate-400 hover:bg-slate-900 hover:text-white"
+                  }`}
+                >
+                  <Code className="h-4.5 w-4.5" />
+                  Widget Code
+                </button>
+              </>
+            )}
           </nav>
         </div>
 
@@ -1201,6 +1276,7 @@ export default function DashboardPage() {
                activeTab === "visitor" ? "Visitor Activity Tracking" :
                activeTab === "competitor" ? "Competitor Analysis Audit" :
                activeTab === "integrations" ? "Multi-Channel Settings" :
+               activeTab === "team" ? "Team Seats Management" :
                activeTab}
             </h2>
             {dataLoading && <RefreshCw className="h-4 w-4 animate-spin text-emerald-400" />}
@@ -1870,137 +1946,141 @@ export default function DashboardPage() {
                 <p className="text-xs text-slate-500 mt-1">Upload answers, instructions, and services so the AI sales agent can reference them.</p>
               </div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                {/* V3: Auto Website Learning Scraper Container */}
-                <div className="rounded-2xl border border-slate-900 bg-slate-900/30 p-6 space-y-4">
-                  <h4 className="font-bold text-sm uppercase tracking-wider text-slate-400 flex items-center gap-2">
-                    <Globe className="h-4.5 w-4.5 text-emerald-400 animate-pulse" />
-                    Auto Website Learning (Instant RAG Scraper)
-                  </h4>
-                  <p className="text-xs text-slate-500">
-                    Enter any website URL. Beacon will crawl the pages, extract FAQs/services, and automatically generate Knowledge Base articles using Gemini context extraction.
-                  </p>
-
-                  <form onSubmit={handleStartScrape} className="flex gap-3">
-                    <input
-                      type="url"
-                      required
-                      value={scraperUrl}
-                      onChange={(e) => setScraperUrl(e.target.value)}
-                      placeholder="e.g. https://theirwebsite.com"
-                      className="flex-1 rounded-xl bg-slate-900 border border-slate-800 px-4 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500/50 placeholder-slate-700"
-                    />
-                    <button
-                      type="submit"
-                      disabled={scraperLoading || !scraperUrl}
-                      className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-xl px-5 py-2.5 text-sm flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-                    >
-                      {scraperLoading ? (
-                        <RefreshCw className="h-4.5 w-4.5 animate-spin" />
-                      ) : (
-                        <ArrowRight className="h-4.5 w-4.5" />
-                      )}
-                      Crawl Website
-                    </button>
-                  </form>
-
-                  {/* Scraper Logs Console */}
-                  {scraperLogs.length > 0 && (
-                    <div className="rounded-xl bg-slate-950 border border-slate-900 p-4 font-mono text-[11px] text-emerald-500 space-y-1 overflow-y-auto max-h-40 leading-relaxed shadow-inner">
-                      {scraperLogs.map((log, i) => (
-                        <div key={i} className="flex gap-2">
-                          <span className="text-emerald-800 shrink-0">[{i+1}]</span>
-                          <span>{log}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* PDF/Text Document RAG Upload Container */}
-                <div className="rounded-2xl border border-slate-900 bg-slate-900/30 p-6 space-y-4">
-                  <h4 className="font-bold text-sm uppercase tracking-wider text-slate-400 flex items-center gap-2">
-                    <FileText className="h-4.5 w-4.5 text-emerald-400" />
-                    RAG Knowledge Document Upload
-                  </h4>
-                  <p className="text-xs text-slate-500">
-                    Upload service lists, catalogs, or context files (.txt, .csv, .json) to extract and inject FAQ items into your AI agent's memory.
-                  </p>
-
-                  <div className="border border-dashed border-slate-800 rounded-xl p-6 flex flex-col items-center justify-center bg-slate-950/20 relative hover:bg-slate-950/40 transition-colors">
-                    <input
-                      type="file"
-                      accept=".txt,.csv,.json"
-                      onChange={handleStartFileUpload}
-                      disabled={kbUploading}
-                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:pointer-events-none"
-                    />
-                    <FileText className={`h-8 w-8 text-slate-600 mb-2 ${kbUploading ? 'animate-bounce' : ''}`} />
-                    <p className="text-xs text-slate-400 text-center">
-                      {kbUploading ? `Reading and extracting "${kbFileName}"...` : 'Drag and drop or click to upload knowledge document'}
+              {user?.role === 'ADMIN' && (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                  {/* V3: Auto Website Learning Scraper Container */}
+                  <div className="rounded-2xl border border-slate-900 bg-slate-900/30 p-6 space-y-4">
+                    <h4 className="font-bold text-sm uppercase tracking-wider text-slate-400 flex items-center gap-2">
+                      <Globe className="h-4.5 w-4.5 text-emerald-400 animate-pulse" />
+                      Auto Website Learning (Instant RAG Scraper)
+                    </h4>
+                    <p className="text-xs text-slate-500">
+                      Enter any website URL. Beacon will crawl the pages, extract FAQs/services, and automatically generate Knowledge Base articles using Gemini context extraction.
                     </p>
-                    <p className="text-[10px] text-slate-600 mt-1">Supports UTF-8 text files up to 2MB</p>
+
+                    <form onSubmit={handleStartScrape} className="flex gap-3">
+                      <input
+                        type="url"
+                        required
+                        value={scraperUrl}
+                        onChange={(e) => setScraperUrl(e.target.value)}
+                        placeholder="e.g. https://theirwebsite.com"
+                        className="flex-1 rounded-xl bg-slate-900 border border-slate-800 px-4 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500/50 placeholder-slate-700"
+                      />
+                      <button
+                        type="submit"
+                        disabled={scraperLoading || !scraperUrl}
+                        className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-xl px-5 py-2.5 text-sm flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                      >
+                        {scraperLoading ? (
+                          <RefreshCw className="h-4.5 w-4.5 animate-spin" />
+                        ) : (
+                          <ArrowRight className="h-4.5 w-4.5" />
+                        )}
+                        Crawl Website
+                      </button>
+                    </form>
+
+                    {/* Scraper Logs Console */}
+                    {scraperLogs.length > 0 && (
+                      <div className="rounded-xl bg-slate-950 border border-slate-900 p-4 font-mono text-[11px] text-emerald-500 space-y-1 overflow-y-auto max-h-40 leading-relaxed shadow-inner">
+                        {scraperLogs.map((log, i) => (
+                          <div key={i} className="flex gap-2">
+                            <span className="text-emerald-800 shrink-0">[{i+1}]</span>
+                            <span>{log}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
-                  {kbUploading && (
-                    <div className="space-y-2">
-                      <div className="flex justify-between text-[10px] font-mono text-emerald-400">
-                        <span>Uploading...</span>
-                        <span>{kbProgress}%</span>
-                      </div>
-                      <div className="w-full bg-slate-900 h-1.5 rounded-full overflow-hidden">
-                        <div className="h-full rounded-full bg-emerald-500 transition-all duration-300" style={{ width: `${kbProgress}%` }}></div>
-                      </div>
+                  {/* PDF/Text Document RAG Upload Container */}
+                  <div className="rounded-2xl border border-slate-900 bg-slate-900/30 p-6 space-y-4">
+                    <h4 className="font-bold text-sm uppercase tracking-wider text-slate-400 flex items-center gap-2">
+                      <FileText className="h-4.5 w-4.5 text-emerald-400" />
+                      RAG Knowledge Document Upload
+                    </h4>
+                    <p className="text-xs text-slate-500">
+                      Upload service lists, catalogs, or context files (.txt, .csv, .json) to extract and inject FAQ items into your AI agent's memory.
+                    </p>
+
+                    <div className="border border-dashed border-slate-800 rounded-xl p-6 flex flex-col items-center justify-center bg-slate-950/20 relative hover:bg-slate-950/40 transition-colors">
+                      <input
+                        type="file"
+                        accept=".txt,.csv,.json"
+                        onChange={handleStartFileUpload}
+                        disabled={kbUploading}
+                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:pointer-events-none"
+                      />
+                      <FileText className={`h-8 w-8 text-slate-600 mb-2 ${kbUploading ? 'animate-bounce' : ''}`} />
+                      <p className="text-xs text-slate-400 text-center">
+                        {kbUploading ? `Reading and extracting "${kbFileName}"...` : 'Drag and drop or click to upload knowledge document'}
+                      </p>
+                      <p className="text-[10px] text-slate-600 mt-1">Supports UTF-8 text files up to 2MB</p>
                     </div>
-                  )}
-                </div>
-              </div>
 
-              {/* Add FAQ form */}
-              <div className="rounded-2xl border border-slate-900 bg-slate-900/30 p-6">
-                <h4 className="font-bold text-sm uppercase tracking-wider text-slate-400 mb-4">Add FAQ Question</h4>
-                <form onSubmit={handleAddFAQ} className="space-y-4">
-                  <div>
-                    <label className="text-xs font-semibold uppercase tracking-wider text-slate-400">Question / Topic Title</label>
-                    <input
-                      type="text"
-                      required
-                      value={faqTitle}
-                      onChange={(e) => setFaqTitle(e.target.value)}
-                      placeholder="e.g. What are your pricing plans for SEO services?"
-                      className="mt-1 w-full rounded-xl bg-slate-900 border border-slate-800/80 px-4 py-2.5 text-sm text-white placeholder-slate-600 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/30 transition-all"
-                    />
+                    {kbUploading && (
+                      <div className="space-y-2">
+                        <div className="flex justify-between text-[10px] font-mono text-emerald-400">
+                          <span>Uploading...</span>
+                          <span>{kbProgress}%</span>
+                        </div>
+                        <div className="w-full bg-slate-900 h-1.5 rounded-full overflow-hidden">
+                          <div className="h-full rounded-full bg-emerald-500 transition-all duration-300" style={{ width: `${kbProgress}%` }}></div>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                  <div>
-                    <label className="text-xs font-semibold uppercase tracking-wider text-slate-400">Answer / Knowledge Content</label>
-                    <textarea
-                      required
-                      value={faqContent}
-                      onChange={(e) => setFaqContent(e.target.value)}
-                      rows={3}
-                      placeholder="Detail the answer here..."
-                      className="mt-1 w-full rounded-xl bg-slate-900 border border-slate-800/80 px-4 py-2.5 text-sm text-white placeholder-slate-600 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/30 transition-all resize-none"
-                    />
-                  </div>
-                  <div className="flex justify-end">
-                    <button
-                      type="submit"
-                      disabled={faqLoading || !faqTitle || !faqContent}
-                      className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl px-4 py-2.5 text-sm font-semibold transition-all shadow-md disabled:opacity-50 cursor-pointer"
-                    >
-                      <Plus className="h-4.5 w-4.5" />
-                      Add to Knowledge Base
-                    </button>
-                  </div>
-                </form>
-              </div>
+                </div>
+              )}
+
+              {user?.role === 'ADMIN' && (
+                /* Add FAQ form */
+                <div className="rounded-2xl border border-slate-900 bg-slate-900/30 p-6">
+                  <h4 className="font-bold text-sm uppercase tracking-wider text-slate-400 mb-4">Add FAQ Question</h4>
+                  <form onSubmit={handleAddFAQ} className="space-y-4">
+                    <div>
+                      <label className="text-xs font-semibold uppercase tracking-wider text-slate-400">Question / Topic Title</label>
+                      <input
+                        type="text"
+                        required
+                        value={faqTitle}
+                        onChange={(e) => setFaqTitle(e.target.value)}
+                        placeholder="e.g. What are your pricing plans for SEO services?"
+                        className="mt-1 w-full rounded-xl bg-slate-900 border border-slate-800/80 px-4 py-2.5 text-sm text-white placeholder-slate-600 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/30 transition-all"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold uppercase tracking-wider text-slate-400">Answer / Knowledge Content</label>
+                      <textarea
+                        required
+                        value={faqContent}
+                        onChange={(e) => setFaqContent(e.target.value)}
+                        rows={3}
+                        placeholder="Detail the answer here..."
+                        className="mt-1 w-full rounded-xl bg-slate-900 border border-slate-800/80 px-4 py-2.5 text-sm text-white placeholder-slate-600 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/30 transition-all resize-none"
+                      />
+                    </div>
+                    <div className="flex justify-end">
+                      <button
+                        type="submit"
+                        disabled={faqLoading || !faqTitle || !faqContent}
+                        className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl px-4 py-2.5 text-sm font-semibold transition-all shadow-md disabled:opacity-50 cursor-pointer"
+                      >
+                        <Plus className="h-4.5 w-4.5" />
+                        Add to Knowledge Base
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              )}
 
               {/* FAQs list */}
               <div className="space-y-4">
                 <h4 className="font-bold text-sm uppercase tracking-wider text-slate-400">Existing Knowledge Items</h4>
                 {faqs.length === 0 ? (
                   <div className="border border-slate-900 border-dashed rounded-2xl p-8 text-center text-slate-500 text-sm">
-                    No FAQs uploaded yet. Add your first knowledge item above!
+                    No FAQs uploaded yet.
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 gap-4">
@@ -2010,12 +2090,14 @@ export default function DashboardPage() {
                           <h5 className="font-bold text-sm text-slate-200">{faq.title}</h5>
                           <p className="text-xs text-slate-400 leading-relaxed">{faq.content}</p>
                         </div>
-                        <button
-                          onClick={() => handleDeleteFAQ(faq.id)}
-                          className="text-slate-600 hover:text-red-400 rounded-lg p-1.5 self-start transition-colors cursor-pointer"
-                        >
-                          <Trash2 className="h-4.5 w-4.5" />
-                        </button>
+                        {user?.role === 'ADMIN' && (
+                          <button
+                            onClick={() => handleDeleteFAQ(faq.id)}
+                            className="text-slate-600 hover:text-red-400 rounded-lg p-1.5 self-start transition-colors cursor-pointer"
+                          >
+                            <Trash2 className="h-4.5 w-4.5" />
+                          </button>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -2216,7 +2298,7 @@ export default function DashboardPage() {
           )}
 
           {/* TAB 8: MULTI-CHANNEL SETTINGS & SIMULATOR */}
-          {activeTab === "integrations" && (
+          {activeTab === "integrations" && user?.role === 'ADMIN' && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
               {/* Integration Toggles Panel */}
               <div className="space-y-6">
@@ -2459,6 +2541,126 @@ export default function DashboardPage() {
                     )}
                   </div>
                 </form>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 8.5: TEAM MEMBERS SEATS MANAGEMENT */}
+          {activeTab === "team" && user?.role === 'ADMIN' && (
+            <div className="space-y-8">
+              <div>
+                <h3 className="text-xl font-bold text-white">Team Seats Management</h3>
+                <p className="text-xs text-slate-500 mt-1">Create operator logins for your support agents so they can reply in the Live Inbox.</p>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                {/* Add Operator Form */}
+                <div className="lg:col-span-1 rounded-2xl border border-slate-900 bg-slate-900/30 p-6 space-y-4 h-fit">
+                  <h4 className="font-bold text-sm uppercase tracking-wider text-slate-400 flex items-center gap-2">
+                    <Plus className="h-4.5 w-4.5 text-emerald-400" />
+                    Invite Support Agent
+                  </h4>
+                  
+                  {employeeError && (
+                    <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-3 text-xs text-red-400 text-center">
+                      {employeeError}
+                    </div>
+                  )}
+                  {employeeSuccess && (
+                    <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3 text-xs text-emerald-400 text-center">
+                      {employeeSuccess}
+                    </div>
+                  )}
+
+                  <form onSubmit={handleAddEmployee} className="space-y-4">
+                    <div>
+                      <label className="text-xs font-semibold uppercase tracking-wider text-slate-400">Agent Name</label>
+                      <input
+                        type="text"
+                        required
+                        value={employeeName}
+                        onChange={(e) => setEmployeeName(e.target.value)}
+                        placeholder="e.g. Alice Smith"
+                        className="mt-1 w-full rounded-xl bg-slate-900 border border-slate-800 px-4 py-2 text-xs text-white focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold uppercase tracking-wider text-slate-400">Email Address</label>
+                      <input
+                        type="email"
+                        required
+                        value={employeeEmail}
+                        onChange={(e) => setEmployeeEmail(e.target.value)}
+                        placeholder="e.g. alice@company.com"
+                        className="mt-1 w-full rounded-xl bg-slate-900 border border-slate-800 px-4 py-2 text-xs text-white focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold uppercase tracking-wider text-slate-400">Temporary Password</label>
+                      <input
+                        type="text"
+                        value={employeePassword}
+                        onChange={(e) => setEmployeePassword(e.target.value)}
+                        placeholder="Welcome123! (Defaults if blank)"
+                        className="mt-1 w-full rounded-xl bg-slate-900 border border-slate-800 px-4 py-2 text-xs text-white focus:outline-none"
+                      />
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={employeeLoading || !employeeEmail || !employeeName}
+                      className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl py-2.5 text-xs flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                    >
+                      {employeeLoading ? (
+                        <RefreshCw className="h-4.5 w-4.5 animate-spin" />
+                      ) : (
+                        <Plus className="h-4.5 w-4.5" />
+                      )}
+                      Create Agent Account
+                    </button>
+                  </form>
+                </div>
+
+                {/* Operator List Table */}
+                <div className="lg:col-span-2 space-y-4">
+                  <h4 className="font-bold text-sm uppercase tracking-wider text-slate-400">Active Operators</h4>
+                  <div className="overflow-hidden border border-slate-900 rounded-2xl bg-slate-900/10">
+                    <table className="w-full border-collapse text-left text-sm">
+                      <thead className="bg-slate-900/50 border-b border-slate-900 text-xs font-semibold uppercase text-slate-400">
+                        <tr>
+                          <th className="px-6 py-4">Name</th>
+                          <th className="px-6 py-4">Email</th>
+                          <th className="px-6 py-4">Role</th>
+                          <th className="px-6 py-4">Joined Date</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-900/60">
+                        {employees.length === 0 ? (
+                          <tr>
+                            <td colSpan={4} className="px-6 py-8 text-center text-slate-500 text-xs">
+                              No employees added yet. Invite your first operator on the left!
+                            </td>
+                          </tr>
+                        ) : (
+                          employees.map((emp) => (
+                            <tr key={emp.id} className="hover:bg-slate-900/20 text-xs transition-colors">
+                              <td className="px-6 py-4 font-semibold text-slate-200">{emp.name}</td>
+                              <td className="px-6 py-4 text-slate-300">{emp.email}</td>
+                              <td className="px-6 py-4">
+                                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                                  {emp.role}
+                                </span>
+                              </td>
+                              <td className="px-6 py-4 text-slate-500">
+                                {new Date(emp.createdAt).toLocaleDateString()}
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
               </div>
             </div>
           )}
