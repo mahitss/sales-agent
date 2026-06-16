@@ -247,6 +247,11 @@ export default function DashboardPage() {
   const [employeeError, setEmployeeError] = useState("");
   const [employeeSuccess, setEmployeeSuccess] = useState("");
 
+  const handleUnauthorized = () => {
+    handleLogout();
+    alert("Your session has expired. Please sign in again.");
+  };
+
   const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
 
   // Check LocalStorage for Auth Session
@@ -313,6 +318,10 @@ export default function DashboardPage() {
       const res = await fetch(`${API_URL}/business`, {
         headers: { Authorization: `Bearer ${localStorage.getItem("beacon_token")}` },
       });
+      if (res.status === 401) {
+        handleUnauthorized();
+        return;
+      }
       if (res.ok) {
         const text = await res.text();
         if (!text || text.trim() === "null" || text.trim() === "") {
@@ -350,17 +359,34 @@ export default function DashboardPage() {
     try {
       const headers = { Authorization: `Bearer ${localStorage.getItem("beacon_token")}` };
       
+      let res;
       if (activeTab === "overview") {
         const statsRes = await fetch(`${API_URL}/leads/stats/${business.id}`, { headers });
+        if (statsRes.status === 401) {
+          handleUnauthorized();
+          return;
+        }
         if (statsRes.ok) setStats(await statsRes.json());
         
         const recsRes = await fetch(`${API_URL}/business/${business.id}/recommendations`, { headers });
+        if (recsRes.status === 401) {
+          handleUnauthorized();
+          return;
+        }
         if (recsRes.ok) setRecommendations(await recsRes.json());
       } else if (activeTab === "leads") {
-        const res = await fetch(`${API_URL}/leads/business/${business.id}`, { headers });
+        res = await fetch(`${API_URL}/leads/business/${business.id}`, { headers });
+        if (res.status === 401) {
+          handleUnauthorized();
+          return;
+        }
         if (res.ok) setLeads(await res.json());
       } else if (activeTab === "conversations") {
-        const res = await fetch(`${API_URL}/conversations/business/${business.id}`, { headers });
+        res = await fetch(`${API_URL}/conversations/business/${business.id}`, { headers });
+        if (res.status === 401) {
+          handleUnauthorized();
+          return;
+        }
         if (res.ok) {
           const list = await res.json();
           setConversations(list);
@@ -370,16 +396,28 @@ export default function DashboardPage() {
           }
         }
       } else if (activeTab === "appointments") {
-        const res = await fetch(`${API_URL}/appointments/business/${business.id}`, { headers });
+        res = await fetch(`${API_URL}/appointments/business/${business.id}`, { headers });
+        if (res.status === 401) {
+          handleUnauthorized();
+          return;
+        }
         if (res.ok) setAppointments(await res.json());
       } else if (activeTab === "kb") {
-        const res = await fetch(`${API_URL}/business/${business.id}/faq`);
+        res = await fetch(`${API_URL}/business/${business.id}/faq`);
         if (res.ok) setFaqs(await res.json());
       } else if (activeTab === "visitor") {
-        const res = await fetch(`${API_URL}/business/${business.id}/visitor-tracks`, { headers });
+        res = await fetch(`${API_URL}/business/${business.id}/visitor-tracks`, { headers });
+        if (res.status === 401) {
+          handleUnauthorized();
+          return;
+        }
         if (res.ok) setVisitorTracks(await res.json());
       } else if (activeTab === "competitor") {
-        const res = await fetch(`${API_URL}/business/${business.id}/competitor-analysis`, { headers });
+        res = await fetch(`${API_URL}/business/${business.id}/competitor-analysis`, { headers });
+        if (res.status === 401) {
+          handleUnauthorized();
+          return;
+        }
         if (res.ok) setCompetitorAnalyses(await res.json());
       } else if (activeTab === "team") {
         await fetchEmployees();
@@ -397,6 +435,10 @@ export default function DashboardPage() {
       const res = await fetch(`${API_URL}/business/${business.id}/employees`, {
         headers: { Authorization: `Bearer ${localStorage.getItem("beacon_token")}` },
       });
+      if (res.status === 401) {
+        handleUnauthorized();
+        return;
+      }
       if (res.ok) {
         setEmployees(await res.json());
       }
@@ -475,7 +517,7 @@ export default function DashboardPage() {
     }
   };
 
-  const handleLogout = () => {
+  function handleLogout() {
     localStorage.removeItem("beacon_token");
     localStorage.removeItem("beacon_user");
     setToken(null);
@@ -483,7 +525,7 @@ export default function DashboardPage() {
     setBusiness(null);
     setSelectedConv(null);
     setBusinessLoading(true);
-  };
+  }
 
   // Onboarding Handler
   const handleOnboard = async (e: React.FormEvent) => {
@@ -503,6 +545,10 @@ export default function DashboardPage() {
           description: compDesc,
         }),
       });
+      if (res.status === 401) {
+        handleUnauthorized();
+        return;
+      }
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
         throw new Error(errorData.message || "Failed to create profile");
@@ -1101,6 +1147,16 @@ export default function DashboardPage() {
               </button>
             </div>
           </form>
+
+          <div className="text-center mt-4">
+            <button
+              onClick={handleLogout}
+              className="text-xs font-medium text-slate-500 hover:text-slate-400 transition-colors cursor-pointer flex items-center justify-center gap-1 mx-auto"
+            >
+              <LogOut className="h-3.5 w-3.5" />
+              Sign Out
+            </button>
+          </div>
         </div>
       </div>
     );
