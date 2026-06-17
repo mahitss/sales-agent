@@ -1,6 +1,26 @@
 version: '3.8'
 
 services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: beacon-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgrespassword
+      POSTGRES_DB: beacon_sales_agent
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: always
+
+  redis:
+    image: redis:7-alpine
+    container_name: beacon-redis
+    ports:
+      - "6379:6379"
+    restart: always
+
   ai-service:
     build:
       context: ./ai-service
@@ -20,15 +40,19 @@ services:
     ports:
       - "4000:4000"
     environment:
-      - DATABASE_URL=file:./dev.db
+      - DATABASE_URL=postgresql://postgres:postgrespassword@postgres:5432/beacon_sales_agent?schema=public
       - JWT_SECRET=super-secret-key-change-me-in-production
       - JWT_REFRESH_SECRET=super-secret-key-change-me-in-production
-      - JWT_EXPIRATION=1d
+      - JWT_EXPIRATION=15m
       - JWT_REFRESH_EXPIRATION=7d
       - AI_SERVICE_URL=http://ai-service:8000
       - FRONTEND_URL=http://localhost:3000
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
     depends_on:
       - ai-service
+      - postgres
+      - redis
     restart: always
 
   frontend:
@@ -42,3 +66,7 @@ services:
     depends_on:
       - backend
     restart: always
+
+volumes:
+  postgres_data:
+

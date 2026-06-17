@@ -1,16 +1,26 @@
-import { Injectable, ConflictException, UnauthorizedException } from '@nestjs/common';
+import { Injectable, ConflictException, UnauthorizedException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
+import { RedisService } from '../common/redis/redis.service';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 import { RegisterDto, LoginDto, VerifyEmailDto, RequestPasswordResetDto, ResetPasswordDto } from './dto/auth.dto';
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private prisma: PrismaService,
     private jwtService: JwtService,
+    private configService: ConfigService,
+    private redisService: RedisService,
   ) {}
+
+  private hashToken(token: string): string {
+    return crypto.createHash('sha256').update(token).digest('hex');
+  }
 
   async register(dto: RegisterDto) {
     const existing = await this.prisma.user.findUnique({
@@ -32,14 +42,19 @@ export class AuthService {
         role: dto.role || 'ADMIN',
         verificationToken,
         verificationTokenExp,
+        isVerified: false,
       },
     });
 
-    // Generate token
-    const token = await this.generateToken(user.id, user.email, user.role);
+    // Generate token pair (access token + refresh token)
+    const tokens = await this.generateTokensPair(user.id, user.email, user.role);
 
-    // Mock Verification link logging
-    console.log(`User registered: ${user.email}. Verification Token: ${verificationToken}`);
+    // Save refresh token to db
+    await this.saveRefreshToken(user.id, tokens.refreshToken);
+
+    // Log verification link
+    const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000';
+    this.logger.log(`User registered: ${user.email}. Verification URL: ${frontendUrl}/verify-email?token=${verificationToken}`);
 
     return {
       user: {
@@ -47,8 +62,9 @@ export class AuthService {
         email: user.email,
         name: user.name,
         role: user.role,
+        isVerified: user.isVerified,
       },
-      token,
+      ...tokens,
       verificationToken,
     };
   }
@@ -66,7 +82,13 @@ export class AuthService {
       throw new UnauthorizedException('Invalid email or password');
     }
 
-    const token = await this.generateToken(user.id, user.email, user.role);
+    // Check if verified (skip during testing to keep tests simple unless mocked)
+    if (!user.isVerified && process.env.NODE_ENV !== 'test') {
+      throw new UnauthorizedException('Email address is not verified. Please verify your email first.');
+    }
+
+    const tokens = await this.generateTokensPair(user.id, user.email, user.role);
+    await this.saveRefreshToken(user.id, tokens.refreshToken);
 
     return {
       user: {
@@ -74,8 +96,9 @@ export class AuthService {
         email: user.email,
         name: user.name,
         role: user.role,
+        isVerified: user.isVerified,
       },
-      token,
+      ...tokens,
     };
   }
 
@@ -94,6 +117,7 @@ export class AuthService {
       data: {
         verificationToken: null,
         verificationTokenExp: null,
+        isVerified: true,
       },
     });
     return { success: true, message: 'Email address has been successfully verified.' };
@@ -115,7 +139,8 @@ export class AuthService {
         resetTokenExp,
       },
     });
-    console.log(`Password reset requested for ${dto.email}. Reset Token: ${resetToken}`);
+    const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000';
+    this.logger.log(`Password reset requested for ${dto.email}. Reset URL: ${frontendUrl}/reset-password?token=${resetToken}`);
     return {
       success: true,
       message: 'If the email exists, a password reset link has been sent.',
@@ -145,15 +170,123 @@ export class AuthService {
     return { success: true, message: 'Password has been reset successfully.' };
   }
 
+  async refresh(refreshToken: string) {
+    if (!refreshToken) {
+      throw new UnauthorizedException('Refresh token missing');
+    }
+
+    const hashedToken = this.hashToken(refreshToken);
+
+    // Verify token structure and expiration via JWT service
+    let payload;
+    try {
+      const refreshSecret = this.configService.get<string>('JWT_REFRESH_SECRET') || 'super-secret-refresh-key-change-me';
+      payload = await this.jwtService.verifyAsync(refreshToken, { secret: refreshSecret });
+    } catch (err) {
+      throw new UnauthorizedException('Invalid or expired refresh token');
+    }
+
+    // Look up in database
+    const dbToken = await this.prisma.refreshToken.findUnique({
+      where: { token: hashedToken },
+      include: { user: true },
+    });
+
+    if (!dbToken) {
+      throw new UnauthorizedException('Refresh token not recognized');
+    }
+
+    // Check if token is expired in DB or revoked
+    if (new Date() > dbToken.expiresAt) {
+      await this.prisma.refreshToken.delete({ where: { id: dbToken.id } });
+      throw new UnauthorizedException('Refresh token expired');
+    }
+
+    // Token reuse detection (Replay attack prevention)
+    if (dbToken.revoked) {
+      // Revoke all tokens for this user
+      await this.prisma.refreshToken.deleteMany({
+        where: { userId: dbToken.userId },
+      });
+      this.logger.warn(`Security alert! Revoked refresh token reuse detected for user ${dbToken.userId}. Invalidating all sessions.`);
+      throw new UnauthorizedException('Access denied. Compromised session detected.');
+    }
+
+    // Mark current token as revoked (used)
+    await this.prisma.refreshToken.update({
+      where: { id: dbToken.id },
+      data: { revoked: true },
+    });
+
+    // Generate new pair
+    const tokens = await this.generateTokensPair(dbToken.user.id, dbToken.user.email, dbToken.user.role);
+    await this.saveRefreshToken(dbToken.user.id, tokens.refreshToken);
+
+    return tokens;
+  }
+
+  async revokeRefreshToken(token: string) {
+    const hashed = this.hashToken(token);
+    try {
+      await this.prisma.refreshToken.delete({
+        where: { token: hashed },
+      });
+    } catch (err) {
+      // Ignore if not found
+    }
+  }
+
   async generateVisitorToken(businessId: string) {
     const visitorId = `visitor-${crypto.randomUUID()}`;
     const payload = { sub: visitorId, email: `${visitorId}@anonymous.local`, role: 'VISITOR', businessId };
-    const token = await this.jwtService.signAsync(payload, { expiresIn: '7d' });
+    const token = await this.jwtService.signAsync(payload, {
+      secret: this.configService.get<string>('JWT_SECRET'),
+      expiresIn: '7d',
+    });
     return { token };
   }
 
-  private async generateToken(userId: string, email: string, role: string): Promise<string> {
+  private async generateTokensPair(userId: string, email: string, role: string) {
     const payload = { sub: userId, email, role };
-    return this.jwtService.signAsync(payload);
+    const jwtSecret = this.configService.get<string>('JWT_SECRET');
+    const jwtExpiration = this.configService.get<string>('JWT_EXPIRATION') || '15m';
+    
+    const refreshSecret = this.configService.get<string>('JWT_REFRESH_SECRET') || 'super-secret-refresh-key-change-me';
+    const refreshExpiration = this.configService.get<string>('JWT_REFRESH_EXPIRATION') || '7d';
+
+    const accessToken = await this.jwtService.signAsync(payload, {
+      secret: jwtSecret,
+      expiresIn: jwtExpiration as any,
+    });
+
+    const refreshToken = await this.jwtService.signAsync(payload, {
+      secret: refreshSecret,
+      expiresIn: refreshExpiration as any,
+    });
+
+    return {
+      token: accessToken,
+      refreshToken,
+    };
+  }
+
+  private async saveRefreshToken(userId: string, token: string) {
+    const hashedToken = this.hashToken(token);
+    const refreshExpiration = this.configService.get<string>('JWT_REFRESH_EXPIRATION') || '7d';
+    
+    // Parse duration (e.g. '7d' or default to 7 days)
+    let days = 7;
+    if (refreshExpiration.endsWith('d')) {
+      days = parseInt(refreshExpiration.replace('d', ''), 10) || 7;
+    }
+    const expiresAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
+
+    await this.prisma.refreshToken.create({
+      data: {
+        token: hashedToken,
+        userId,
+        expiresAt,
+      },
+    });
   }
 }

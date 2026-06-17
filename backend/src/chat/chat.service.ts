@@ -106,31 +106,255 @@ export class ChatService {
         budget: lead.budget,
       },
     };
-
-    // 4. Call Python AI Service
+    // 4. Call Python AI Service with retry
     let aiResponse;
-    try {
-      const response = await axios.post(`${aiServiceUrl}/chat`, payload, { timeout: 5000 });
-      aiResponse = response.data;
-    } catch (err) {
-      console.error('Failed to communicate with AI Service:', err instanceof Error ? err.message : String(err));
-      // Fallback response
-      aiResponse = {
-        response: "I'm experiencing connectivity issues. May I get your name and email so our human agent can reach out?",
-        intent: 'Support',
-        extracted_name: null,
-        extracted_email: null,
-        extracted_phone: null,
-        extracted_budget: null,
-        extracted_appointment_date: null,
-        extracted_appointment_time: null,
-        lead_score: 'COLD',
-        lead_sentiment: 'Neutral',
-        engagement_score: 10,
-      };
+    const maxRetries = 3;
+    let attempt = 0;
+    while (attempt < maxRetries) {
+      try {
+        const response = await axios.post(`${aiServiceUrl}/chat`, payload, { timeout: 10000 });
+        aiResponse = response.data;
+        break;
+      } catch (err: any) {
+        attempt++;
+        console.error(`Attempt ${attempt} to connect to AI Service chat failed: ${err.message}`);
+        if (attempt >= maxRetries) {
+          aiResponse = {
+            response: "I'm experiencing connectivity issues. May I get your name and email so our human agent can reach out?",
+            intent: 'Support',
+            extracted_name: null,
+            extracted_email: null,
+            extracted_phone: null,
+            extracted_budget: null,
+            extracted_appointment_date: null,
+            extracted_appointment_time: null,
+            lead_score: 'COLD',
+            lead_sentiment: 'Neutral',
+            engagement_score: 10,
+          };
+        } else {
+          await new Promise((resolve) => setTimeout(resolve, attempt * 500));
+        }
+      }
     }
 
-    // 5. Update Lead details in DB based on AI extractions
+    await this.postProcessAIResponse(lead, conversation, businessId, messageHistory, aiResponse);
+
+    return {
+      response: aiResponse.response,
+      intent: aiResponse.intent,
+      leadId: lead.id,
+      conversationId: conversation.id,
+      lead,
+    };
+  }
+
+  async streamMessage(dto: SendMessageDto, res: any) {
+    const { message, businessId, leadId: inputLeadId, conversationId: inputConvId, channel } = dto;
+
+    let lead;
+    if (inputLeadId) {
+      lead = await this.prisma.lead.findUnique({ where: { id: inputLeadId } });
+    }
+    if (!lead) {
+      lead = await this.prisma.lead.create({
+        data: {
+          businessId,
+          name: 'Anonymous Visitor',
+          source: channel || 'WIDGET',
+          status: 'COLD',
+        },
+      });
+    }
+
+    let conversation;
+    if (inputConvId) {
+      conversation = await this.prisma.conversation.findUnique({ where: { id: inputConvId } });
+    }
+    if (!conversation) {
+      conversation = await this.prisma.conversation.create({
+        data: {
+          leadId: lead.id,
+          businessId,
+          messages: '[]',
+          channel: channel || 'WIDGET',
+        },
+      });
+    }
+
+    if (conversation?.isHumanTakeover) {
+      const messageHistory = JSON.parse(conversation.messages);
+      messageHistory.push({ role: 'user', content: message });
+      
+      conversation = await this.prisma.conversation.update({
+        where: { id: conversation.id },
+        data: {
+          leadId: lead.id,
+          messages: JSON.stringify(messageHistory),
+        },
+      });
+
+      const chunk = JSON.stringify({
+        text: 'A live agent is currently typing...',
+        metadata: {
+          intent: 'HumanTakeoverActive',
+          leadId: lead.id,
+          conversationId: conversation.id,
+          lead,
+          isHumanTakeover: true,
+        }
+      });
+      res.write(`data: ${chunk}\n\n`);
+      res.end();
+      return;
+    }
+
+    const messageHistory = JSON.parse(conversation.messages);
+    messageHistory.push({ role: 'user', content: message });
+
+    const business = await this.prisma.business.findUnique({
+      where: { id: businessId },
+      include: { knowledgeBases: true },
+    });
+    if (!business) {
+      throw new Error('Business profile not found');
+    }
+
+    let aiServiceUrl = process.env.AI_SERVICE_URL || 'http://localhost:8000';
+    if (aiServiceUrl && !aiServiceUrl.startsWith('http://') && !aiServiceUrl.startsWith('https://')) {
+      aiServiceUrl = `http://${aiServiceUrl}`;
+    }
+    const payload = {
+      messages: messageHistory,
+      business_info: {
+        companyName: business.companyName,
+        website: business.website,
+        industry: business.industry,
+        description: business.description,
+        agentTone: business.agentTone,
+        agentPrompt: business.agentPrompt,
+      },
+      faqs: business.knowledgeBases.map((kb) => ({
+        title: kb.title,
+        content: kb.content,
+      })),
+      current_lead: {
+        name: lead.name === 'Anonymous Visitor' ? null : lead.name,
+        email: lead.email,
+        phone: lead.phone,
+        budget: lead.budget,
+      },
+    };
+
+    let streamResponse;
+    const maxRetries = 3;
+    let attempt = 0;
+    while (attempt < maxRetries) {
+      try {
+        streamResponse = await axios.post(`${aiServiceUrl}/chat/stream`, payload, {
+          responseType: 'stream',
+          timeout: 15000,
+        });
+        break;
+      } catch (err: any) {
+        attempt++;
+        console.error(`Attempt ${attempt} to connect to AI Service stream failed: ${err.message}`);
+        if (attempt >= maxRetries) {
+          console.warn('AI Service streaming failed. Falling back to mock stream.');
+          try {
+            const mockService = new (require('../../../ai-service/app/services/agent').AIAgentService)();
+            const generator = mockService.process_chat_stream(
+              payload.messages,
+              payload.business_info,
+              payload.faqs,
+              payload.current_lead
+            );
+
+            let fullMockText = "";
+            let finalMetadata: any = null;
+
+            for (const chunk of generator) {
+              res.write(chunk);
+              if (chunk.startsWith("data: ")) {
+                try {
+                  const parsed = JSON.parse(chunk.replace("data: ", "").trim());
+                  if (parsed.text) fullMockText += parsed.text;
+                  if (parsed.metadata) finalMetadata = parsed.metadata;
+                } catch (e) {}
+              }
+            }
+
+            if (finalMetadata) {
+              await this.postProcessAIResponse(lead, conversation, businessId, messageHistory, {
+                response: fullMockText,
+                ...finalMetadata
+              });
+            }
+          } catch (mockErr) {
+            console.error('Failed to run mock stream:', mockErr);
+            res.write(`data: {"text": "I am having trouble connecting right now."}\n\n`);
+          }
+          res.end();
+          return;
+        }
+        await new Promise((resolve) => setTimeout(resolve, attempt * 500));
+      }
+    }
+
+    let fullText = '';
+    let metadata: any = null;
+
+    streamResponse.data.on('data', (chunk: Buffer) => {
+      const chunkStr = chunk.toString();
+      res.write(chunkStr);
+
+      const lines = chunkStr.split('\n');
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          try {
+            const dataStr = line.substring(6).trim();
+            const data = JSON.parse(dataStr);
+            if (data.text) {
+              fullText += data.text;
+            }
+            if (data.metadata) {
+              metadata = data.metadata;
+            }
+          } catch (e) {
+            // ignore partial JSON parse errors
+          }
+        }
+      }
+    });
+
+    streamResponse.data.on('end', async () => {
+      try {
+        if (metadata) {
+          await this.postProcessAIResponse(lead, conversation, businessId, messageHistory, {
+            response: fullText,
+            ...metadata
+          });
+        }
+      } catch (err) {
+        console.error('Error post-processing stream metadata:', err);
+      } finally {
+        res.end();
+      }
+    });
+
+    streamResponse.data.on('error', (err) => {
+      console.error('AI Stream Error:', err);
+      res.end();
+    });
+  }
+
+  private async postProcessAIResponse(
+    lead: any,
+    conversation: any,
+    businessId: string,
+    messageHistory: any[],
+    aiResponse: any
+  ) {
     const updateData: any = {};
     if (aiResponse.extracted_name && (lead.name === 'Anonymous Visitor' || !lead.name)) {
       updateData.name = aiResponse.extracted_name;
@@ -155,13 +379,12 @@ export class ChatService {
     }
 
     if (Object.keys(updateData).length > 0) {
-      lead = await this.prisma.lead.update({
+      await this.prisma.lead.update({
         where: { id: lead.id },
         data: updateData,
       });
     }
 
-    // 6. Check for appointment extraction
     if (aiResponse.extracted_appointment_date && aiResponse.extracted_appointment_time) {
       const existingAppt = await this.prisma.appointment.findFirst({
         where: {
@@ -184,23 +407,14 @@ export class ChatService {
       }
     }
 
-    // 7. Save conversation history
     messageHistory.push({ role: 'model', content: aiResponse.response });
-    conversation = await this.prisma.conversation.update({
+    await this.prisma.conversation.update({
       where: { id: conversation.id },
       data: {
         leadId: lead.id,
         messages: JSON.stringify(messageHistory),
       },
     });
-
-    return {
-      response: aiResponse.response,
-      intent: aiResponse.intent,
-      leadId: lead.id,
-      conversationId: conversation.id,
-      lead,
-    };
   }
 
   // --- Manual Human Agent Reply ---

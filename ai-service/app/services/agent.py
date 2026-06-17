@@ -1,5 +1,7 @@
 import os
 import re
+import time
+import json
 import logging
 from typing import List, Dict, Any, Optional
 from pydantic import BaseModel, Field
@@ -146,18 +148,27 @@ class AIAgentService:
             # The latest message goes in as the prompt
             latest_prompt = messages[-1]["content"] if messages else ""
 
-            response = self.client.models.generate_content(
-                model='gemini-2.5-flash',
-                contents=contents + [latest_prompt] if contents else latest_prompt,
-                config=types.GenerateContentConfig(
-                    system_instruction=system_instruction,
-                    response_mime_type="application/json",
-                    response_schema=AgentResponse,
-                    temperature=0.3,
-                )
-            )
-
-            return AgentResponse.model_validate_json(response.text)
+            # Try generating content with retries
+            max_retries = 3
+            backoff_factor = 0.5
+            for attempt in range(max_retries):
+                try:
+                    response = self.client.models.generate_content(
+                        model='gemini-2.5-flash',
+                        contents=contents + [latest_prompt] if contents else latest_prompt,
+                        config=types.GenerateContentConfig(
+                            system_instruction=system_instruction,
+                            response_mime_type="application/json",
+                            response_schema=AgentResponse,
+                            temperature=0.3,
+                        )
+                    )
+                    return AgentResponse.model_validate_json(response.text)
+                except Exception as e:
+                    logger.warning(f"Gemini API attempt {attempt + 1} failed: {e}")
+                    if attempt == max_retries - 1:
+                        raise e
+                    time.sleep(backoff_factor * (2 ** attempt))
 
         except Exception as e:
             logger.exception("Error in Gemini call")
@@ -168,6 +179,134 @@ class AIAgentService:
                 lead_sentiment="Neutral",
                 engagement_score=10
             )
+
+    def process_chat_stream(
+        self,
+        messages: List[Dict[str, str]],
+        business_info: Dict[str, Any],
+        faqs: List[Dict[str, str]],
+        current_lead: Dict[str, Any]
+    ):
+        # Build knowledge base context
+        faq_context = ""
+        for faq in faqs:
+            faq_context += f"Q: {faq.get('title')}\nA: {faq.get('content')}\n\n"
+
+        # Build lead qualification progress
+        lead_progress = (
+            f"Current accumulated Lead Details:\n"
+            f"- Name: {current_lead.get('name') or 'Not provided yet'}\n"
+            f"- Email: {current_lead.get('email') or 'Not provided yet'}\n"
+            f"- Phone: {current_lead.get('phone') or 'Not provided yet'}\n"
+            f"- Budget: {current_lead.get('budget') or 'Not provided yet'}\n"
+        )
+
+        tone = business_info.get('agentTone') or 'PROFESSIONAL'
+        custom_instructions = business_info.get('agentPrompt') or ''
+
+        # Formulate instructions
+        system_instruction = (
+            f"You are a premium AI Sales Agent for the business '{business_info.get('companyName')}' on their website.\n"
+            f"Adopt a {tone} conversational sales tone at all times.\n"
+            f"Business Details:\n"
+            f"- Website: {business_info.get('website')}\n"
+            f"- Industry: {business_info.get('industry')}\n"
+            f"- Description: {business_info.get('description')}\n\n"
+            f"Knowledge Base (FAQs & Services info):\n"
+            f"{faq_context}\n"
+            f"Lead Capture Requirements:\n"
+            f"You must qualify the visitor and capture these details: Name, Email, Phone, and Budget.\n"
+            f"{lead_progress}\n\n"
+            f"Rules:\n"
+            f"1. Conversational Tone: Maintain a {tone} tone.\n"
+            f"2. Use the Knowledge Base to answer visitor questions accurately. If you don't know, say so and offer to log their details for a call back.\n"
+            f"3. If the visitor shows interest, lead-qualify them. Ask for missing details one at a time. Do not ask for all 4 at once (that feels like a form).\n"
+            f"4. If they ask to schedule a call/appointment, invite them to state a date/time and confirm you'll book it. Capture that date/time in the fields.\n"
+            f"5. Custom Prompts / Rules: {custom_instructions}\n"
+        )
+
+        if not self.client:
+            mock_res = self._mock_response(messages[-1]["content"] if messages else "", current_lead)
+            words = mock_res.response.split(" ")
+            for word in words:
+                yield f"data: {json.dumps({'text': word + ' '})}\n\n"
+                time.sleep(0.08)
+            meta = mock_res.model_dump()
+            meta.pop("response", None)
+            yield f"data: {json.dumps({'metadata': meta})}\n\n"
+            return
+
+        try:
+            # Transform chat messages to Gemini SDK contents format
+            contents = []
+            for msg in messages[:-1]:
+                role = "user" if msg["role"] == "user" else "model"
+                contents.append(types.Content(
+                    role=role,
+                    parts=[types.Part.from_text(text=msg["content"])]
+                ))
+            
+            latest_prompt = messages[-1]["content"] if messages else ""
+
+            # Call generate_content_stream with retry
+            max_retries = 3
+            backoff_factor = 0.5
+            response_stream = None
+            for attempt in range(max_retries):
+                try:
+                    response_stream = self.client.models.generate_content_stream(
+                        model='gemini-2.5-flash',
+                        contents=contents + [latest_prompt] if contents else latest_prompt,
+                        config=types.GenerateContentConfig(
+                            system_instruction=system_instruction,
+                            temperature=0.3,
+                        )
+                    )
+                    break
+                except Exception as e:
+                    logger.warning(f"Gemini API stream attempt {attempt + 1} failed: {e}")
+                    if attempt == max_retries - 1:
+                        raise e
+                    time.sleep(backoff_factor * (2 ** attempt))
+
+            full_text = ""
+            for chunk in response_stream:
+                if chunk.text:
+                    full_text += chunk.text
+                    yield f"data: {json.dumps({'text': chunk.text})}\n\n"
+
+            # Post-stream: run a fast structured extraction call to get the updated metadata
+            history_for_extraction = messages + [{"role": "model", "content": full_text}]
+            metadata_instruction = (
+                f"You are an assistant analyzer. Your job is to extract current lead information and conversation stats from the conversation history.\n"
+                f"Identify the intent, extracted_name, extracted_email, extracted_phone, extracted_budget, extracted_appointment_date (YYYY-MM-DD), extracted_appointment_time, lead_score, lead_sentiment, and engagement_score.\n"
+                f"Use the existing lead details to avoid losing previously collected info:\n"
+                f"{lead_progress}\n"
+            )
+
+            try:
+                extraction_res = self.client.models.generate_content(
+                    model='gemini-2.5-flash',
+                    contents=history_for_extraction[-3:],
+                    config=types.GenerateContentConfig(
+                        system_instruction=metadata_instruction,
+                        response_mime_type="application/json",
+                        response_schema=AgentResponse,
+                        temperature=0.0,
+                    )
+                )
+                meta_data = AgentResponse.model_validate_json(extraction_res.text)
+                meta_dict = meta_data.model_dump()
+                meta_dict.pop("response", None)
+                yield f"data: {json.dumps({'metadata': meta_dict})}\n\n"
+            except Exception as extract_err:
+                logger.error(f"Failed to extract metadata after stream: {extract_err}")
+                yield f"data: {json.dumps({'metadata': {'intent': 'Other', 'lead_score': 'COLD', 'lead_sentiment': 'Neutral', 'engagement_score': 10}})}\n\n"
+
+        except Exception as e:
+            logger.exception("Error in Gemini streaming call")
+            yield f"data: {json.dumps({'text': 'I am currently experiencing some technical difficulties. Can you please repeat your message?'})}\n\n"
+            yield f"data: {json.dumps({'metadata': {'intent': 'Support', 'lead_score': 'COLD', 'lead_sentiment': 'Neutral', 'engagement_score': 5}})}\n\n"
 
     def _mock_response(self, latest_message: str, current_lead: Dict[str, Any]) -> AgentResponse:
         """Fallback mock agent response when API Key is missing."""

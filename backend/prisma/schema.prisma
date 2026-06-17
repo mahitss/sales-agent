@@ -1,6 +1,6 @@
 datasource db {
-  provider = "sqlite"
-  url      = "file:./dev.db"
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 generator client {
@@ -8,20 +8,22 @@ generator client {
 }
 
 model User {
-  id                   String     @id @default(uuid())
-  email                String     @unique
+  id                   String         @id @default(uuid())
+  email                String         @unique
   password             String
   name                 String
-  role                 String     @default("ADMIN") // ADMIN, EMPLOYEE
+  role                 String         @default("ADMIN") // ADMIN, EMPLOYEE
   businessId           String?
-  business             Business?  @relation("BusinessEmployees", fields: [businessId], references: [id], onDelete: SetNull)
+  business             Business?      @relation("BusinessEmployees", fields: [businessId], references: [id], onDelete: SetNull)
   verificationToken    String?
   verificationTokenExp DateTime?
   resetToken           String?
   resetTokenExp        DateTime?
-  createdAt            DateTime   @default(now())
-  updatedAt            DateTime   @updatedAt
+  isVerified           Boolean        @default(false)
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
   businesses           Business[]
+  refreshTokens        RefreshToken[]
 
   @@index([businessId])
 }
@@ -157,3 +159,16 @@ model Recommendation {
 
   @@index([businessId])
 }
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  revoked   Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+

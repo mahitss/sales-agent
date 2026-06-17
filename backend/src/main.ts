@@ -5,6 +5,7 @@ import { NestExpressApplication } from '@nestjs/platform-express';
 import { join } from 'path';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import cookieParser from 'cookie-parser';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
@@ -13,19 +14,29 @@ async function bootstrap() {
       : ['error', 'warn', 'log', 'debug', 'verbose'],
   });
   
+  app.use(cookieParser());
+
   // Register global HTTP exception filter
   app.useGlobalFilters(new HttpExceptionFilter());
 
   // Enable CORS with strict origins
   const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
   const allowedOrigins = [frontendUrl, 'http://localhost:3000', 'http://localhost:4000'];
+  if (process.env.ALLOWED_ORIGINS) {
+    process.env.ALLOWED_ORIGINS.split(',').forEach((origin) => {
+      const trimmed = origin.trim();
+      if (trimmed && !allowedOrigins.includes(trimmed)) {
+        allowedOrigins.push(trimmed);
+      }
+    });
+  }
   
   app.enableCors({
     origin: (origin, callback) => {
       if (!origin || allowedOrigins.indexOf(origin) !== -1) {
         callback(null, true);
       } else {
-        callback(new Error('Not allowed by CORS'));
+        callback(new Error('Not allowed by CORS: ' + origin));
       }
     },
     credentials: true,

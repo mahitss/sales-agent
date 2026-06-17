@@ -300,63 +300,170 @@ function WidgetContent() {
 
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim() || loading || !businessId || !visitorToken) return;
+    if (!input.trim() || loading || !businessId) return;
 
     const userMessage = input.trim();
     setInput("");
-    setMessages((prev) => [...prev, { role: "user", content: userMessage }]);
+    setError(null);
     setLoading(true);
+
+    // Add user message to history
+    setMessages((prev) => [...prev, { role: "user", content: userMessage }]);
+
+    // Add a placeholder message for the incoming model response
+    setMessages((prev) => [...prev, { role: "model", content: "" }]);
 
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
 
     try {
-      const response = await fetch(`${apiUrl}/chat`, {
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      };
+      if (visitorToken) {
+        headers["Authorization"] = `Bearer ${visitorToken}`;
+      }
+
+      const response = await fetch(`${apiUrl}/chat/stream`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${visitorToken}`
-        },
+        headers,
         body: JSON.stringify({
           message: userMessage,
           businessId,
-          leadId,
-          conversationId,
+          leadId: leadId || undefined,
+          conversationId: conversationId || undefined,
+          channel: "WIDGET",
         }),
       });
 
       if (!response.ok) {
-        throw new Error("Failed to send message");
+        throw new Error(`Chat request failed with status: ${response.status}`);
       }
 
-      const data = await response.json();
+      if (!response.body) {
+        throw new Error("No response body received from stream");
+      }
 
-      setMessages((prev) => [...prev, { role: "model", content: data.response }]);
-      
-      // Save session info with exception safety
-      try {
-        if (data.leadId) {
-          setLeadId(data.leadId);
-          sessionStorage.setItem(`leadId_${businessId}`, data.leadId);
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder("utf-8");
+      let buffer = "";
+      let modelContent = "";
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        // Keep the last partial line in the buffer
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed) continue;
+
+          // Event source standard: expect "data: <JSON>"
+          if (trimmed.startsWith("data: ")) {
+            const dataStr = trimmed.slice(6);
+            try {
+              const parsed = JSON.parse(dataStr);
+              if (parsed.text) {
+                modelContent += parsed.text;
+                // Update the last message (the bot's message) in messages
+                setMessages((prev) => {
+                  if (prev.length === 0) return prev;
+                  const newMsgs = [...prev];
+                  newMsgs[newMsgs.length - 1] = {
+                    role: "model",
+                    content: modelContent,
+                  };
+                  return newMsgs;
+                });
+              }
+
+              if (parsed.metadata) {
+                const meta = parsed.metadata;
+                // If metadata returned, update state and session storage
+                if (meta.leadId) {
+                  setLeadId(meta.leadId);
+                  try {
+                    sessionStorage.setItem(`leadId_${businessId}`, meta.leadId);
+                  } catch (e) {
+                    console.error("sessionStorage write error:", e);
+                  }
+                }
+                if (meta.conversationId) {
+                  setConversationId(meta.conversationId);
+                  try {
+                    sessionStorage.setItem(`convId_${businessId}`, meta.conversationId);
+                  } catch (e) {
+                    console.error("sessionStorage write error:", e);
+                  }
+                }
+                if (meta.lead) {
+                  setLead(meta.lead);
+                }
+              }
+            } catch (err) {
+              console.warn("Error parsing stream chunk JSON:", err, dataStr);
+            }
+          }
         }
-        if (data.conversationId) {
-          setConversationId(data.conversationId);
-          sessionStorage.setItem(`convId_${businessId}`, data.conversationId);
+      }
+
+      // Handle any remaining text in the buffer if it was somehow formatted as data: ...
+      if (buffer.startsWith("data: ")) {
+        const dataStr = buffer.slice(6);
+        try {
+          const parsed = JSON.parse(dataStr);
+          if (parsed.text) {
+            modelContent += parsed.text;
+            setMessages((prev) => {
+              if (prev.length === 0) return prev;
+              const newMsgs = [...prev];
+              newMsgs[newMsgs.length - 1] = {
+                role: "model",
+                content: modelContent,
+              };
+              return newMsgs;
+            });
+          }
+          if (parsed.metadata) {
+            const meta = parsed.metadata;
+            if (meta.leadId) {
+              setLeadId(meta.leadId);
+              try {
+                sessionStorage.setItem(`leadId_${businessId}`, meta.leadId);
+              } catch (e) {
+                console.error("sessionStorage write error:", e);
+              }
+            }
+            if (meta.conversationId) {
+              setConversationId(meta.conversationId);
+              try {
+                sessionStorage.setItem(`convId_${businessId}`, meta.conversationId);
+              } catch (e) {
+                console.error("sessionStorage write error:", e);
+              }
+            }
+            if (meta.lead) {
+              setLead(meta.lead);
+            }
+          }
+        } catch (e) {}
+      }
+
+    } catch (err: any) {
+      console.error("Streaming error:", err);
+      // Remove the last model message (which was empty) or change it to error message
+      setMessages((prev) => {
+        if (prev.length === 0) return prev;
+        const newMsgs = [...prev];
+        const lastMsg = newMsgs[newMsgs.length - 1];
+        if (lastMsg.role === "model" && lastMsg.content === "") {
+          lastMsg.content = "Oops! I encountered an error connecting to our system. Please try again.";
         }
-      } catch (e) {
-        console.error("Failed to write to sessionStorage:", e);
-      }
-      if (data.lead) {
-        setLead(data.lead);
-      }
-    } catch (err) {
-      console.error(err);
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: "model",
-          content: "Sorry, I encountered an issue. Let's try again in a moment.",
-        },
-      ]);
+        return newMsgs;
+      });
     } finally {
       setLoading(false);
     }

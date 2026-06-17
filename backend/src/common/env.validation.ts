@@ -12,7 +12,31 @@ class EnvironmentVariables {
 
   @IsString()
   @IsNotEmpty()
+  DATABASE_URL: string;
+
+  @IsString()
+  @IsNotEmpty()
   JWT_SECRET: string;
+
+  @IsString()
+  @IsNotEmpty()
+  JWT_REFRESH_SECRET: string;
+
+  @IsString()
+  @IsOptional()
+  JWT_EXPIRATION: string = '15m';
+
+  @IsString()
+  @IsOptional()
+  JWT_REFRESH_EXPIRATION: string = '7d';
+
+  @IsString()
+  @IsOptional()
+  REDIS_HOST?: string;
+
+  @IsNumber()
+  @IsOptional()
+  REDIS_PORT?: number = 6379;
 }
 
 export function validate(config: Record<string, any>) {

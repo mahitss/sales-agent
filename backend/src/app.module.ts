@@ -10,6 +10,8 @@ import { AppointmentModule } from './appointment/appointment.module';
 import { ConversationModule } from './conversation/conversation.module';
 import { ChatModule } from './chat/chat.module';
 import { RateLimiterMiddleware } from './common/middleware/rate-limiter.middleware';
+import { ThrottlerModule } from '@nestjs/throttler';
+import { RedisModule } from './common/redis/redis.module';
 import { validate } from './common/env.validation';
 
 @Module({
@@ -18,6 +20,11 @@ import { validate } from './common/env.validation';
       isGlobal: true,
       validate,
     }),
+    ThrottlerModule.forRoot([{
+      ttl: 60000,
+      limit: 100, // General high rate limit for app routes
+    }]),
+    RedisModule,
     PrismaModule,
     AuthModule,
     BusinessModule,

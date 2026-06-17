@@ -3,11 +3,13 @@ import { AuthService } from './auth.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { JwtService } from '@nestjs/jwt';
 import { ConflictException, UnauthorizedException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { RedisService } from '../common/redis/redis.service';
 import * as bcrypt from 'bcrypt';
 
 jest.mock('bcrypt', () => ({
-  hash: jest.fn(),
   compare: jest.fn(),
+  hash: jest.fn(),
 }));
 
 describe('AuthService', () => {
@@ -21,10 +23,31 @@ describe('AuthService', () => {
       create: jest.fn(),
       update: jest.fn(),
     },
+    refreshToken: {
+      create: jest.fn().mockResolvedValue({}),
+      findUnique: jest.fn(),
+      delete: jest.fn(),
+      deleteMany: jest.fn(),
+      update: jest.fn(),
+    },
   };
 
   const mockJwtService = {
     signAsync: jest.fn(),
+  };
+
+  const mockConfigService = {
+    get: jest.fn().mockImplementation((key: string) => {
+      if (key === 'JWT_EXPIRATION') return '15m';
+      if (key === 'JWT_REFRESH_EXPIRATION') return '7d';
+      return 'mock-secret';
+    }),
+  };
+
+  const mockRedisService = {
+    get: jest.fn().mockResolvedValue(null),
+    set: jest.fn().mockResolvedValue(undefined),
+    del: jest.fn().mockResolvedValue(undefined),
   };
 
   beforeEach(async () => {
@@ -33,6 +56,8 @@ describe('AuthService', () => {
         AuthService,
         { provide: PrismaService, useValue: mockPrismaService },
         { provide: JwtService, useValue: mockJwtService },
+        { provide: ConfigService, useValue: mockConfigService },
+        { provide: RedisService, useValue: mockRedisService },
       ],
     }).compile();
 

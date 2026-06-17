@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { RedisService } from '../common/redis/redis.service';
 import { CreateBusinessDto, CreateFAQDto } from './dto/business.dto';
 import axios from 'axios';
 import * as bcrypt from 'bcrypt';
@@ -7,7 +8,10 @@ import sanitizeHtml from 'sanitize-html';
 
 @Injectable()
 export class BusinessService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private redisService: RedisService,
+  ) {}
 
   async create(ownerId: string, dto: CreateBusinessDto) {
     return this.prisma.business.create({
@@ -64,7 +68,6 @@ export class BusinessService {
     }
     return business;
   }
-
   async update(businessId: string, ownerId: string, dto: CreateBusinessDto) {
     const business = await this.prisma.business.findFirst({
       where: { id: businessId, ownerId },
@@ -73,7 +76,7 @@ export class BusinessService {
       throw new NotFoundException('Business not found or access denied');
     }
 
-    return this.prisma.business.update({
+    const updated = await this.prisma.business.update({
       where: { id: businessId },
       data: {
         companyName: dto.companyName,
@@ -91,6 +94,14 @@ export class BusinessService {
         agentPrompt: dto.agentPrompt,
       },
     });
+
+    try {
+      await this.redisService.del(`business:${businessId}:public`);
+    } catch (err) {
+      // Ignore cache errors
+    }
+
+    return updated;
   }
 
   private sanitizeHtml(text: string): string {
@@ -527,6 +538,16 @@ export class BusinessService {
   }
 
   async getPublicDetails(id: string) {
+    const cacheKey = `business:${id}:public`;
+    try {
+      const cached = await this.redisService.get(cacheKey);
+      if (cached) {
+        return JSON.parse(cached);
+      }
+    } catch (err) {
+      // Ignore cache errors
+    }
+
     const business = await this.prisma.business.findUnique({
       where: { id },
       select: {
@@ -543,6 +564,13 @@ export class BusinessService {
     if (!business) {
       throw new NotFoundException('Business profile not found');
     }
+
+    try {
+      await this.redisService.set(cacheKey, JSON.stringify(business), 3600); // 1 hour TTL
+    } catch (err) {
+      // Ignore cache errors
+    }
+
     return business;
   }
 

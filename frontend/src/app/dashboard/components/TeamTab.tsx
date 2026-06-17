@@ -1,33 +1,51 @@
 import React from "react";
 import { Plus, RefreshCw } from "lucide-react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { employeeSchema } from "@/lib/schemas";
+import { z } from "zod";
+
+type EmployeeInput = z.infer<typeof employeeSchema>;
 
 interface TeamTabProps {
   employees: any[];
   employeeError: string;
   employeeSuccess: string;
-  employeeEmail: string;
-  setEmployeeEmail: (val: string) => void;
-  employeeName: string;
-  setEmployeeName: (val: string) => void;
-  employeePassword: string;
-  setEmployeePassword: (val: string) => void;
   employeeLoading: boolean;
-  handleAddEmployee: (e: React.FormEvent) => void;
+  handleAddEmployee: (data: { name: string; email: string; password?: string }) => void;
 }
 
 export const TeamTab: React.FC<TeamTabProps> = ({
   employees,
   employeeError,
   employeeSuccess,
-  employeeEmail,
-  setEmployeeEmail,
-  employeeName,
-  setEmployeeName,
-  employeePassword,
-  setEmployeePassword,
   employeeLoading,
   handleAddEmployee,
 }) => {
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors },
+  } = useForm<EmployeeInput>({
+    resolver: zodResolver(employeeSchema),
+    defaultValues: {
+      name: "",
+      email: "",
+      password: "",
+    },
+  });
+
+  const onSubmit = (data: EmployeeInput) => {
+    handleAddEmployee({
+      name: data.name,
+      email: data.email,
+      password: data.password || undefined,
+    });
+    // Reset form after submit
+    reset();
+  };
+
   return (
     <div className="space-y-8">
       <div>
@@ -54,43 +72,47 @@ export const TeamTab: React.FC<TeamTabProps> = ({
             </div>
           )}
 
-          <form onSubmit={handleAddEmployee} className="space-y-4">
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             <div>
               <label className="text-xs font-semibold uppercase tracking-wider text-slate-400">Agent Name</label>
               <input
                 type="text"
-                required
-                value={employeeName}
-                onChange={(e) => setEmployeeName(e.target.value)}
+                {...register("name")}
                 placeholder="e.g. Alice Smith"
-                className="mt-1 w-full rounded-xl bg-slate-900 border border-slate-800 px-4 py-2 text-xs text-white focus:outline-none"
+                className="mt-1 w-full rounded-xl bg-slate-900 border border-slate-800 px-4 py-2 text-xs text-white focus:outline-none focus:border-emerald-500/50"
               />
+              {errors.name && (
+                <p className="text-[10px] text-rose-400 mt-1">{errors.name.message}</p>
+              )}
             </div>
             <div>
               <label className="text-xs font-semibold uppercase tracking-wider text-slate-400">Email Address</label>
               <input
                 type="email"
-                required
-                value={employeeEmail}
-                onChange={(e) => setEmployeeEmail(e.target.value)}
+                {...register("email")}
                 placeholder="e.g. alice@company.com"
-                className="mt-1 w-full rounded-xl bg-slate-900 border border-slate-800 px-4 py-2 text-xs text-white focus:outline-none"
+                className="mt-1 w-full rounded-xl bg-slate-900 border border-slate-800 px-4 py-2 text-xs text-white focus:outline-none focus:border-emerald-500/50"
               />
+              {errors.email && (
+                <p className="text-[10px] text-rose-400 mt-1">{errors.email.message}</p>
+              )}
             </div>
             <div>
               <label className="text-xs font-semibold uppercase tracking-wider text-slate-400">Temporary Password</label>
               <input
                 type="text"
-                value={employeePassword}
-                onChange={(e) => setEmployeePassword(e.target.value)}
+                {...register("password")}
                 placeholder="Welcome123! (Defaults if blank)"
-                className="mt-1 w-full rounded-xl bg-slate-900 border border-slate-800 px-4 py-2 text-xs text-white focus:outline-none"
+                className="mt-1 w-full rounded-xl bg-slate-900 border border-slate-800 px-4 py-2 text-xs text-white focus:outline-none focus:border-emerald-500/50"
               />
+              {errors.password && (
+                <p className="text-[10px] text-rose-400 mt-1">{errors.password.message}</p>
+              )}
             </div>
 
             <button
               type="submit"
-              disabled={employeeLoading || !employeeEmail || !employeeName}
+              disabled={employeeLoading}
               className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl py-2.5 text-xs flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
             >
               {employeeLoading ? (

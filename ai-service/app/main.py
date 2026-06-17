@@ -2,6 +2,7 @@ import os
 import time
 import logging
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
@@ -122,7 +123,6 @@ def read_root():
         "service": "Beacon AI Agent Service",
         "mock_mode": agent_service.client is None
     }
-
 @app.post("/chat", response_model=AgentResponse)
 def chat_endpoint(payload: ChatPayload):
     try:
@@ -136,6 +136,21 @@ def chat_endpoint(payload: ChatPayload):
         return result
     except Exception as e:
         logger.exception("Error in chat endpoint")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/chat/stream")
+def chat_stream_endpoint(payload: ChatPayload):
+    try:
+        msg_dicts = [{"role": msg.role, "content": msg.content} for msg in payload.messages]
+        generator = agent_service.process_chat_stream(
+            messages=msg_dicts,
+            business_info=payload.business_info,
+            faqs=payload.faqs,
+            current_lead=payload.current_lead
+        )
+        return StreamingResponse(generator, media_type="text/event-stream")
+    except Exception as e:
+        logger.exception("Error in chat streaming endpoint")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/extract-faqs", response_model=ExtractFAQsResponse)

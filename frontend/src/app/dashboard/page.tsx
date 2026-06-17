@@ -30,6 +30,11 @@ import { CompetitorTab } from "./components/CompetitorTab";
 import { TeamTab } from "./components/TeamTab";
 import { WidgetTab } from "./components/WidgetTab";
 import { IntegrationsTab } from "./components/IntegrationsTab";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { loginSchema, registerSchema, forgotPasswordSchema, onboardingSchema } from "@/lib/schemas";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { CheckCircle, AlertTriangle, KeyRound } from "lucide-react";
 
 const SkeletonLoader = () => (
   <div className="space-y-6 animate-pulse">
@@ -145,22 +150,55 @@ export default function DashboardPage() {
     setMounted(true);
   }, []);
 
-  const [isLogin, setIsLogin] = useState(true);
+  // Auth view: "login" | "register" | "forgot"
+  const [authView, setAuthView] = useState<"login" | "register" | "forgot">("login");
   const [businessLoading, setBusinessLoading] = useState(true);
 
   // Auth Form State
-  const [authEmail, setAuthEmail] = useState("");
-  const [authPassword, setAuthPassword] = useState("");
-  const [authName, setAuthName] = useState("");
   const [authError, setAuthError] = useState("");
   const [authLoading, setAuthLoading] = useState(false);
+  const [forgotSuccess, setForgotSuccess] = useState(false);
 
   // Onboarding Form State
-  const [compName, setCompName] = useState("");
-  const [compWeb, setCompWeb] = useState("");
-  const [compInd, setCompInd] = useState("");
-  const [compDesc, setCompDesc] = useState("");
   const [onboardLoading, setOnboardLoading] = useState(false);
+
+  // Zod & React Hook Form initializations
+  const {
+    register: registerLogin,
+    handleSubmit: handleLoginSubmit,
+    formState: { errors: loginErrors },
+  } = useForm({
+    resolver: zodResolver(loginSchema),
+    defaultValues: { email: "", password: "" },
+  });
+
+  const {
+    register: registerRegister,
+    handleSubmit: handleRegisterSubmit,
+    formState: { errors: registerErrors },
+  } = useForm({
+    resolver: zodResolver(registerSchema),
+    defaultValues: { name: "", email: "", password: "" },
+  });
+
+  const {
+    register: registerForgot,
+    handleSubmit: handleForgotSubmit,
+    formState: { errors: forgotErrors },
+    reset: resetForgot,
+  } = useForm({
+    resolver: zodResolver(forgotPasswordSchema),
+    defaultValues: { email: "" },
+  });
+
+  const {
+    register: registerOnboard,
+    handleSubmit: handleOnboardSubmit,
+    formState: { errors: onboardErrors },
+  } = useForm({
+    resolver: zodResolver(onboardingSchema),
+    defaultValues: { companyName: "", website: "", industry: "", description: "" },
+  });
 
   // Dashboard Active State
   const [activeTab, setActiveTab] = useState<
@@ -246,9 +284,6 @@ export default function DashboardPage() {
 
   // Team Seats States
   const [employees, setEmployees] = useState<any[]>([]);
-  const [employeeEmail, setEmployeeEmail] = useState("");
-  const [employeeName, setEmployeeName] = useState("");
-  const [employeePassword, setEmployeePassword] = useState("");
   const [employeeLoading, setEmployeeLoading] = useState(false);
   const [employeeError, setEmployeeError] = useState("");
   const [employeeSuccess, setEmployeeSuccess] = useState("");
@@ -387,10 +422,6 @@ export default function DashboardPage() {
         const data = JSON.parse(text);
         setBusiness(data);
         if (data) {
-          setCompName(data.companyName);
-          setCompWeb(data.website);
-          setCompInd(data.industry);
-          setCompDesc(data.description);
           setWhatsappEnabled(data.whatsappEnabled);
           setInstagramEnabled(data.instagramEnabled);
           setEmailEnabled(data.emailEnabled);
@@ -498,9 +529,8 @@ export default function DashboardPage() {
     }
   };
 
-  const handleAddEmployee = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!employeeEmail || !employeeName || !business) return;
+  const handleAddEmployee = async (data: { name: string; email: string; password?: string }) => {
+    if (!business) return;
     setEmployeeLoading(true);
     setEmployeeError("");
     setEmployeeSuccess("");
@@ -511,19 +541,16 @@ export default function DashboardPage() {
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          email: employeeEmail,
-          name: employeeName,
-          password: employeePassword || undefined
+          email: data.email,
+          name: data.name,
+          password: data.password || undefined
         })
       });
-      const data = await res.json();
+      const resData = await res.json();
       if (!res.ok) {
-        throw new Error(data.message || "Failed to create employee");
+        throw new Error(resData.message || "Failed to create employee");
       }
-      setEmployeeSuccess(`Created operator credentials! Temporary password: ${employeePassword || 'Welcome123!'}`);
-      setEmployeeEmail("");
-      setEmployeeName("");
-      setEmployeePassword("");
+      setEmployeeSuccess(`Created operator credentials! Temporary password: ${data.password || 'Welcome123!'}`);
       fetchEmployees();
     } catch (err: any) {
       setEmployeeError(err?.message || String(err) || "Failed to create employee");
@@ -533,33 +560,80 @@ export default function DashboardPage() {
   };
 
   // Auth Handlers
-  const handleAuth = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleLogin = async (data: any) => {
     setAuthError("");
     setAuthLoading(true);
-
-    const endpoint = isLogin ? "/auth/login" : "/auth/register";
-    const payload = isLogin
-      ? { email: authEmail, password: authPassword }
-      : { email: authEmail, password: authPassword, name: authName };
-
     try {
-      const res = await fetch(`${API_URL}${endpoint}`, {
+      const res = await fetch(`${API_URL}/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ email: data.email, password: data.password }),
       });
       const text = await res.text();
-      const data = text ? JSON.parse(text) : {};
+      const resData = text ? JSON.parse(text) : {};
       if (!res.ok) {
-        throw new Error(data.message || "Authentication failed");
+        throw new Error(resData.message || "Authentication failed");
       }
 
-      localStorage.setItem("beacon_token", data.token);
-      localStorage.setItem("beacon_user", JSON.stringify(data.user));
+      localStorage.setItem("beacon_token", resData.token);
+      localStorage.setItem("beacon_user", JSON.stringify(resData.user));
       setBusinessLoading(true);
-      setToken(data.token);
-      setUser(data.user);
+      setToken(resData.token);
+      setUser(resData.user);
+    } catch (err: any) {
+      setAuthError(err?.message || String(err) || "An error occurred");
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const handleRegister = async (data: any) => {
+    setAuthError("");
+    setAuthLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/auth/register`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: data.email,
+          password: data.password,
+          name: data.name,
+        }),
+      });
+      const text = await res.text();
+      const resData = text ? JSON.parse(text) : {};
+      if (!res.ok) {
+        throw new Error(resData.message || "Registration failed");
+      }
+
+      localStorage.setItem("beacon_token", resData.token);
+      localStorage.setItem("beacon_user", JSON.stringify(resData.user));
+      setBusinessLoading(true);
+      setToken(resData.token);
+      setUser(resData.user);
+    } catch (err: any) {
+      setAuthError(err?.message || String(err) || "An error occurred");
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const handleRequestPasswordReset = async (data: any) => {
+    setAuthError("");
+    setAuthLoading(true);
+    setForgotSuccess(false);
+    try {
+      const res = await fetch(`${API_URL}/auth/request-password-reset`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: data.email }),
+      });
+      const resData = await res.json();
+      if (!res.ok) {
+        throw new Error(resData.message || "Failed to request password reset");
+      }
+      setForgotSuccess(true);
+      resetForgot();
     } catch (err: any) {
       setAuthError(err?.message || String(err) || "An error occurred");
     } finally {
@@ -568,7 +642,6 @@ export default function DashboardPage() {
   };
 
   function handleLogout() {
-    // Clear cookies on backend side
     authenticatedFetch(`${API_URL}/auth/logout`, { method: "POST" }).catch(() => {});
     localStorage.removeItem("beacon_token");
     localStorage.removeItem("beacon_user");
@@ -580,8 +653,7 @@ export default function DashboardPage() {
   }
 
   // Onboarding Handler
-  const handleOnboard = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleOnboard = async (data: any) => {
     setOnboardLoading(true);
     try {
       const res = await authenticatedFetch(`${API_URL}/business`, {
@@ -590,10 +662,10 @@ export default function DashboardPage() {
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          companyName: compName,
-          website: compWeb,
-          industry: compInd,
-          description: compDesc,
+          companyName: data.companyName,
+          website: data.website,
+          industry: data.industry,
+          description: data.description,
         }),
       });
       if (res.status === 401) {
@@ -604,22 +676,18 @@ export default function DashboardPage() {
         const errorData = await res.json().catch(() => ({}));
         throw new Error(errorData.message || "Failed to create profile");
       }
-      const data = await res.json();
-      setBusiness(data);
-      if (data) {
-        setCompName(data.companyName);
-        setCompWeb(data.website);
-        setCompInd(data.industry);
-        setCompDesc(data.description);
-        setWhatsappEnabled(data.whatsappEnabled);
-        setInstagramEnabled(data.instagramEnabled);
-        setEmailEnabled(data.emailEnabled);
-        setWhatsappApiKey(data.whatsappApiKey || "");
-        setInstagramAccountId(data.instagramAccountId || "");
-        setEmailSmtp(data.emailSmtp || "");
-        setThemeColor(data.themeColor || "#10B981");
-        setAgentTone(data.agentTone || "PROFESSIONAL");
-        setAgentPrompt(data.agentPrompt || "");
+      const resData = await res.json();
+      setBusiness(resData);
+      if (resData) {
+        setWhatsappEnabled(resData.whatsappEnabled);
+        setInstagramEnabled(resData.instagramEnabled);
+        setEmailEnabled(resData.emailEnabled);
+        setWhatsappApiKey(resData.whatsappApiKey || "");
+        setInstagramAccountId(resData.instagramAccountId || "");
+        setEmailSmtp(resData.emailSmtp || "");
+        setThemeColor(resData.themeColor || "#10B981");
+        setAgentTone(resData.agentTone || "PROFESSIONAL");
+        setAgentPrompt(resData.agentPrompt || "");
       }
     } catch (err: any) {
       console.error(err);
@@ -1001,94 +1069,275 @@ export default function DashboardPage() {
   }
 
   // RENDER: Auth Gate
+  // RENDER: Auth Gate
   if (!token) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-950 px-4 text-white">
         <div className="w-full max-w-md space-y-8 rounded-3xl border border-slate-800/80 bg-slate-900/40 p-8 shadow-2xl backdrop-blur-md">
-          <div className="text-center">
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-400 text-white shadow-lg shadow-emerald-500/20">
-              <Building className="h-7 w-7" />
-            </div>
-            <h2 className="mt-6 text-3xl font-extrabold tracking-tight bg-gradient-to-r from-emerald-400 to-teal-300 bg-clip-text text-transparent">
-              {isLogin ? "Welcome to Beacon AI" : "Create Business Portal"}
-            </h2>
-            <p className="mt-2 text-sm text-slate-400">
-              {isLogin ? "Manage your AI Sales Agent and leads" : "Get started with your AI-powered site widget"}
-            </p>
-          </div>
-
-          <form className="mt-8 space-y-6" onSubmit={handleAuth}>
-            {authError && (
-              <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-4 text-sm text-red-400 text-center">
-                {authError}
+          
+          {authView === "login" && (
+            <>
+              <div className="text-center">
+                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-400 text-white shadow-lg shadow-emerald-500/20">
+                  <Building className="h-7 w-7" />
+                </div>
+                <h2 className="mt-6 text-3xl font-extrabold tracking-tight bg-gradient-to-r from-emerald-400 to-teal-300 bg-clip-text text-transparent">
+                  Welcome to Beacon AI
+                </h2>
+                <p className="mt-2 text-sm text-slate-400">
+                  Manage your AI Sales Agent and leads
+                </p>
               </div>
-            )}
-            <div className="space-y-4 rounded-md">
-              {!isLogin && (
+
+              <form className="mt-8 space-y-6" onSubmit={handleLoginSubmit(handleLogin)}>
+                {authError && (
+                  <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-4 text-sm text-red-400 text-center">
+                    {authError}
+                  </div>
+                )}
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-xs font-semibold uppercase tracking-wider text-slate-400">Email Address</label>
+                    <input
+                      type="email"
+                      {...registerLogin("email")}
+                      placeholder="admin@company.com"
+                      className="mt-1 w-full rounded-xl bg-slate-900 border border-slate-800/80 px-4 py-3 text-sm text-white placeholder-slate-600 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/30 transition-all"
+                    />
+                    {loginErrors.email && (
+                      <p className="text-xs text-rose-400 mt-1">{loginErrors.email.message}</p>
+                    )}
+                  </div>
+                  <div>
+                    <div className="flex justify-between items-center">
+                      <label className="text-xs font-semibold uppercase tracking-wider text-slate-400">Password</label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAuthView("forgot");
+                          setAuthError("");
+                          setForgotSuccess(false);
+                        }}
+                        className="text-xs text-emerald-400 hover:text-emerald-300 transition-colors"
+                      >
+                        Forgot Password?
+                      </button>
+                    </div>
+                    <input
+                      type="password"
+                      {...registerLogin("password")}
+                      placeholder="••••••••"
+                      className="mt-1 w-full rounded-xl bg-slate-900 border border-slate-800/80 px-4 py-3 text-sm text-white placeholder-slate-600 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/30 transition-all"
+                    />
+                    {loginErrors.password && (
+                      <p className="text-xs text-rose-400 mt-1">{loginErrors.password.message}</p>
+                    )}
+                  </div>
+                </div>
+
                 <div>
-                  <label className="text-xs font-semibold uppercase tracking-wider text-slate-400">Name</label>
-                  <input
-                    type="text"
-                    required
-                    value={authName}
-                    onChange={(e) => setAuthName(e.target.value)}
-                    placeholder="John Doe"
-                    className="mt-1 w-full rounded-xl bg-slate-900 border border-slate-800/80 px-4 py-3 text-sm text-white placeholder-slate-600 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/30 transition-all"
-                  />
+                  <button
+                    type="submit"
+                    disabled={authLoading}
+                    className="group relative flex w-full justify-center rounded-xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white hover:bg-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 disabled:opacity-50 transition-all shadow-lg cursor-pointer"
+                  >
+                    {authLoading ? (
+                      <span className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent"></span>
+                    ) : (
+                      "Sign In"
+                    )}
+                  </button>
+                </div>
+              </form>
+
+              <div className="text-center">
+                <button
+                  onClick={() => {
+                    setAuthView("register");
+                    setAuthError("");
+                  }}
+                  className="text-xs font-medium text-emerald-400 hover:text-emerald-300 transition-colors cursor-pointer"
+                >
+                  Need a portal account? Register here
+                </button>
+              </div>
+            </>
+          )}
+
+          {authView === "register" && (
+            <>
+              <div className="text-center">
+                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-400 text-white shadow-lg shadow-emerald-500/20">
+                  <Building className="h-7 w-7" />
+                </div>
+                <h2 className="mt-6 text-3xl font-extrabold tracking-tight bg-gradient-to-r from-emerald-400 to-teal-300 bg-clip-text text-transparent">
+                  Create Business Portal
+                </h2>
+                <p className="mt-2 text-sm text-slate-400">
+                  Get started with your AI-powered site widget
+                </p>
+              </div>
+
+              <form className="mt-8 space-y-6" onSubmit={handleRegisterSubmit(handleRegister)}>
+                {authError && (
+                  <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-4 text-sm text-red-400 text-center">
+                    {authError}
+                  </div>
+                )}
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-xs font-semibold uppercase tracking-wider text-slate-400">Name</label>
+                    <input
+                      type="text"
+                      {...registerRegister("name")}
+                      placeholder="John Doe"
+                      className="mt-1 w-full rounded-xl bg-slate-900 border border-slate-800/80 px-4 py-3 text-sm text-white placeholder-slate-600 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/30 transition-all"
+                    />
+                    {registerErrors.name && (
+                      <p className="text-xs text-rose-400 mt-1">{registerErrors.name.message}</p>
+                    )}
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold uppercase tracking-wider text-slate-400">Email Address</label>
+                    <input
+                      type="email"
+                      {...registerRegister("email")}
+                      placeholder="admin@company.com"
+                      className="mt-1 w-full rounded-xl bg-slate-900 border border-slate-800/80 px-4 py-3 text-sm text-white placeholder-slate-600 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/30 transition-all"
+                    />
+                    {registerErrors.email && (
+                      <p className="text-xs text-rose-400 mt-1">{registerErrors.email.message}</p>
+                    )}
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold uppercase tracking-wider text-slate-400">Password</label>
+                    <input
+                      type="password"
+                      {...registerRegister("password")}
+                      placeholder="••••••••"
+                      className="mt-1 w-full rounded-xl bg-slate-900 border border-slate-800/80 px-4 py-3 text-sm text-white placeholder-slate-600 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/30 transition-all"
+                    />
+                    {registerErrors.password && (
+                      <p className="text-xs text-rose-400 mt-1">{registerErrors.password.message}</p>
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <button
+                    type="submit"
+                    disabled={authLoading}
+                    className="group relative flex w-full justify-center rounded-xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white hover:bg-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 disabled:opacity-50 transition-all shadow-lg cursor-pointer"
+                  >
+                    {authLoading ? (
+                      <span className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent"></span>
+                    ) : (
+                      "Register Agent"
+                    )}
+                  </button>
+                </div>
+              </form>
+
+              <div className="text-center">
+                <button
+                  onClick={() => {
+                    setAuthView("login");
+                    setAuthError("");
+                  }}
+                  className="text-xs font-medium text-emerald-400 hover:text-emerald-300 transition-colors cursor-pointer"
+                >
+                  Already have an account? Sign in
+                </button>
+              </div>
+            </>
+          )}
+
+          {authView === "forgot" && (
+            <>
+              <div className="text-center">
+                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-400 text-white shadow-lg shadow-emerald-500/20">
+                  <KeyRound className="h-7 w-7" />
+                </div>
+                <h2 className="mt-6 text-3xl font-extrabold tracking-tight bg-gradient-to-r from-emerald-400 to-teal-300 bg-clip-text text-transparent">
+                  Recover Password
+                </h2>
+                <p className="mt-2 text-sm text-slate-400">
+                  Enter your email address to receive password recovery link
+                </p>
+              </div>
+
+              {forgotSuccess ? (
+                <div className="mt-8 space-y-6 text-center animate-blur-fade-up">
+                  <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
+                    <CheckCircle className="h-6 w-6" />
+                  </div>
+                  <p className="text-sm text-slate-300">
+                    If the email exists, a password reset link has been logged to the console.
+                  </p>
+                  <button
+                    onClick={() => {
+                      setAuthView("login");
+                      setAuthError("");
+                    }}
+                    className="w-full bg-slate-800 hover:bg-slate-700 text-white rounded-xl py-3 text-sm font-semibold transition-all"
+                  >
+                    Back to Sign In
+                  </button>
+                </div>
+              ) : (
+                <form className="mt-8 space-y-6" onSubmit={handleForgotSubmit(handleRequestPasswordReset)}>
+                  {authError && (
+                    <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-4 text-sm text-red-400 text-center">
+                      {authError}
+                    </div>
+                  )}
+                  <div className="space-y-4">
+                    <div>
+                      <label className="text-xs font-semibold uppercase tracking-wider text-slate-400">Email Address</label>
+                      <input
+                        type="email"
+                        {...registerForgot("email")}
+                        placeholder="admin@company.com"
+                        className="mt-1 w-full rounded-xl bg-slate-900 border border-slate-800/80 px-4 py-3 text-sm text-white placeholder-slate-600 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/30 transition-all"
+                      />
+                      {forgotErrors.email && (
+                        <p className="text-xs text-rose-400 mt-1">{forgotErrors.email.message}</p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div>
+                    <button
+                      type="submit"
+                      disabled={authLoading}
+                      className="group relative flex w-full justify-center rounded-xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white hover:bg-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 disabled:opacity-50 transition-all shadow-lg cursor-pointer"
+                    >
+                      {authLoading ? (
+                        <span className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent"></span>
+                      ) : (
+                        "Request Reset Link"
+                      )}
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {!forgotSuccess && (
+                <div className="text-center">
+                  <button
+                    onClick={() => {
+                      setAuthView("login");
+                      setAuthError("");
+                    }}
+                    className="text-xs font-medium text-emerald-400 hover:text-emerald-300 transition-colors cursor-pointer"
+                  >
+                    Back to Sign In
+                  </button>
                 </div>
               )}
-              <div>
-                <label className="text-xs font-semibold uppercase tracking-wider text-slate-400">Email Address</label>
-                <input
-                  type="email"
-                  required
-                  value={authEmail}
-                  onChange={(e) => setAuthEmail(e.target.value)}
-                  placeholder="admin@company.com"
-                  className="mt-1 w-full rounded-xl bg-slate-900 border border-slate-800/80 px-4 py-3 text-sm text-white placeholder-slate-600 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/30 transition-all"
-                />
-              </div>
-              <div>
-                <label className="text-xs font-semibold uppercase tracking-wider text-slate-400">Password</label>
-                <input
-                  type="password"
-                  required
-                  value={authPassword}
-                  onChange={(e) => setAuthPassword(e.target.value)}
-                  placeholder="••••••••"
-                  className="mt-1 w-full rounded-xl bg-slate-900 border border-slate-800/80 px-4 py-3 text-sm text-white placeholder-slate-600 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/30 transition-all"
-                />
-              </div>
-            </div>
+            </>
+          )}
 
-            <div>
-              <button
-                type="submit"
-                disabled={authLoading}
-                className="group relative flex w-full justify-center rounded-xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white hover:bg-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 disabled:opacity-50 transition-all shadow-lg cursor-pointer"
-              >
-                {authLoading ? (
-                  <span className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent"></span>
-                ) : isLogin ? (
-                  "Sign In"
-                ) : (
-                  "Register Agent"
-                )}
-              </button>
-            </div>
-          </form>
-
-          <div className="text-center">
-            <button
-              onClick={() => {
-                setIsLogin(!isLogin);
-                setAuthError("");
-              }}
-              className="text-xs font-medium text-emerald-400 hover:text-emerald-300 transition-colors cursor-pointer"
-            >
-              {isLogin ? "Need a portal account? Register here" : "Already have an account? Sign in"}
-            </button>
-          </div>
         </div>
       </div>
     );
@@ -1120,7 +1369,7 @@ export default function DashboardPage() {
             </p>
           </div>
 
-          <form className="mt-8 space-y-4" onSubmit={handleOnboard}>
+          <form className="mt-8 space-y-4" onSubmit={handleOnboardSubmit(handleOnboard)}>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
                 <label className="text-xs font-semibold uppercase tracking-wider text-slate-400">Company Name</label>
@@ -1128,13 +1377,14 @@ export default function DashboardPage() {
                   <Building className="absolute left-3 top-3.5 h-4.5 w-4.5 text-slate-600" />
                   <input
                     type="text"
-                    required
-                    value={compName}
-                    onChange={(e) => setCompName(e.target.value)}
+                    {...registerOnboard("companyName")}
                     placeholder="e.g. Acme Agency"
                     className="w-full rounded-xl bg-slate-900 border border-slate-800/80 pl-10 pr-4 py-3 text-sm text-white focus:border-emerald-500/50 focus:outline-none transition-all"
                   />
                 </div>
+                {onboardErrors.companyName && (
+                  <p className="text-xs text-rose-400 mt-1">{onboardErrors.companyName.message}</p>
+                )}
               </div>
               <div>
                 <label className="text-xs font-semibold uppercase tracking-wider text-slate-400">Website URL</label>
@@ -1142,13 +1392,14 @@ export default function DashboardPage() {
                   <Globe className="absolute left-3 top-3.5 h-4.5 w-4.5 text-slate-600" />
                   <input
                     type="text"
-                    required
-                    value={compWeb}
-                    onChange={(e) => setCompWeb(e.target.value)}
+                    {...registerOnboard("website")}
                     placeholder="e.g. acme.com"
                     className="w-full rounded-xl bg-slate-900 border border-slate-800/80 pl-10 pr-4 py-3 text-sm text-white focus:border-emerald-500/50 focus:outline-none transition-all"
                   />
                 </div>
+                {onboardErrors.website && (
+                  <p className="text-xs text-rose-400 mt-1">{onboardErrors.website.message}</p>
+                )}
               </div>
             </div>
 
@@ -1158,13 +1409,14 @@ export default function DashboardPage() {
                 <Briefcase className="absolute left-3 top-3.5 h-4.5 w-4.5 text-slate-600" />
                 <input
                   type="text"
-                  required
-                  value={compInd}
-                  onChange={(e) => setCompInd(e.target.value)}
+                  {...registerOnboard("industry")}
                   placeholder="e.g. Marketing, Real Estate, Consulting"
                   className="w-full rounded-xl bg-slate-900 border border-slate-800/80 pl-10 pr-4 py-3 text-sm text-white focus:border-emerald-500/50 focus:outline-none transition-all"
                 />
               </div>
+              {onboardErrors.industry && (
+                <p className="text-xs text-rose-400 mt-1">{onboardErrors.industry.message}</p>
+              )}
             </div>
 
             <div>
@@ -1172,14 +1424,15 @@ export default function DashboardPage() {
               <div className="relative mt-1">
                 <FileText className="absolute left-3 top-3.5 h-4.5 w-4.5 text-slate-600" />
                 <textarea
-                  required
-                  value={compDesc}
-                  onChange={(e) => setCompDesc(e.target.value)}
+                  {...registerOnboard("description")}
                   rows={4}
                   placeholder="Describe what your business does, who you serve, pricing structure, and key services..."
                   className="w-full rounded-xl bg-slate-900 border border-slate-800/80 pl-10 pr-4 py-3 text-sm text-white focus:border-emerald-500/50 focus:outline-none transition-all resize-none"
                 />
               </div>
+              {onboardErrors.description && (
+                <p className="text-xs text-rose-400 mt-1">{onboardErrors.description.message}</p>
+              )}
             </div>
 
             <div>
@@ -1401,155 +1654,169 @@ export default function DashboardPage() {
           ) : (
             <>
               {activeTab === "overview" && (
-            <OverviewTab
-              user={user}
-              stats={stats}
-              recommendations={recommendations}
-              whatsappEnabled={whatsappEnabled}
-              instagramEnabled={instagramEnabled}
-              emailEnabled={emailEnabled}
-              setActiveTab={setActiveTab}
-            />
+            <ErrorBoundary>
+              <OverviewTab
+                user={user}
+                stats={stats}
+                recommendations={recommendations}
+                whatsappEnabled={whatsappEnabled}
+                instagramEnabled={instagramEnabled}
+                emailEnabled={emailEnabled}
+                setActiveTab={setActiveTab}
+              />
+            </ErrorBoundary>
           )}
 
           {activeTab === "leads" && (
-            <LeadsTab
-              leads={leads}
-              searchTerm={searchTerm}
-              setSearchTerm={setSearchTerm}
-              filterStatus={filterStatus}
-              setFilterStatus={setFilterStatus}
-              filterSource={filterSource}
-              setFilterSource={setFilterSource}
-              filterSentiment={filterSentiment}
-              setFilterSentiment={setFilterSentiment}
-              handleExportLeads={handleExportLeads}
-              handleUpdateLeadStatus={handleUpdateLeadStatus}
-            />
+            <ErrorBoundary>
+              <LeadsTab
+                leads={leads}
+                searchTerm={searchTerm}
+                setSearchTerm={setSearchTerm}
+                filterStatus={filterStatus}
+                setFilterStatus={setFilterStatus}
+                filterSource={filterSource}
+                setFilterSource={setFilterSource}
+                filterSentiment={filterSentiment}
+                setFilterSentiment={setFilterSentiment}
+                handleExportLeads={handleExportLeads}
+                handleUpdateLeadStatus={handleUpdateLeadStatus}
+              />
+            </ErrorBoundary>
           )}
 
           {activeTab === "conversations" && (
-            <ConversationsTab
-              conversations={conversations}
-              selectedConv={selectedConv}
-              setSelectedConv={setSelectedConv}
-              handleToggleTakeover={handleToggleTakeover}
-              operatorReply={operatorReply}
-              setOperatorReply={setOperatorReply}
-              handleSendOperatorReply={handleSendOperatorReply}
-              operatorSending={operatorSending}
-            />
+            <ErrorBoundary>
+              <ConversationsTab
+                conversations={conversations}
+                selectedConv={selectedConv}
+                setSelectedConv={setSelectedConv}
+                handleToggleTakeover={handleToggleTakeover}
+                operatorReply={operatorReply}
+                setOperatorReply={setOperatorReply}
+                handleSendOperatorReply={handleSendOperatorReply}
+                operatorSending={operatorSending}
+              />
+            </ErrorBoundary>
           )}
 
           {activeTab === "appointments" && (
-            <AppointmentsTab
-              appointments={appointments}
-              handleUpdateApptStatus={handleUpdateApptStatus}
-            />
+            <ErrorBoundary>
+              <AppointmentsTab
+                appointments={appointments}
+                handleUpdateApptStatus={handleUpdateApptStatus}
+              />
+            </ErrorBoundary>
           )}
 
           {activeTab === "kb" && (
-            <KnowledgeBaseTab
-              user={user}
-              business={business}
-              faqs={faqs}
-              scraperUrl={scraperUrl}
-              setScraperUrl={setScraperUrl}
-              scraperLoading={scraperLoading}
-              scraperLogs={scraperLogs}
-              handleStartScrape={handleStartScrape}
-              kbUploading={kbUploading}
-              kbFileName={kbFileName}
-              kbProgress={kbProgress}
-              handleStartFileUpload={handleStartFileUpload}
-              faqTitle={faqTitle}
-              setFaqTitle={setFaqTitle}
-              faqContent={faqContent}
-              setFaqContent={setFaqContent}
-              faqLoading={faqLoading}
-              handleAddFAQ={handleAddFAQ}
-              handleDeleteFAQ={handleDeleteFAQ}
-            />
+            <ErrorBoundary>
+              <KnowledgeBaseTab
+                user={user}
+                business={business}
+                faqs={faqs}
+                scraperUrl={scraperUrl}
+                setScraperUrl={setScraperUrl}
+                scraperLoading={scraperLoading}
+                scraperLogs={scraperLogs}
+                handleStartScrape={handleStartScrape}
+                kbUploading={kbUploading}
+                kbFileName={kbFileName}
+                kbProgress={kbProgress}
+                handleStartFileUpload={handleStartFileUpload}
+                faqTitle={faqTitle}
+                setFaqTitle={setFaqTitle}
+                faqContent={faqContent}
+                setFaqContent={setFaqContent}
+                faqLoading={faqLoading}
+                handleAddFAQ={handleAddFAQ}
+                handleDeleteFAQ={handleDeleteFAQ}
+              />
+            </ErrorBoundary>
           )}
 
           {activeTab === "visitor" && (
-            <VisitorTracksTab
-              visitorTracks={visitorTracks}
-            />
+            <ErrorBoundary>
+              <VisitorTracksTab
+                visitorTracks={visitorTracks}
+              />
+            </ErrorBoundary>
           )}
 
           {activeTab === "competitor" && (
-            <CompetitorTab
-              competitorUrl={competitorUrl}
-              setCompetitorUrl={setCompetitorUrl}
-              competitorLoading={competitorLoading}
-              competitorLogs={competitorLogs}
-              handleStartCompetitor={handleStartCompetitor}
-              competitorAnalyses={competitorAnalyses}
-              business={business}
-            />
+            <ErrorBoundary>
+              <CompetitorTab
+                competitorUrl={competitorUrl}
+                setCompetitorUrl={setCompetitorUrl}
+                competitorLoading={competitorLoading}
+                competitorLogs={competitorLogs}
+                handleStartCompetitor={handleStartCompetitor}
+                competitorAnalyses={competitorAnalyses}
+                business={business}
+              />
+            </ErrorBoundary>
           )}
 
           {activeTab === "team" && (
-            <TeamTab
-              employees={employees}
-              employeeError={employeeError}
-              employeeSuccess={employeeSuccess}
-              employeeEmail={employeeEmail}
-              setEmployeeEmail={setEmployeeEmail}
-              employeeName={employeeName}
-              setEmployeeName={setEmployeeName}
-              employeePassword={employeePassword}
-              setEmployeePassword={setEmployeePassword}
-              employeeLoading={employeeLoading}
-              handleAddEmployee={handleAddEmployee}
-            />
+            <ErrorBoundary>
+              <TeamTab
+                employees={employees}
+                employeeError={employeeError}
+                employeeSuccess={employeeSuccess}
+                employeeLoading={employeeLoading}
+                handleAddEmployee={handleAddEmployee}
+              />
+            </ErrorBoundary>
           )}
 
           {activeTab === "widget" && (
-            <WidgetTab
-              business={business}
-              API_URL={API_URL}
-            />
+            <ErrorBoundary>
+              <WidgetTab
+                business={business}
+                API_URL={API_URL}
+              />
+            </ErrorBoundary>
           )}
 
           {activeTab === "integrations" && (
-            <IntegrationsTab
-              business={business}
-              whatsappEnabled={whatsappEnabled}
-              setWhatsappEnabled={setWhatsappEnabled}
-              whatsappApiKey={whatsappApiKey}
-              setWhatsappApiKey={setWhatsappApiKey}
-              instagramEnabled={instagramEnabled}
-              setInstagramEnabled={setInstagramEnabled}
-              instagramAccountId={instagramAccountId}
-              setInstagramAccountId={setInstagramAccountId}
-              emailEnabled={emailEnabled}
-              setEmailEnabled={setEmailEnabled}
-              emailSmtp={emailSmtp}
-              setEmailSmtp={setEmailSmtp}
-              themeColor={themeColor}
-              setThemeColor={setThemeColor}
-              agentTone={agentTone}
-              setAgentTone={setAgentTone}
-              agentPrompt={agentPrompt}
-              setAgentPrompt={setAgentPrompt}
-              connectionSaving={connectionSaving}
-              handleSaveConnections={handleSaveConnections}
-              simChannel={simChannel}
-              setSimChannel={setSimChannel}
-              simLeadName={simLeadName}
-              setSimLeadName={setSimLeadName}
-              simLeadPhone={simLeadPhone}
-              setSimLeadPhone={setSimLeadPhone}
-              simLeadEmail={simLeadEmail}
-              setSimLeadEmail={setSimLeadEmail}
-              simMessage={simMessage}
-              setSimMessage={setSimMessage}
-              simLoading={simLoading}
-              simStatus={simStatus}
-              handleSimulateMessage={handleSimulateMessage}
-            />
+            <ErrorBoundary>
+              <IntegrationsTab
+                business={business}
+                whatsappEnabled={whatsappEnabled}
+                setWhatsappEnabled={setWhatsappEnabled}
+                whatsappApiKey={whatsappApiKey}
+                setWhatsappApiKey={setWhatsappApiKey}
+                instagramEnabled={instagramEnabled}
+                setInstagramEnabled={setInstagramEnabled}
+                instagramAccountId={instagramAccountId}
+                setInstagramAccountId={setInstagramAccountId}
+                emailEnabled={emailEnabled}
+                setEmailEnabled={setEmailEnabled}
+                emailSmtp={emailSmtp}
+                setEmailSmtp={setEmailSmtp}
+                themeColor={themeColor}
+                setThemeColor={setThemeColor}
+                agentTone={agentTone}
+                setAgentTone={setAgentTone}
+                agentPrompt={agentPrompt}
+                setAgentPrompt={setAgentPrompt}
+                connectionSaving={connectionSaving}
+                handleSaveConnections={handleSaveConnections}
+                simChannel={simChannel}
+                setSimChannel={setSimChannel}
+                simLeadName={simLeadName}
+                setSimLeadName={setSimLeadName}
+                simLeadPhone={simLeadPhone}
+                setSimLeadPhone={setSimLeadPhone}
+                simLeadEmail={simLeadEmail}
+                setSimLeadEmail={setSimLeadEmail}
+                simMessage={simMessage}
+                setSimMessage={setSimMessage}
+                simLoading={simLoading}
+                simStatus={simStatus}
+                handleSimulateMessage={handleSimulateMessage}
+              />
+            </ErrorBoundary>
           )}
             </>
           )}
