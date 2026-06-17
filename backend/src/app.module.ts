@@ -1,4 +1,4 @@
-import { Module, NestModule, MiddlewareConsumer } from '@nestjs/common';
+import { Module, NestModule, MiddlewareConsumer, RequestMethod } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -10,10 +10,14 @@ import { AppointmentModule } from './appointment/appointment.module';
 import { ConversationModule } from './conversation/conversation.module';
 import { ChatModule } from './chat/chat.module';
 import { RateLimiterMiddleware } from './common/middleware/rate-limiter.middleware';
+import { validate } from './common/env.validation';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true }),
+    ConfigModule.forRoot({
+      isGlobal: true,
+      validate,
+    }),
     PrismaModule,
     AuthModule,
     BusinessModule,
@@ -29,6 +33,11 @@ export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
     consumer
       .apply(RateLimiterMiddleware)
+      .exclude(
+        { path: 'logicra-widget.js', method: RequestMethod.GET },
+        { path: 'logicra-widget.min.js', method: RequestMethod.GET },
+        { path: 'widget-assets/(.*)', method: RequestMethod.GET },
+      )
       .forRoutes('*');
   }
 }

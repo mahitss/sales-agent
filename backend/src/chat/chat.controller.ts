@@ -1,12 +1,16 @@
 import { Controller, Post, Body, UseGuards } from '@nestjs/common';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { ChatService } from './chat.service';
 import { SendMessageDto } from './dto/chat.dto';
 import { AuthGuard } from '../auth/auth.guard';
 
+@ApiTags('chat')
+@ApiBearerAuth()
 @Controller('chat')
 export class ChatController {
   constructor(private chatService: ChatService) {}
 
+  @UseGuards(AuthGuard)
   @Post()
   async sendMessage(@Body() dto: SendMessageDto) {
     return this.chatService.sendMessage(dto);

@@ -1,8 +1,9 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateBusinessDto, CreateFAQDto } from './dto/business.dto';
 import axios from 'axios';
 import * as bcrypt from 'bcrypt';
+import sanitizeHtml from 'sanitize-html';
 
 @Injectable()
 export class BusinessService {
@@ -94,13 +95,13 @@ export class BusinessService {
 
   private sanitizeHtml(text: string): string {
     if (!text) return '';
-    return text
-      .replace(/<script[^>]*>([\s\S]*?)<\/script>/gi, '')
-      .replace(/<style[^>]*>([\s\S]*?)<\/style>/gi, '')
-      .replace(/<iframe[^>]*>([\s\S]*?)<\/iframe>/gi, '')
-      .replace(/on\w+\s*=\s*"[^"]*"/gi, '')
-      .replace(/on\w+\s*=\s*'[^']*'/gi, '')
-      .replace(/javascript:[^"']*/gi, '');
+    return sanitizeHtml(text, {
+      allowedTags: sanitizeHtml.defaults.allowedTags.concat(['img', 'h1', 'h2']),
+      allowedAttributes: {
+        ...sanitizeHtml.defaults.allowedAttributes,
+        '*': ['class', 'style', 'id'],
+      },
+    });
   }
 
   async createFAQ(businessId: string, ownerId: string, dto: CreateFAQDto) {
@@ -167,6 +168,9 @@ export class BusinessService {
 
   // --- Auto Website Scraper & FAQs extraction ---
   async scrapeWebsite(businessId: string, url: string) {
+    if (!this.isValidWebUrl(url)) {
+      throw new BadRequestException('Invalid or restricted website URL');
+    }
     const business = await this.getById(businessId);
     let faqList: Array<{ title: string; content: string }> = [];
     let scrapedText = '';
@@ -284,6 +288,9 @@ export class BusinessService {
 
   // --- Competitor Domain Analysis ---
   async competitorAnalysis(businessId: string, competitorUrl: string) {
+    if (!this.isValidWebUrl(competitorUrl)) {
+      throw new BadRequestException('Invalid or restricted website URL');
+    }
     const business = await this.getById(businessId);
     let analysisResult: any = {};
     let scrapedText = '';
@@ -517,5 +524,54 @@ export class BusinessService {
         createdAt: true,
       },
     });
+  }
+
+  async getPublicDetails(id: string) {
+    const business = await this.prisma.business.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        companyName: true,
+        website: true,
+        industry: true,
+        description: true,
+        themeColor: true,
+        agentTone: true,
+        agentPrompt: true,
+      },
+    });
+    if (!business) {
+      throw new NotFoundException('Business profile not found');
+    }
+    return business;
+  }
+
+  private isValidWebUrl(urlStr: string): boolean {
+    try {
+      const parsed = new URL(urlStr);
+      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+        return false;
+      }
+      const hostname = parsed.hostname.toLowerCase();
+      
+      // Block local and loopback hosts
+      const localHosts = ['localhost', '127.0.0.1', '0.0.0.0', '[::1]', '169.254.169.254'];
+      if (localHosts.includes(hostname)) {
+        return false;
+      }
+      
+      // Block private IP ranges
+      if (
+        hostname.startsWith('10.') ||
+        hostname.startsWith('192.168.') ||
+        /^172\.(1[6-9]|2\d|3[0-1])\./.test(hostname)
+      ) {
+        return false;
+      }
+      
+      return true;
+    } catch (e) {
+      return false;
+    }
   }
 }

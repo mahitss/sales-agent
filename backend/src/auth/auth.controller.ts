@@ -1,8 +1,10 @@
 import { Controller, Post, Body, HttpCode, HttpStatus, Res } from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { RegisterDto, LoginDto, VerifyEmailDto, RequestPasswordResetDto, ResetPasswordDto } from './dto/auth.dto';
 import * as express from 'express';
 
+@ApiTags('auth')
 @Controller('auth')
 export class AuthController {
   constructor(private authService: AuthService) {}
@@ -62,5 +64,11 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   resetPassword(@Body() dto: ResetPasswordDto) {
     return this.authService.resetPassword(dto);
+  }
+
+  @Post('visitor-token')
+  @HttpCode(HttpStatus.OK)
+  generateVisitorToken(@Body() body: { businessId: string }) {
+    return this.authService.generateVisitorToken(body.businessId);
   }
 }

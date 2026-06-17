@@ -13,11 +13,7 @@ export class ChatService {
     // 1. Get or create Lead
     let lead;
     if (inputLeadId) {
-      try {
-        lead = await this.prisma.lead.findUnique({ where: { id: inputLeadId } });
-      } catch (e) {
-        lead = null;
-      }
+      lead = await this.prisma.lead.findUnique({ where: { id: inputLeadId } });
     }
     if (!lead) {
       lead = await this.prisma.lead.create({
@@ -33,11 +29,7 @@ export class ChatService {
     // 2. Get or create Conversation
     let conversation;
     if (inputConvId) {
-      try {
-        conversation = await this.prisma.conversation.findUnique({ where: { id: inputConvId } });
-      } catch (e) {
-        conversation = null;
-      }
+      conversation = await this.prisma.conversation.findUnique({ where: { id: inputConvId } });
     }
     if (!conversation) {
       conversation = await this.prisma.conversation.create({

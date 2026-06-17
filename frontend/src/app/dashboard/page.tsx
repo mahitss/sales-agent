@@ -31,6 +31,18 @@ import { TeamTab } from "./components/TeamTab";
 import { WidgetTab } from "./components/WidgetTab";
 import { IntegrationsTab } from "./components/IntegrationsTab";
 
+const SkeletonLoader = () => (
+  <div className="space-y-6 animate-pulse">
+    <div className="h-8 bg-slate-900/60 rounded-xl w-1/4 mb-4"></div>
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="h-32 bg-slate-900/40 border border-slate-900/50 rounded-2xl"></div>
+      <div className="h-32 bg-slate-900/40 border border-slate-900/50 rounded-2xl"></div>
+      <div className="h-32 bg-slate-900/40 border border-slate-900/50 rounded-2xl"></div>
+    </div>
+    <div className="h-64 bg-slate-900/30 border border-slate-900/50 rounded-2xl"></div>
+  </div>
+);
+
 interface UserInfo {
   id: string;
   email: string;
@@ -128,6 +140,11 @@ export default function DashboardPage() {
   const [token, setToken] = useState<string | null>(null);
   const [user, setUser] = useState<UserInfo | null>(null);
   const [business, setBusiness] = useState<BusinessInfo | null>(null);
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   const [isLogin, setIsLogin] = useState(true);
   const [businessLoading, setBusinessLoading] = useState(true);
 
@@ -264,12 +281,17 @@ export default function DashboardPage() {
 
   // Check Session on mount
   useEffect(() => {
-    const savedToken = localStorage.getItem("beacon_token");
-    const savedUser = localStorage.getItem("beacon_user");
-    if (savedToken && savedUser) {
-      setToken(savedToken);
-      setUser(JSON.parse(savedUser));
-    } else {
+    try {
+      const savedToken = localStorage.getItem("beacon_token");
+      const savedUser = localStorage.getItem("beacon_user");
+      if (savedToken && savedUser) {
+        setToken(savedToken);
+        setUser(JSON.parse(savedUser));
+      } else {
+        setBusinessLoading(false);
+      }
+    } catch (e) {
+      console.error("Failed to retrieve user session:", e);
       setBusinessLoading(false);
     }
   }, []);
@@ -292,10 +314,15 @@ export default function DashboardPage() {
   useEffect(() => {
     if (!token || !selectedConv || activeTab !== "conversations") return;
 
-    const controller = new AbortController();
-    const { signal } = controller;
+    let activeController: AbortController | null = null;
 
     const interval = setInterval(() => {
+      if (activeController) {
+        activeController.abort();
+      }
+      activeController = new AbortController();
+      const { signal } = activeController;
+
       fetch(`${API_URL}/conversations/${selectedConv.id}`, { signal })
         .then((res) => {
           if (!res.ok) throw new Error("Conversation not found");
@@ -329,9 +356,11 @@ export default function DashboardPage() {
 
     return () => {
       clearInterval(interval);
-      controller.abort();
+      if (activeController) {
+        activeController.abort();
+      }
     };
-  }, [token, selectedConv, activeTab]);
+  }, [token, selectedConv?.id, activeTab]);
 
   // Clear upload interval on unmount
   useEffect(() => {
@@ -963,6 +992,14 @@ export default function DashboardPage() {
     }
   };
 
+  if (!mounted) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-950 text-white">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-emerald-500 border-t-transparent"></div>
+      </div>
+    );
+  }
+
   // RENDER: Auth Gate
   if (!token) {
     return (
@@ -1359,7 +1396,11 @@ export default function DashboardPage() {
 
         {/* Dynamic Panels */}
         <div className="flex-1 overflow-y-auto p-8">
-          {activeTab === "overview" && (
+          {dataLoading ? (
+            <SkeletonLoader />
+          ) : (
+            <>
+              {activeTab === "overview" && (
             <OverviewTab
               user={user}
               stats={stats}
@@ -1509,6 +1550,8 @@ export default function DashboardPage() {
               simStatus={simStatus}
               handleSimulateMessage={handleSimulateMessage}
             />
+          )}
+            </>
           )}
         </div>
       </main>

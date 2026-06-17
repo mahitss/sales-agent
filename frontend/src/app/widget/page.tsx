@@ -38,8 +38,15 @@ function WidgetContent() {
   const [leadId, setLeadId] = useState<string | null>(null);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [lead, setLead] = useState<Lead | null>(null);
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   const [error, setError] = useState<string | null>(null);
   const [historyLoading, setHistoryLoading] = useState(false);
+
+  const [visitorToken, setVisitorToken] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const lastMessageCountRef = useRef(0);
@@ -93,7 +100,7 @@ function WidgetContent() {
 
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
 
-    fetch(`${apiUrl}/business/${businessId}`)
+    fetch(`${apiUrl}/business/${businessId}/public`)
       .then((res) => {
         if (!res.ok) throw new Error("Business profile not found");
         return res.json();
@@ -101,45 +108,91 @@ function WidgetContent() {
       .then((data) => {
         setBusiness(data);
         
-        // Retrieve session storage if exists with exception safety
-        let savedLeadId: string | null = null;
-        let savedConvId: string | null = null;
+        // Retrieve visitor token if exists with exception safety
+        let savedVisitorToken: string | null = null;
         try {
-          savedLeadId = sessionStorage.getItem(`leadId_${businessId}`);
-          savedConvId = sessionStorage.getItem(`convId_${businessId}`);
+          savedVisitorToken = sessionStorage.getItem(`visitorToken_${businessId}`);
         } catch (e) {
           console.error("sessionStorage access blocked:", e);
         }
 
-        if (savedLeadId && savedConvId) {
-          setLeadId(savedLeadId);
-          setConversationId(savedConvId);
-          setHistoryLoading(true);
-          
-          // Fetch existing conversation history
-          fetch(`${apiUrl}/conversations/${savedConvId}`)
+        const proceedWithHistory = (tokenToUse: string) => {
+          setVisitorToken(tokenToUse);
+          let savedLeadId: string | null = null;
+          let savedConvId: string | null = null;
+          try {
+            savedLeadId = sessionStorage.getItem(`leadId_${businessId}`);
+            savedConvId = sessionStorage.getItem(`convId_${businessId}`);
+          } catch (e) {
+            console.error("sessionStorage access blocked:", e);
+          }
+
+          if (savedLeadId && savedConvId) {
+            setLeadId(savedLeadId);
+            setConversationId(savedConvId);
+            setHistoryLoading(true);
+            
+            fetch(`${apiUrl}/conversations/${savedConvId}`, {
+              headers: {
+                "Authorization": `Bearer ${tokenToUse}`
+              }
+            })
+              .then((r) => {
+                if (!r.ok) throw new Error("Conversation fetch failed");
+                return r.json();
+              })
+              .then((cData) => {
+                if (cData && cData.messages) {
+                  setMessages(cData.messages);
+                }
+                if (cData && cData.lead) {
+                  setLead(cData.lead);
+                }
+              })
+              .catch(console.error)
+              .finally(() => setHistoryLoading(false));
+          } else {
+            // Add initial welcome message
+            setMessages([
+              {
+                role: "model",
+                content: `Hello! Welcome to ${data.companyName}. How can I assist you today?`,
+              },
+            ]);
+          }
+        };
+
+        if (savedVisitorToken) {
+          proceedWithHistory(savedVisitorToken);
+        } else {
+          // Request new visitor token
+          fetch(`${apiUrl}/auth/visitor-token`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ businessId })
+          })
             .then((r) => {
-              if (!r.ok) throw new Error("Conversation fetch failed");
+              if (!r.ok) throw new Error("Visitor token error");
               return r.json();
             })
-            .then((cData) => {
-              if (cData && cData.messages) {
-                setMessages(cData.messages);
+            .then((vData) => {
+              try {
+                sessionStorage.setItem(`visitorToken_${businessId}`, vData.token);
+              } catch (e) {
+                console.error("sessionStorage write error:", e);
               }
-              if (cData && cData.lead) {
-                setLead(cData.lead);
-              }
+              proceedWithHistory(vData.token);
             })
-            .catch(console.error)
-            .finally(() => setHistoryLoading(false));
-        } else {
-          // Add initial welcome message
-          setMessages([
-            {
-              role: "model",
-              content: `Hello! Welcome to ${data.companyName}. How can I assist you today?`,
-            },
-          ]);
+            .catch((err) => {
+              console.error("Failed to generate visitor token:", err);
+              // Fallback with empty welcome message
+              setMessages([
+                {
+                  role: "model",
+                  content: `Hello! Welcome to ${data.companyName}. How can I assist you today?`,
+                },
+              ]);
+            });
         }
       })
       .catch((err) => {
@@ -163,48 +216,66 @@ function WidgetContent() {
       }
     }
 
-    // Geolocate user using ipapi.co
-    fetch("https://ipapi.co/json/")
-      .then((res) => {
-        if (!res.ok) throw new Error("Geolocation request failed");
-        return res.json();
-      })
-      .then((data) => {
-        const location = data.city && data.country_name 
-          ? `${data.city}, ${data.country_name}` 
-          : data.city || data.country_name || "Unknown Location";
-        
-        return fetch(`${apiUrl}/business/${businessId}/track-visitor`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            location: location,
-            pagesViewed: [referrerPath],
-            duration: 120
-          })
+    const reportTracking = (tokenToUse: string | null) => {
+      // Geolocate user using ipapi.co
+      fetch("https://ipapi.co/json/")
+        .then((res) => {
+          if (!res.ok) throw new Error("Geolocation request failed");
+          return res.json();
+        })
+        .then((data) => {
+          const location = data.city && data.country_name 
+            ? `${data.city}, ${data.country_name}` 
+            : data.city || data.country_name || "Unknown Location";
+          
+          const headers: Record<string, string> = { "Content-Type": "application/json" };
+          if (tokenToUse) {
+            headers["Authorization"] = `Bearer ${tokenToUse}`;
+          }
+          return fetch(`${apiUrl}/business/${businessId}/track-visitor`, {
+            method: "POST",
+            headers,
+            body: JSON.stringify({
+              location: location,
+              pagesViewed: [referrerPath],
+              duration: 120
+            })
+          });
+        })
+        .catch((err) => {
+          console.warn("IP Geolocation lookup failed, using fallback:", err);
+          const headers: Record<string, string> = { "Content-Type": "application/json" };
+          if (tokenToUse) {
+            headers["Authorization"] = `Bearer ${tokenToUse}`;
+          }
+          fetch(`${apiUrl}/business/${businessId}/track-visitor`, {
+            method: "POST",
+            headers,
+            body: JSON.stringify({
+              location: "Local Visitor",
+              pagesViewed: [referrerPath],
+              duration: 90
+            })
+          }).catch(console.error);
         });
-      })
-      .catch((err) => {
-        console.warn("IP Geolocation lookup failed, using fallback:", err);
-        fetch(`${apiUrl}/business/${businessId}/track-visitor`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            location: "Local Visitor",
-            pagesViewed: [referrerPath],
-            duration: 90
-          })
-        }).catch(console.error);
-      });
-  }, [businessId]);
+    };
+
+    if (visitorToken) {
+      reportTracking(visitorToken);
+    }
+  }, [businessId, visitorToken]);
 
   // Poll conversation history for operator takeover replies
   useEffect(() => {
-    if (!conversationId || loading) return;
+    if (!conversationId || loading || !visitorToken) return;
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
     
     const interval = setInterval(() => {
-      fetch(`${apiUrl}/conversations/${conversationId}`)
+      fetch(`${apiUrl}/conversations/${conversationId}`, {
+        headers: {
+          "Authorization": `Bearer ${visitorToken}`
+        }
+      })
         .then((r) => r.json())
         .then((cData) => {
           if (cData && cData.messages && !loading) {
@@ -220,7 +291,7 @@ function WidgetContent() {
     }, 2000);
 
     return () => clearInterval(interval);
-  }, [conversationId, loading]);
+  }, [conversationId, loading, visitorToken]);
 
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -229,7 +300,7 @@ function WidgetContent() {
 
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim() || loading || !businessId) return;
+    if (!input.trim() || loading || !businessId || !visitorToken) return;
 
     const userMessage = input.trim();
     setInput("");
@@ -241,7 +312,10 @@ function WidgetContent() {
     try {
       const response = await fetch(`${apiUrl}/chat`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${visitorToken}`
+        },
         body: JSON.stringify({
           message: userMessage,
           businessId,
@@ -291,6 +365,14 @@ function WidgetContent() {
   const closeWidget = () => {
     window.parent.postMessage("close-logicra-widget", "*");
   };
+
+  if (!mounted) {
+    return (
+      <div className="flex h-screen flex-col items-center justify-center bg-slate-950 text-white animate-pulse">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-emerald-500 border-t-transparent"></div>
+      </div>
+    );
+  }
 
   if (error) {
     return (

@@ -1,10 +1,13 @@
 import { Controller, Post, Get, Put, Delete, Body, Param, UseGuards, Request } from '@nestjs/common';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { BusinessService } from './business.service';
 import { CreateBusinessDto, CreateFAQDto } from './dto/business.dto';
 import { AuthGuard } from '../auth/auth.guard';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 
+@ApiTags('business')
+@ApiBearerAuth()
 @Controller('business')
 export class BusinessController {
   constructor(private businessService: BusinessService) {}
@@ -22,9 +25,15 @@ export class BusinessController {
     return this.businessService.getForUser(req.user.sub, req.user.role);
   }
 
+  @UseGuards(AuthGuard)
   @Get(':id')
   async getById(@Param('id') id: string) {
     return this.businessService.getById(id);
+  }
+
+  @Get(':id/public')
+  async getPublicDetails(@Param('id') id: string) {
+    return this.businessService.getPublicDetails(id);
   }
 
   @UseGuards(AuthGuard, RolesGuard)

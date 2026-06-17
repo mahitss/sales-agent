@@ -156,7 +156,7 @@ export default function Home() {
   const slide = slides[currentSlide];
 
   return (
-    <div className="relative w-screen h-screen overflow-hidden bg-black text-white font-sans flex flex-col justify-between selection:bg-white selection:text-black">
+    <div className="relative w-screen h-screen overflow-hidden bg-black bg-gradient-to-br from-slate-950 via-black to-slate-900 text-white font-sans flex flex-col justify-between selection:bg-white selection:text-black">
       {/* Background Video */}
       <video
         className="fixed inset-0 w-full h-full object-cover z-0 pointer-events-none select-none"
@@ -165,6 +165,10 @@ export default function Home() {
         loop
         muted
         playsInline
+        onError={(e) => {
+          console.warn("Background video failed to load, falling back to CSS gradient.");
+          (e.currentTarget as HTMLVideoElement).style.display = "none";
+        }}
       />
 
       {/* Bottom Blur Overlay */}

@@ -1,4 +1,4 @@
-import React from "react";
+import DOMPurify from "isomorphic-dompurify";
 import { Check, Radio, Send } from "lucide-react";
 
 interface IntegrationsTabProps {
@@ -76,7 +76,7 @@ export const IntegrationsTab: React.FC<IntegrationsTabProps> = ({
 }) => {
   const sanitizeHtml = (str: string): string => {
     if (!str) return "";
-    return str.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    return DOMPurify.sanitize(str);
   };
 
   return (

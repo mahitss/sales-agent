@@ -18,8 +18,10 @@ export class AuthGuard implements CanActivate {
       const payload = await this.jwtService.verifyAsync(token, {
         secret: (() => {
           const secret = process.env.JWT_SECRET;
-          if (!secret && process.env.NODE_ENV === 'production') {
-            throw new Error('FATAL: JWT_SECRET environment variable is required in production!');
+          if (!secret || secret === 'super-secret-key-change-me-in-production') {
+            if (process.env.NODE_ENV === 'production') {
+              throw new Error('FATAL: JWT_SECRET environment variable is required and cannot be default placeholder in production!');
+            }
           }
           return secret || 'super-secret-key-change-me-in-production';
         })(),
@@ -34,7 +36,7 @@ export class AuthGuard implements CanActivate {
   private extractTokenFromHeader(request: Request): string | undefined {
     // 1. Try to extract bearer token from Authorization header
     const [type, token] = request.headers.authorization?.split(' ') ?? [];
-    if (type === 'Bearer' && token && token !== 'cookie-auth') {
+    if (type === 'Bearer' && token) {
       return token;
     }
     // 2. Try to extract token from cookies

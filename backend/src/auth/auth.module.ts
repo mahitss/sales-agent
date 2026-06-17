@@ -9,8 +9,10 @@ import { AuthController } from './auth.controller';
       global: true,
       secret: (() => {
         const secret = process.env.JWT_SECRET;
-        if (!secret && process.env.NODE_ENV === 'production') {
-          throw new Error('FATAL: JWT_SECRET environment variable is required in production!');
+        if (!secret || secret === 'super-secret-key-change-me-in-production') {
+          if (process.env.NODE_ENV === 'production') {
+            throw new Error('FATAL: JWT_SECRET environment variable is required and cannot be default placeholder in production!');
+          }
         }
         return secret || 'super-secret-key-change-me-in-production';
       })(),

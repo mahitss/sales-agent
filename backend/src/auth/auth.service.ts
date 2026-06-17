@@ -2,6 +2,7 @@ import { Injectable, ConflictException, UnauthorizedException } from '@nestjs/co
 import { PrismaService } from '../prisma/prisma.service';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
+import * as crypto from 'crypto';
 import { RegisterDto, LoginDto, VerifyEmailDto, RequestPasswordResetDto, ResetPasswordDto } from './dto/auth.dto';
 
 @Injectable()
@@ -20,6 +21,8 @@ export class AuthService {
     }
 
     const hashedPassword = await bcrypt.hash(dto.password, 10);
+    const verificationToken = crypto.randomUUID();
+    const verificationTokenExp = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
 
     const user = await this.prisma.user.create({
       data: {
@@ -27,6 +30,8 @@ export class AuthService {
         name: dto.name,
         password: hashedPassword,
         role: dto.role || 'ADMIN',
+        verificationToken,
+        verificationTokenExp,
       },
     });
 
@@ -34,7 +39,7 @@ export class AuthService {
     const token = await this.generateToken(user.id, user.email, user.role);
 
     // Mock Verification link logging
-    console.log(`User registered: ${user.email}. Verification Token: mock-verify-token-${user.id}`);
+    console.log(`User registered: ${user.email}. Verification Token: ${verificationToken}`);
 
     return {
       user: {
@@ -44,7 +49,7 @@ export class AuthService {
         role: user.role,
       },
       token,
-      verificationToken: `mock-verify-token-${user.id}`,
+      verificationToken,
     };
   }
 
@@ -75,18 +80,22 @@ export class AuthService {
   }
 
   async verifyEmail(dto: VerifyEmailDto) {
-    // Format: mock-verify-token-{userId}
-    const match = dto.token.match(/^mock-verify-token-(.+)$/);
-    if (!match) {
-      throw new UnauthorizedException('Invalid or expired verification token');
-    }
-    const userId = match[1];
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
+    const user = await this.prisma.user.findFirst({
+      where: {
+        verificationToken: dto.token,
+        verificationTokenExp: { gte: new Date() },
+      },
     });
     if (!user) {
       throw new UnauthorizedException('Invalid or expired verification token');
     }
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        verificationToken: null,
+        verificationTokenExp: null,
+      },
+    });
     return { success: true, message: 'Email address has been successfully verified.' };
   }
 
@@ -97,7 +106,15 @@ export class AuthService {
     if (!user) {
       return { success: true, message: 'If the email exists, a password reset link has been sent.' };
     }
-    const resetToken = `reset-token-${user.id}`;
+    const resetToken = crypto.randomUUID();
+    const resetTokenExp = new Date(Date.now() + 15 * 60 * 1000); // 15 mins
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        resetToken,
+        resetTokenExp,
+      },
+    });
     console.log(`Password reset requested for ${dto.email}. Reset Token: ${resetToken}`);
     return {
       success: true,
@@ -107,23 +124,32 @@ export class AuthService {
   }
 
   async resetPassword(dto: ResetPasswordDto) {
-    const match = dto.token.match(/^reset-token-(.+)$/);
-    if (!match) {
-      throw new UnauthorizedException('Invalid or expired reset token');
-    }
-    const userId = match[1];
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
+    const user = await this.prisma.user.findFirst({
+      where: {
+        resetToken: dto.token,
+        resetTokenExp: { gte: new Date() },
+      },
     });
     if (!user) {
       throw new UnauthorizedException('Invalid or expired reset token');
     }
     const hashedPassword = await bcrypt.hash(dto.password, 10);
     await this.prisma.user.update({
-      where: { id: userId },
-      data: { password: hashedPassword },
+      where: { id: user.id },
+      data: {
+        password: hashedPassword,
+        resetToken: null,
+        resetTokenExp: null,
+      },
     });
     return { success: true, message: 'Password has been reset successfully.' };
+  }
+
+  async generateVisitorToken(businessId: string) {
+    const visitorId = `visitor-${crypto.randomUUID()}`;
+    const payload = { sub: visitorId, email: `${visitorId}@anonymous.local`, role: 'VISITOR', businessId };
+    const token = await this.jwtService.signAsync(payload, { expiresIn: '7d' });
+    return { token };
   }
 
   private async generateToken(userId: string, email: string, role: string): Promise<string> {

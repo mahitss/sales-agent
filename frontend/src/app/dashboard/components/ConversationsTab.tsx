@@ -1,4 +1,4 @@
-import React from "react";
+import DOMPurify from "isomorphic-dompurify";
 import { MessageSquare, ShieldAlert, Bot, User, Send } from "lucide-react";
 
 interface Conversation {
@@ -34,7 +34,7 @@ export const ConversationsTab: React.FC<ConversationsTabProps> = ({
 }) => {
   const sanitizeHtml = (str: string): string => {
     if (!str) return "";
-    return str.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    return DOMPurify.sanitize(str);
   };
 
   return (

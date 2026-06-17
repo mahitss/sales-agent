@@ -34,7 +34,7 @@
   button.style.transition = 'transform 0.2s ease, background-color 0.2s ease';
   
   // Fetch custom theme color dynamically
-  fetch(`${backendUrl}/business/${businessId}`)
+  fetch(`${backendUrl}/business/${businessId}/public`)
     .then(res => {
       if (!res.ok) throw new Error('Network response was not ok');
       return res.json();
