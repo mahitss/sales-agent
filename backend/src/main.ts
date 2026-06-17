@@ -6,6 +6,17 @@ import { join } from 'path';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
+import helmet from 'helmet';
+import compression from 'compression';
+import { HtmlSanitizationInterceptor } from './common/interceptors/html-sanitization.interceptor';
+import { MetricsInterceptor } from './common/interceptors/metrics.interceptor';
+import * as Sentry from '@sentry/node';
+
+Sentry.init({
+  dsn: process.env.SENTRY_DSN || '',
+  environment: process.env.NODE_ENV || 'development',
+  tracesSampleRate: 1.0,
+});
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
@@ -15,6 +26,26 @@ async function bootstrap() {
   });
   
   app.use(cookieParser());
+  app.use(helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "*"],
+        styleSrc: ["'self'", "'unsafe-inline'", "*"],
+        imgSrc: ["'self'", "data:", "*"],
+        connectSrc: ["'self'", "*"],
+        frameAncestors: ["*"], // Allow iframe embedding globally for widget
+      },
+    },
+    crossOriginEmbedderPolicy: false,
+  }));
+  app.use(compression());
+  app.useGlobalInterceptors(
+    new HtmlSanitizationInterceptor(),
+    new MetricsInterceptor(),
+  );
+  app.setGlobalPrefix('api/v1');
+  app.enableShutdownHooks();
 
   // Register global HTTP exception filter
   app.useGlobalFilters(new HttpExceptionFilter());

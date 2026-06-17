@@ -33,19 +33,27 @@
   button.style.outline = 'none';
   button.style.transition = 'transform 0.2s ease, background-color 0.2s ease';
   
-  // Fetch custom theme color dynamically
+  // Fetch custom theme settings dynamically
   fetch(`${backendUrl}/business/${businessId}/public`)
     .then(res => {
       if (!res.ok) throw new Error('Network response was not ok');
       return res.json();
     })
     .then(data => {
-      if (data && data.themeColor) {
-        button.style.backgroundColor = data.themeColor;
+      if (data) {
+        if (data.themeColor) {
+          button.style.backgroundColor = data.themeColor;
+        }
+        if (data.widgetPosition === 'bottom-left') {
+          container.style.left = '20px';
+          container.style.right = 'auto';
+          iframe.style.left = '0';
+          iframe.style.right = 'auto';
+        }
       }
     })
     .catch(err => {
-      console.warn('Failed to load widget theme color, using fallback:', err);
+      console.warn('Failed to load widget configurations, using fallback:', err);
       button.style.backgroundColor = '#10B981'; // Fallback Emerald color
     });
 
@@ -58,6 +66,7 @@
   // Create iframe
   const iframe = document.createElement('iframe');
   iframe.src = `${frontendUrl}/widget?id=${businessId}`;
+  iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms allow-popups');
   iframe.style.width = '380px';
   iframe.style.height = '580px';
   iframe.style.border = 'none';
@@ -106,6 +115,9 @@
   });
 
   window.addEventListener('message', (event) => {
+    if (event.origin !== new URL(frontendUrl).origin) {
+      return;
+    }
     if (event.data === 'close-logicra-widget') {
       button.click();
     }

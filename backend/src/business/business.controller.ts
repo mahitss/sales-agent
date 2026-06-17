@@ -1,6 +1,7 @@
-import { Controller, Post, Get, Put, Delete, Body, Param, UseGuards, Request } from '@nestjs/common';
+import { Controller, Post, Get, Put, Delete, Body, Param, UseGuards, Request, Inject, forwardRef } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { BusinessService } from './business.service';
+import { QueueService } from '../common/queues/queue.service';
 import { CreateBusinessDto, CreateFAQDto } from './dto/business.dto';
 import { AuthGuard } from '../auth/auth.guard';
 import { Roles } from '../auth/roles.decorator';
@@ -10,7 +11,11 @@ import { RolesGuard } from '../auth/roles.guard';
 @ApiBearerAuth()
 @Controller('business')
 export class BusinessController {
-  constructor(private businessService: BusinessService) {}
+  constructor(
+    private businessService: BusinessService,
+    @Inject(forwardRef(() => QueueService))
+    private queueService: QueueService,
+  ) {}
 
   @UseGuards(AuthGuard, RolesGuard)
   @Roles('ADMIN')
@@ -82,7 +87,8 @@ export class BusinessController {
   @Roles('ADMIN')
   @Post(':id/scrape')
   async scrapeWebsite(@Param('id') id: string, @Body('url') url: string) {
-    return this.businessService.scrapeWebsite(id, url);
+    await this.queueService.addJob('scraper', { businessId: id, url });
+    return { success: true, message: 'Web scraping job queued successfully' };
   }
 
   // --- Document Import / Learn Text ---

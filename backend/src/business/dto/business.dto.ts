@@ -52,6 +52,18 @@ export class CreateBusinessDto {
   @IsOptional()
   @IsString()
   agentPrompt?: string;
+
+  @IsOptional()
+  @IsString()
+  widgetGreeting?: string;
+
+  @IsOptional()
+  @IsString()
+  widgetRules?: string;
+
+  @IsOptional()
+  @IsString()
+  widgetPosition?: string;
 }
 
 export class CreateFAQDto {

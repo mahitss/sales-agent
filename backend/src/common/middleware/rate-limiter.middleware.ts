@@ -18,12 +18,22 @@ export class RateLimiterMiddleware implements NestMiddleware {
       }
     }
 
-    const isSensitive = req.path.includes('/auth/login') || req.path.includes('/auth/register');
+    const isSensitive =
+      req.path.includes('/auth/login') ||
+      req.path.includes('/auth/register') ||
+      req.path.includes('/auth/verify-email') ||
+      req.path.includes('/auth/request-password-reset') ||
+      req.path.includes('/auth/reset-password') ||
+      req.path.includes('/auth/2fa');
+
+    const isChat = req.path.includes('/chat');
     const isAuth = !!req.headers.authorization;
 
     let limit = 100;
     if (isSensitive) {
-      limit = 5; // Strict: max 5 requests per minute for login/register
+      limit = 5; // Strict: max 5 requests per minute for auth operations
+    } else if (isChat) {
+      limit = 30; // Max 30 requests per minute for chat/stream endpoints
     } else if (isAuth) {
       limit = 200; // Higher: authenticated users get 200 requests per minute
     } else {
@@ -31,7 +41,7 @@ export class RateLimiterMiddleware implements NestMiddleware {
     }
 
     const windowMs = 60 * 1000; // 1 minute window
-    const cacheKey = `${ip}:${isSensitive ? 'sensitive' : isAuth ? 'auth' : 'anon'}`;
+    const cacheKey = `${ip}:${isSensitive ? 'sensitive' : isChat ? 'chat' : isAuth ? 'auth' : 'anon'}`;
 
     const record = ipCache.get(cacheKey);
     if (!record) {

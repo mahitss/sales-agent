@@ -1,6 +1,7 @@
-import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, BadRequestException, Inject, forwardRef } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../common/redis/redis.service';
+import { QueueService } from '../common/queues/queue.service';
 import { CreateBusinessDto, CreateFAQDto } from './dto/business.dto';
 import axios from 'axios';
 import * as bcrypt from 'bcrypt';
@@ -11,6 +12,8 @@ export class BusinessService {
   constructor(
     private prisma: PrismaService,
     private redisService: RedisService,
+    @Inject(forwardRef(() => QueueService))
+    private queueService: QueueService,
   ) {}
 
   async create(ownerId: string, dto: CreateBusinessDto) {
@@ -30,6 +33,9 @@ export class BusinessService {
         themeColor: dto.themeColor ?? '#10B981',
         agentTone: dto.agentTone ?? 'PROFESSIONAL',
         agentPrompt: dto.agentPrompt,
+        widgetGreeting: dto.widgetGreeting ?? 'Hello! How can we help you today?',
+        widgetRules: dto.widgetRules ?? '[]',
+        widgetPosition: dto.widgetPosition ?? 'bottom-right',
       },
     });
   }
@@ -92,6 +98,9 @@ export class BusinessService {
         themeColor: dto.themeColor ?? '#10B981',
         agentTone: dto.agentTone ?? 'PROFESSIONAL',
         agentPrompt: dto.agentPrompt,
+        widgetGreeting: dto.widgetGreeting ?? 'Hello! How can we help you today?',
+        widgetRules: dto.widgetRules ?? '[]',
+        widgetPosition: dto.widgetPosition ?? 'bottom-right',
       },
     });
 
@@ -123,19 +132,40 @@ export class BusinessService {
       throw new NotFoundException('Business not found or access denied');
     }
 
-    return this.prisma.knowledgeBase.create({
+    const created = await this.prisma.knowledgeBase.create({
       data: {
         businessId,
         title: this.sanitizeHtml(dto.title),
         content: this.sanitizeHtml(dto.content),
       },
     });
+
+    await this.redisService.del(`business:${businessId}:faqs`).catch(() => {});
+    return created;
   }
 
   async getFAQs(businessId: string) {
-    return this.prisma.knowledgeBase.findMany({
+    const cacheKey = `business:${businessId}:faqs`;
+    try {
+      const cached = await this.redisService.get(cacheKey);
+      if (cached) {
+        return JSON.parse(cached);
+      }
+    } catch (err) {
+      // Ignore cache errors
+    }
+
+    const faqs = await this.prisma.knowledgeBase.findMany({
       where: { businessId },
     });
+
+    try {
+      await this.redisService.set(cacheKey, JSON.stringify(faqs), 3600); // 1 hour TTL
+    } catch (err) {
+      // Ignore cache errors
+    }
+
+    return faqs;
   }
 
   async deleteFAQ(faqId: string, ownerId: string) {
@@ -150,6 +180,8 @@ export class BusinessService {
     await this.prisma.knowledgeBase.delete({
       where: { id: faqId },
     });
+
+    await this.redisService.del(`business:${faq.businessId}:faqs`).catch(() => {});
     return { success: true };
   }
 
@@ -244,6 +276,7 @@ export class BusinessService {
       createdFAQs.push(created);
     }
 
+    await this.redisService.del(`business:${businessId}:faqs`).catch(() => {});
     return { count: createdFAQs.length, faqs: createdFAQs };
   }
 
@@ -294,6 +327,7 @@ export class BusinessService {
       createdFAQs.push(created);
     }
 
+    await this.redisService.del(`business:${businessId}:faqs`).catch(() => {});
     return { count: createdFAQs.length, faqs: createdFAQs };
   }
 
@@ -497,6 +531,14 @@ export class BusinessService {
       },
     });
 
+    // Queue invite email delivery
+    await this.queueService.addJob('emails', {
+      email: employee.email,
+      name: employee.name,
+      businessName: business.companyName,
+      inviteUrl: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/dashboard`,
+    }).catch(() => {});
+
     return {
       id: employee.id,
       email: employee.email,
@@ -559,6 +601,9 @@ export class BusinessService {
         themeColor: true,
         agentTone: true,
         agentPrompt: true,
+        widgetGreeting: true,
+        widgetRules: true,
+        widgetPosition: true,
       },
     });
     if (!business) {

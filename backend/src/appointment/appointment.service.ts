@@ -1,13 +1,17 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { RedisService } from '../common/redis/redis.service';
 import { CreateAppointmentDto } from './dto/appointment.dto';
 
 @Injectable()
 export class AppointmentService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private redisService: RedisService,
+  ) {}
 
   async create(dto: CreateAppointmentDto) {
-    return this.prisma.appointment.create({
+    const appt = await this.prisma.appointment.create({
       data: {
         leadId: dto.leadId,
         businessId: dto.businessId,
@@ -16,6 +20,8 @@ export class AppointmentService {
         status: 'PENDING',
       },
     });
+    await this.redisService.del(`business:${dto.businessId}:lead-stats`).catch(() => {});
+    return appt;
   }
 
   async updateStatus(id: string, status: string) {
@@ -23,10 +29,12 @@ export class AppointmentService {
     if (!existing) {
       throw new NotFoundException('Appointment not found');
     }
-    return this.prisma.appointment.update({
+    const updated = await this.prisma.appointment.update({
       where: { id },
       data: { status },
     });
+    await this.redisService.del(`business:${existing.businessId}:lead-stats`).catch(() => {});
+    return updated;
   }
 
   async getByBusiness(businessId: string) {

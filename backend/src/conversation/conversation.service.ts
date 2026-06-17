@@ -19,16 +19,28 @@ export class ConversationService {
     };
   }
 
-  async getByBusiness(businessId: string) {
+  async getByBusiness(businessId: string, limit: number = 20, cursor?: string) {
+    const take = limit;
+    const skip = cursor ? 1 : 0;
+    const cursorObj = cursor ? { id: cursor } : undefined;
+
     const list = await this.prisma.conversation.findMany({
       where: { businessId },
       include: { lead: true },
-      orderBy: { updatedAt: 'desc' },
+      take,
+      skip,
+      cursor: cursorObj,
+      orderBy: { id: 'desc' },
     });
-    return list.map((item) => ({
-      ...item,
-      messages: JSON.parse(item.messages),
-    }));
+
+    const nextCursor = list.length === take ? list[list.length - 1].id : null;
+    return {
+      data: list.map((item) => ({
+        ...item,
+        messages: JSON.parse(item.messages),
+      })),
+      nextCursor,
+    };
   }
 
   async findOrCreate(leadId: string, businessId: string) {
@@ -74,5 +86,48 @@ export class ConversationService {
       ...conversation,
       messages: JSON.parse(conversation.messages),
     };
+  }
+
+  async exportConversationsToCsv(businessId: string): Promise<string> {
+    const list = await this.prisma.conversation.findMany({
+      where: { businessId },
+      include: { lead: true },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const headers = ['ID', 'Lead ID', 'Lead Name', 'Channel', 'Is Human Takeover', 'Created At', 'Messages'];
+    const rows = list.map((c) => [
+      c.id,
+      c.leadId || '',
+      c.lead?.name || 'Anonymous Visitor',
+      c.channel,
+      String(c.isHumanTakeover),
+      c.createdAt.toISOString(),
+      c.messages,
+    ]);
+
+    const csvContent = [
+      headers.join(','),
+      ...rows.map((row) => row.map((val) => `"${val.replace(/"/g, '""')}"`).join(',')),
+    ].join('\n');
+
+    return csvContent;
+  }
+
+  async exportConversationsToJson(businessId: string): Promise<any[]> {
+    const list = await this.prisma.conversation.findMany({
+      where: { businessId },
+      include: { lead: true },
+      orderBy: { createdAt: 'desc' },
+    });
+    return list.map((c) => ({
+      id: c.id,
+      leadId: c.leadId,
+      leadName: c.lead?.name || 'Anonymous Visitor',
+      channel: c.channel,
+      isHumanTakeover: c.isHumanTakeover,
+      createdAt: c.createdAt,
+      messages: JSON.parse(c.messages),
+    }));
   }
 }

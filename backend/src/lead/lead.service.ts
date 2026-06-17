@@ -1,13 +1,17 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { RedisService } from '../common/redis/redis.service';
 import { CreateLeadDto, UpdateLeadDto } from './dto/lead.dto';
 
 @Injectable()
 export class LeadService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private redisService: RedisService,
+  ) {}
 
   async create(dto: CreateLeadDto) {
-    return this.prisma.lead.create({
+    const lead = await this.prisma.lead.create({
       data: {
         businessId: dto.businessId,
         name: dto.name,
@@ -18,6 +22,9 @@ export class LeadService {
         status: dto.status || 'COLD',
       },
     });
+
+    await this.redisService.del(`business:${dto.businessId}:lead-stats`).catch(() => {});
+    return lead;
   }
 
   async update(id: string, dto: UpdateLeadDto) {
@@ -25,10 +32,13 @@ export class LeadService {
     if (!existing) {
       throw new NotFoundException('Lead not found');
     }
-    return this.prisma.lead.update({
+    const updated = await this.prisma.lead.update({
       where: { id },
       data: dto,
     });
+
+    await this.redisService.del(`business:${existing.businessId}:lead-stats`).catch(() => {});
+    return updated;
   }
 
   async getById(id: string) {
@@ -42,14 +52,37 @@ export class LeadService {
     return lead;
   }
 
-  async getByBusiness(businessId: string) {
-    return this.prisma.lead.findMany({
+  async getByBusiness(businessId: string, limit: number = 20, cursor?: string) {
+    const take = limit;
+    const skip = cursor ? 1 : 0;
+    const cursorObj = cursor ? { id: cursor } : undefined;
+
+    const leads = await this.prisma.lead.findMany({
       where: { businessId },
-      orderBy: { createdAt: 'desc' },
+      take,
+      skip,
+      cursor: cursorObj,
+      orderBy: { id: 'desc' },
     });
+
+    const nextCursor = leads.length === take ? leads[leads.length - 1].id : null;
+    return {
+      data: leads,
+      nextCursor,
+    };
   }
 
   async getStats(businessId: string) {
+    const cacheKey = `business:${businessId}:lead-stats`;
+    try {
+      const cached = await this.redisService.get(cacheKey);
+      if (cached) {
+        return JSON.parse(cached);
+      }
+    } catch (err) {
+      // Ignore cache errors
+    }
+
     const totalLeads = await this.prisma.lead.count({ where: { businessId } });
     const hotLeads = await this.prisma.lead.count({ where: { businessId, status: 'HOT' } });
     const warmLeads = await this.prisma.lead.count({ where: { businessId, status: 'WARM' } });
@@ -59,7 +92,7 @@ export class LeadService {
     const qualifiedLeads = hotLeads + warmLeads;
     const conversionRate = totalLeads > 0 ? Math.round((qualifiedLeads / totalLeads) * 100) : 0;
 
-    return {
+    const stats = {
       totalLeads,
       qualifiedLeads,
       hotLeads,
@@ -68,6 +101,14 @@ export class LeadService {
       appointments,
       conversionRate,
     };
+
+    try {
+      await this.redisService.set(cacheKey, JSON.stringify(stats), 300); // 5 min TTL
+    } catch (err) {
+      // Ignore cache errors
+    }
+
+    return stats;
   }
 
   async exportLeadsToCsv(businessId: string): Promise<string> {
@@ -96,5 +137,12 @@ export class LeadService {
     ].join('\n');
 
     return csvContent;
+  }
+
+  async exportLeadsToJson(businessId: string): Promise<any[]> {
+    return this.prisma.lead.findMany({
+      where: { businessId },
+      orderBy: { createdAt: 'desc' },
+    });
   }
 }

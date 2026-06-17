@@ -33,14 +33,12 @@ services:
       - PORT=8000
     restart: always
 
-  backend:
+  backend-node-1:
     build:
       context: ./backend
-    container_name: beacon-backend
-    ports:
-      - "4000:4000"
+    container_name: backend-node-1
     environment:
-      - DATABASE_URL=postgresql://postgres:postgrespassword@postgres:5432/beacon_sales_agent?schema=public
+      - DATABASE_URL=postgresql://postgres:postgrespassword@postgres:5432/beacon_sales_agent?schema=public&connection_limit=50
       - JWT_SECRET=super-secret-key-change-me-in-production
       - JWT_REFRESH_SECRET=super-secret-key-change-me-in-production
       - JWT_EXPIRATION=15m
@@ -55,6 +53,38 @@ services:
       - redis
     restart: always
 
+  backend-node-2:
+    build:
+      context: ./backend
+    container_name: backend-node-2
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgrespassword@postgres:5432/beacon_sales_agent?schema=public&connection_limit=50
+      - JWT_SECRET=super-secret-key-change-me-in-production
+      - JWT_REFRESH_SECRET=super-secret-key-change-me-in-production
+      - JWT_EXPIRATION=15m
+      - JWT_REFRESH_EXPIRATION=7d
+      - AI_SERVICE_URL=http://ai-service:8000
+      - FRONTEND_URL=http://localhost:3000
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      - ai-service
+      - postgres
+      - redis
+    restart: always
+
+  nginx:
+    image: nginx:alpine
+    container_name: beacon-nginx
+    ports:
+      - "4000:4000"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - backend-node-1
+      - backend-node-2
+    restart: always
+
   frontend:
     build:
       context: ./frontend
@@ -64,7 +94,7 @@ services:
     environment:
       - NEXT_PUBLIC_API_URL=http://localhost:4000
     depends_on:
-      - backend
+      - nginx
     restart: always
 
 volumes:

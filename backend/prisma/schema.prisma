@@ -20,6 +20,8 @@ model User {
   resetToken           String?
   resetTokenExp        DateTime?
   isVerified           Boolean        @default(false)
+  twoFactorSecret      String?
+  twoFactorEnabled     Boolean        @default(false)
   createdAt            DateTime       @default(now())
   updatedAt            DateTime       @updatedAt
   businesses           Business[]
@@ -45,6 +47,9 @@ model Business {
   themeColor         String               @default("#10B981")
   agentTone          String               @default("PROFESSIONAL")
   agentPrompt        String?
+  widgetGreeting     String?              @default("Hello! How can we help you today?")
+  widgetRules        String?              @default("[]")
+  widgetPosition     String?              @default("bottom-right")
   createdAt          DateTime             @default(now())
   updatedAt          DateTime             @updatedAt
   leads              Lead[]
@@ -87,6 +92,7 @@ model Lead {
   appointments Appointment[]
 
   @@index([businessId])
+  @@index([businessId, createdAt])
 }
 
 model Conversation {
@@ -102,6 +108,7 @@ model Conversation {
   updatedAt       DateTime  @updatedAt
 
   @@index([businessId])
+  @@index([businessId, createdAt])
   @@index([leadId])
 }
 
@@ -118,6 +125,7 @@ model Appointment {
   updatedAt  DateTime @updatedAt
 
   @@index([businessId])
+  @@index([businessId, createdAt])
   @@index([leadId])
 }
 
@@ -132,6 +140,7 @@ model VisitorTrack {
   updatedAt   DateTime @updatedAt
 
   @@index([businessId])
+  @@index([businessId, createdAt])
 }
 
 model CompetitorAnalysis {

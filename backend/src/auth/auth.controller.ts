@@ -3,6 +3,7 @@ import { ApiTags } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { RegisterDto, LoginDto, VerifyEmailDto, RequestPasswordResetDto, ResetPasswordDto } from './dto/auth.dto';
 import { ThrottlerGuard } from '@nestjs/throttler';
+import { AuthGuard } from './auth.guard';
 import * as express from 'express';
 
 @ApiTags('auth')
@@ -35,10 +36,23 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   async login(@Body() dto: LoginDto, @Res({ passthrough: true }) response: express.Response) {
     const result = await this.authService.login(dto);
-    this.setRefreshTokenCookie(response, result.refreshToken);
+    if ('require2fa' in result && result.require2fa) {
+      return {
+        require2fa: true,
+        tempToken: result.tempToken,
+      };
+    }
+
+    const successResult = result as {
+      user: any;
+      token: string;
+      refreshToken: string;
+    };
+
+    this.setRefreshTokenCookie(response, successResult.refreshToken);
     return {
-      user: result.user,
-      token: result.token,
+      user: successResult.user,
+      token: successResult.token,
     };
   }
 
@@ -60,11 +74,36 @@ export class AuthController {
     if (refreshToken) {
       await this.authService.revokeRefreshToken(refreshToken);
     }
+
+    // Blacklist access token
+    const authHeader = request.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.substring(7);
+      await this.authService.blacklistAccessToken(token);
+    }
+
+    const cookieHeader = request.headers.cookie;
+    if (cookieHeader) {
+      const tokenCookie = cookieHeader
+        .split(';')
+        .map((c) => c.trim())
+        .find((c) => c.startsWith('beacon_token='));
+      if (tokenCookie) {
+        const token = tokenCookie.substring('beacon_token='.length);
+        await this.authService.blacklistAccessToken(token);
+      }
+    }
+
     response.clearCookie('beacon_refresh_token', {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
       path: '/auth',
+    });
+    response.clearCookie('beacon_token', {
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
     });
     return { success: true, message: 'Logged out successfully' };
   }
@@ -91,5 +130,41 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   generateVisitorToken(@Body() body: { businessId: string }) {
     return this.authService.generateVisitorToken(body.businessId);
+  }
+
+  @UseGuards(AuthGuard)
+  @Post('2fa/generate')
+  @HttpCode(HttpStatus.OK)
+  async generate2FA(@Req() req) {
+    return this.authService.generate2FA(req.user.sub);
+  }
+
+  @UseGuards(AuthGuard)
+  @Post('2fa/enable')
+  @HttpCode(HttpStatus.OK)
+  async enable2FA(@Req() req, @Body('code') code: string) {
+    return this.authService.enable2FA(req.user.sub, code);
+  }
+
+  @UseGuards(AuthGuard)
+  @Post('2fa/disable')
+  @HttpCode(HttpStatus.OK)
+  async disable2FA(@Req() req) {
+    return this.authService.disable2FA(req.user.sub);
+  }
+
+  @Post('2fa/verify')
+  @HttpCode(HttpStatus.OK)
+  async verify2FA(
+    @Body('tempToken') tempToken: string,
+    @Body('code') code: string,
+    @Res({ passthrough: true }) response: express.Response
+  ) {
+    const result = await this.authService.verify2FA(tempToken, code);
+    this.setRefreshTokenCookie(response, result.refreshToken);
+    return {
+      user: result.user,
+      token: result.token,
+    };
   }
 }

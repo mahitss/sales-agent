@@ -1,10 +1,15 @@
 import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { RedisService } from '../common/redis/redis.service';
 import { Request } from 'express';
+import * as crypto from 'crypto';
 
 @Injectable()
 export class AuthGuard implements CanActivate {
-  constructor(private jwtService: JwtService) {}
+  constructor(
+    private jwtService: JwtService,
+    private redisService: RedisService,
+  ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<Request>();
@@ -12,6 +17,16 @@ export class AuthGuard implements CanActivate {
     
     if (!token) {
       throw new UnauthorizedException('Authentication token is missing');
+    }
+
+    try {
+      const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
+      const isBlacklisted = await this.redisService.get(`blacklist:${hashedToken}`);
+      if (isBlacklisted) {
+        throw new UnauthorizedException('Authentication token has been revoked');
+      }
+    } catch (err) {
+      // Ignore blacklist lookup errors to keep app functioning if Redis is down
     }
     
     try {
