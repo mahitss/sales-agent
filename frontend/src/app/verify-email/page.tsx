@@ -9,17 +9,12 @@ function VerifyEmailContent() {
   const router = useRouter();
   const token = searchParams.get("token");
 
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!token ? false : true);
   const [success, setSuccess] = useState(false);
-  const [message, setMessage] = useState("");
+  const [message, setMessage] = useState(!token ? "Verification token is missing from the URL." : "");
 
   useEffect(() => {
-    if (!token) {
-      setLoading(false);
-      setSuccess(false);
-      setMessage("Verification token is missing from the URL.");
-      return;
-    }
+    if (!token) return;
 
     const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
 

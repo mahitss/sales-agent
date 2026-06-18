@@ -1,40 +1,42 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React from "react";
+import dynamic from "next/dynamic";
 import {
   Users,
   MessageSquare,
   Calendar,
   BookOpen,
-  Code,
+  Code as CodeIcon,
   LogOut,
   TrendingUp,
   RefreshCw,
-  Building,
-  Globe,
-  Briefcase,
-  FileText,
   MapPin,
   Compass,
   Radio,
   Activity
 } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 
-import { OverviewTab } from "./components/OverviewTab";
-import { LeadsTab } from "./components/LeadsTab";
-import { ConversationsTab } from "./components/ConversationsTab";
-import { AppointmentsTab } from "./components/AppointmentsTab";
-import { KnowledgeBaseTab } from "./components/KnowledgeBaseTab";
-import { VisitorTracksTab } from "./components/VisitorTracksTab";
-import { CompetitorTab } from "./components/CompetitorTab";
-import { TeamTab } from "./components/TeamTab";
-import { WidgetTab } from "./components/WidgetTab";
-import { IntegrationsTab } from "./components/IntegrationsTab";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { loginSchema, registerSchema, forgotPasswordSchema, onboardingSchema } from "@/lib/schemas";
+import { useDashboardData } from "@/hooks/useDashboardData";
+import { LoginForm } from "@/components/auth/LoginForm";
+import { RegisterForm } from "@/components/auth/RegisterForm";
+import { ForgotPasswordForm } from "@/components/auth/ForgotPasswordForm";
+import { OnboardingForm } from "@/components/auth/OnboardingForm";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
-import { CheckCircle, AlertTriangle, KeyRound } from "lucide-react";
+
+// Dynamic sub-tabs imports for optimized loading and bundles optimization
+const OverviewTab = dynamic(() => import("./components/OverviewTab").then(m => m.OverviewTab), { ssr: false });
+const LeadsTab = dynamic(() => import("./components/LeadsTab").then(m => m.LeadsTab), { ssr: false });
+const ConversationsTab = dynamic(() => import("./components/ConversationsTab").then(m => m.ConversationsTab), { ssr: false });
+const AppointmentsTab = dynamic(() => import("./components/AppointmentsTab").then(m => m.AppointmentsTab), { ssr: false });
+const KnowledgeBaseTab = dynamic(() => import("./components/KnowledgeBaseTab").then(m => m.KnowledgeBaseTab), { ssr: false });
+const VisitorTracksTab = dynamic(() => import("./components/VisitorTracksTab").then(m => m.VisitorTracksTab), { ssr: false });
+const CompetitorTab = dynamic(() => import("./components/CompetitorTab").then(m => m.CompetitorTab), { ssr: false });
+const TeamTab = dynamic(() => import("./components/TeamTab").then(m => m.TeamTab), { ssr: false });
+const WidgetTab = dynamic(() => import("./components/WidgetTab").then(m => m.WidgetTab), { ssr: false });
+const IntegrationsTab = dynamic(() => import("./components/IntegrationsTab").then(m => m.IntegrationsTab), { ssr: false });
 
 const SkeletonLoader = () => (
   <div className="space-y-6 animate-pulse">
@@ -48,1436 +50,239 @@ const SkeletonLoader = () => (
   </div>
 );
 
-interface UserInfo {
-  id: string;
-  email: string;
-  name: string;
-  role: string;
-}
-
-interface BusinessInfo {
-  id: string;
-  companyName: string;
-  website: string;
-  industry: string;
-  description: string;
-  whatsappEnabled: boolean;
-  instagramEnabled: boolean;
-  emailEnabled: boolean;
-  whatsappApiKey?: string;
-  instagramAccountId?: string;
-  emailSmtp?: string;
-  knowledgeBases?: FAQItem[];
-}
-
-interface FAQItem {
-  id: string;
-  title: string;
-  content: string;
-  createdAt: string;
-}
-
-interface Lead {
-  id: string;
-  name: string;
-  email: string;
-  phone: string;
-  budget: string;
-  source: string;
-  status: string; // HOT, WARM, COLD
-  sentiment?: string;
-  engagementScore?: number;
-  createdAt: string;
-}
-
-interface Conversation {
-  id: string;
-  leadId: string | null;
-  lead: Lead | null;
-  messages: Array<{ role: "user" | "model"; content: string }>;
-  channel: string; // WIDGET, WHATSAPP, INSTAGRAM, EMAIL
-  isHumanTakeover: boolean;
-  updatedAt: string;
-}
-
-interface Appointment {
-  id: string;
-  lead: Lead;
-  date: string;
-  time: string;
-  status: string; // PENDING, CONFIRMED, CANCELLED
-  createdAt: string;
-}
-
-interface VisitorTrack {
-  id: string;
-  location: string;
-  pagesViewed: string[];
-  duration: number;
-  createdAt: string;
-}
-
-interface CompetitorAnalysis {
-  id: string;
-  competitorUrl: string;
-  analysis: {
-    serviceCompare: Array<{ feature: string; us: string; competitor: string }>;
-    missingOfferings: string[];
-    contentGaps: string[];
-  };
-  createdAt: string;
-}
-
-interface DashboardStats {
-  totalLeads: number;
-  qualifiedLeads: number;
-  hotLeads: number;
-  warmLeads: number;
-  coldLeads: number;
-  appointments: number;
-  conversionRate: number;
-}
-
 export default function DashboardPage() {
-  const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
-
-  // Authentication & Profile States
-  const [token, setToken] = useState<string | null>(null);
-  const [user, setUser] = useState<UserInfo | null>(null);
-  const [business, setBusiness] = useState<BusinessInfo | null>(null);
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  // Auth view: "login" | "register" | "forgot"
-  const [authView, setAuthView] = useState<"login" | "register" | "forgot">("login");
-  const [businessLoading, setBusinessLoading] = useState(true);
-
-  // Auth Form State
-  const [authError, setAuthError] = useState("");
-  const [authLoading, setAuthLoading] = useState(false);
-  const [forgotSuccess, setForgotSuccess] = useState(false);
-
-  // Onboarding Form State
-  const [onboardLoading, setOnboardLoading] = useState(false);
-
-  // Zod & React Hook Form initializations
   const {
-    register: registerLogin,
-    handleSubmit: handleLoginSubmit,
-    formState: { errors: loginErrors },
-  } = useForm({
-    resolver: zodResolver(loginSchema),
-    defaultValues: { email: "", password: "" },
-  });
+    API_URL,
+    token,
+    user,
+    business,
+    businessLoading,
+    activeTab,
+    setActiveTab,
+    leads,
+    conversations,
+    appointments,
+    faqs,
+    visitorTracks,
+    competitorAnalyses,
+    recommendations,
+    stats,
+    selectedConv,
+    setSelectedConv,
+    faqTitle,
+    setFaqTitle,
+    faqContent,
+    setFaqContent,
+    faqLoading,
+    competitorUrl,
+    setCompetitorUrl,
+    competitorLoading,
+    competitorLogs,
+    scraperUrl,
+    setScraperUrl,
+    scraperLoading,
+    scraperLogs,
+    operatorReply,
+    setOperatorReply,
+    operatorSending,
+    simChannel,
+    setSimChannel,
+    simMessage,
+    setSimMessage,
+    simLeadName,
+    setSimLeadName,
+    simLeadPhone,
+    setSimLeadPhone,
+    simLeadEmail,
+    setSimLeadEmail,
+    simLoading,
+    simStatus,
+    whatsappEnabled,
+    setWhatsappEnabled,
+    instagramEnabled,
+    setInstagramEnabled,
+    emailEnabled,
+    setEmailEnabled,
+    whatsappApiKey,
+    setWhatsappApiKey,
+    instagramAccountId,
+    setInstagramAccountId,
+    emailSmtp,
+    setEmailSmtp,
+    connectionSaving,
+    themeColor,
+    setThemeColor,
+    agentTone,
+    setAgentTone,
+    agentPrompt,
+    setAgentPrompt,
+    searchTerm,
+    setSearchTerm,
+    filterStatus,
+    setFilterStatus,
+    filterSource,
+    setFilterSource,
+    filterSentiment,
+    setFilterSentiment,
+    kbProgress,
+    kbUploading,
+    kbFileName,
+    dataLoading,
+    employees,
+    employeeLoading,
+    employeeError,
+    employeeSuccess,
+    refreshData,
+    handleAddEmployee,
+    authView,
+    setAuthView,
+    authError,
+    setAuthError,
+    authLoading,
+    forgotSuccess,
+    onboardLoading,
+    handleLogout,
+    handleLogin,
+    handleRegister,
+    handleRequestPasswordReset,
+    handleOnboard,
+    handleAddFAQ,
+    handleExportLeads,
+    handleDeleteFAQ,
+    handleUpdateApptStatus,
+    handleUpdateLeadStatus,
+    handleSaveConnections,
+    handleSimulateMessage,
+    handleStartScrape,
+    handleStartFileUpload,
+    handleStartCompetitor,
+    handleToggleTakeover,
+    handleSendOperatorReply,
+  } = useDashboardData();
 
-  const {
-    register: registerRegister,
-    handleSubmit: handleRegisterSubmit,
-    formState: { errors: registerErrors },
-  } = useForm({
-    resolver: zodResolver(registerSchema),
-    defaultValues: { name: "", email: "", password: "" },
-  });
-
-  const {
-    register: registerForgot,
-    handleSubmit: handleForgotSubmit,
-    formState: { errors: forgotErrors },
-    reset: resetForgot,
-  } = useForm({
-    resolver: zodResolver(forgotPasswordSchema),
-    defaultValues: { email: "" },
-  });
-
-  const {
-    register: registerOnboard,
-    handleSubmit: handleOnboardSubmit,
-    formState: { errors: onboardErrors },
-  } = useForm({
-    resolver: zodResolver(onboardingSchema),
-    defaultValues: { companyName: "", website: "", industry: "", description: "" },
-  });
-
-  // Dashboard Active State
-  const [activeTab, setActiveTab] = useState<
-    "overview" | "leads" | "conversations" | "appointments" | "kb" | "widget" | "visitor" | "competitor" | "integrations" | "team"
-  >("overview");
-
-  // Content Data States
-  const [leads, setLeads] = useState<Lead[]>([]);
-  const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [appointments, setAppointments] = useState<Appointment[]>([]);
-  const [faqs, setFaqs] = useState<FAQItem[]>([]);
-  const [stats, setStats] = useState<DashboardStats>({
-    totalLeads: 0,
-    qualifiedLeads: 0,
-    hotLeads: 0,
-    warmLeads: 0,
-    coldLeads: 0,
-    appointments: 0,
-    conversionRate: 0,
-  });
-
-  // Selected Items for Details Panel
-  const [selectedConv, setSelectedConv] = useState<Conversation | null>(null);
-  
-  // Create FAQ Form State
-  const [faqTitle, setFaqTitle] = useState("");
-  const [faqContent, setFaqContent] = useState("");
-  const [faqLoading, setFaqLoading] = useState(false);
-
-  // --- V2 Extensions Local States ---
-  // Visitor Tracking
-  const [visitorTracks, setVisitorTracks] = useState<VisitorTrack[]>([]);
-  // Competitor Analysis
-  const [competitorUrl, setCompetitorUrl] = useState("");
-  const [competitorAnalyses, setCompetitorAnalyses] = useState<CompetitorAnalysis[]>([]);
-  const [competitorLoading, setCompetitorLoading] = useState(false);
-  const [competitorLogs, setCompetitorLogs] = useState<string[]>([]);
-  // Scraper/Website Learning
-  const [scraperUrl, setScraperUrl] = useState("");
-  const [scraperLoading, setScraperLoading] = useState(false);
-  const [scraperLogs, setScraperLogs] = useState<string[]>([]);
-  // AI Recommendations
-  const [recommendations, setRecommendations] = useState<any[]>([]);
-  // Takeover Input
-  const [operatorReply, setOperatorReply] = useState("");
-  const [operatorSending, setOperatorSending] = useState(false);
-  // Channel Simulator Input
-  const [simChannel, setSimChannel] = useState("WHATSAPP");
-  const [simMessage, setSimMessage] = useState("");
-  const [simLeadName, setSimLeadName] = useState("");
-  const [simLeadPhone, setSimLeadPhone] = useState("");
-  const [simLeadEmail, setSimLeadEmail] = useState("");
-  const [simLoading, setSimLoading] = useState(false);
-  const [simStatus, setSimStatus] = useState("");
-
-  // Connection Settings
-  const [whatsappEnabled, setWhatsappEnabled] = useState(false);
-  const [instagramEnabled, setInstagramEnabled] = useState(false);
-  const [emailEnabled, setEmailEnabled] = useState(false);
-  const [whatsappApiKey, setWhatsappApiKey] = useState("");
-  const [instagramAccountId, setInstagramAccountId] = useState("");
-  const [emailSmtp, setEmailSmtp] = useState("");
-  const [connectionSaving, setConnectionSaving] = useState(false);
-
-  // Personalized Agent branding Settings
-  const [themeColor, setThemeColor] = useState("#10B981");
-  const [agentTone, setAgentTone] = useState("PROFESSIONAL");
-  const [agentPrompt, setAgentPrompt] = useState("");
-
-  // Leads Filtering & Searching
-  const [searchTerm, setSearchTerm] = useState("");
-  const [filterStatus, setFilterStatus] = useState("ALL");
-  const [filterSource, setFilterSource] = useState("ALL");
-  const [filterSentiment, setFilterSentiment] = useState("ALL");
-
-  // KB File Upload States
-  const [kbProgress, setKbProgress] = useState(0);
-  const [kbUploading, setKbUploading] = useState(false);
-  const [kbFileName, setKbFileName] = useState("");
-
-  // Global Loading States
-  const [dataLoading, setDataLoading] = useState(false);
-
-  // Team Seats States
-  const [employees, setEmployees] = useState<any[]>([]);
-  const [employeeLoading, setEmployeeLoading] = useState(false);
-  const [employeeError, setEmployeeError] = useState("");
-  const [employeeSuccess, setEmployeeSuccess] = useState("");
-
-  // Refs for upload interval unmount safety
-  const uploadIntervalRef = useRef<NodeJS.Timeout | null>(null);
-
-  // Wrapper fetch to support credentials/cookies and authorization header fallback
-  const authenticatedFetch = (url: string, options: RequestInit = {}) => {
-    const headers = {
-      ...options.headers,
-    } as any;
-    
-    const savedToken = localStorage.getItem("beacon_token");
-    if (savedToken) {
-      headers["Authorization"] = `Bearer ${savedToken}`;
-    }
-    
-    return fetch(url, {
-      ...options,
-      headers,
-      credentials: "include",
-    });
-  };
-
-  const handleUnauthorized = () => {
-    handleLogout();
-    alert("Your session has expired. Please sign in again.");
-  };
-
-  // Check Session on mount
-  useEffect(() => {
-    try {
-      const savedToken = localStorage.getItem("beacon_token");
-      const savedUser = localStorage.getItem("beacon_user");
-      if (savedToken && savedUser) {
-        setToken(savedToken);
-        setUser(JSON.parse(savedUser));
-      } else {
-        setBusinessLoading(false);
-      }
-    } catch (e) {
-      console.error("Failed to retrieve user session:", e);
-      setBusinessLoading(false);
-    }
-  }, []);
-
-  // Fetch Business Info when logged in
-  useEffect(() => {
-    if (token) {
-      fetchBusiness();
-    }
-  }, [token]);
-
-  // Fetch tab-specific data when business details loaded
-  useEffect(() => {
-    if (business) {
-      refreshData();
-    }
-  }, [business, activeTab]);
-
-  // Poll current chat conversation details when takeover chat is selected (with AbortController protection)
-  useEffect(() => {
-    if (!token || !selectedConv || activeTab !== "conversations") return;
-
-    let activeController: AbortController | null = null;
-
-    const interval = setInterval(() => {
-      if (activeController) {
-        activeController.abort();
-      }
-      activeController = new AbortController();
-      const { signal } = activeController;
-
-      fetch(`${API_URL}/conversations/${selectedConv.id}`, { signal })
-        .then((res) => {
-          if (!res.ok) throw new Error("Conversation not found");
-          return res.json();
-        })
-        .then((data) => {
-          if (data && data.messages) {
-            setSelectedConv((prev) => {
-              if (prev && prev.id === data.id) {
-                return {
-                  ...prev,
-                  messages: data.messages,
-                  isHumanTakeover: data.isHumanTakeover
-                };
-              }
-              return prev;
-            });
-            setConversations((prev) =>
-              prev.map((c) =>
-                c.id === data.id ? { ...c, messages: data.messages, isHumanTakeover: data.isHumanTakeover } : c
-              )
-            );
-          }
-        })
-        .catch((err) => {
-          if (err.name !== "AbortError") {
-            console.error(err);
-          }
-        });
-    }, 3000);
-
-    return () => {
-      clearInterval(interval);
-      if (activeController) {
-        activeController.abort();
-      }
-    };
-  }, [token, selectedConv?.id, activeTab]);
-
-  // Clear upload interval on unmount
-  useEffect(() => {
-    return () => {
-      if (uploadIntervalRef.current) {
-        clearInterval(uploadIntervalRef.current);
-      }
-    };
-  }, []);
-
-  const fetchBusiness = async () => {
-    try {
-      const res = await authenticatedFetch(`${API_URL}/business`);
-      if (res.status === 401) {
-        handleUnauthorized();
-        return;
-      }
-      if (res.ok) {
-        const text = await res.text();
-        if (!text || text.trim() === "null" || text.trim() === "") {
-          setBusiness(null);
-          return;
-        }
-        const data = JSON.parse(text);
-        setBusiness(data);
-        if (data) {
-          setWhatsappEnabled(data.whatsappEnabled);
-          setInstagramEnabled(data.instagramEnabled);
-          setEmailEnabled(data.emailEnabled);
-          setWhatsappApiKey(data.whatsappApiKey || "");
-          setInstagramAccountId(data.instagramAccountId || "");
-          setEmailSmtp(data.emailSmtp || "");
-          setThemeColor(data.themeColor || "#10B981");
-          setAgentTone(data.agentTone || "PROFESSIONAL");
-          setAgentPrompt(data.agentPrompt || "");
-        }
-      }
-    } catch (err) {
-      console.error("Fetch business failed", err);
-    } finally {
-      setBusinessLoading(false);
-    }
-  };
-
-  const refreshData = async () => {
-    if (!business) return;
-    setDataLoading(true);
-    try {
-      if (activeTab === "overview") {
-        const statsRes = await authenticatedFetch(`${API_URL}/leads/stats/${business.id}`);
-        if (statsRes.status === 401) {
-          handleUnauthorized();
-          return;
-        }
-        if (statsRes.ok) setStats(await statsRes.json());
-        
-        const recsRes = await authenticatedFetch(`${API_URL}/business/${business.id}/recommendations`);
-        if (recsRes.status === 401) {
-          handleUnauthorized();
-          return;
-        }
-        if (recsRes.ok) setRecommendations(await recsRes.json());
-      } else if (activeTab === "leads") {
-        const res = await authenticatedFetch(`${API_URL}/leads/business/${business.id}`);
-        if (res.status === 401) {
-          handleUnauthorized();
-          return;
-        }
-        if (res.ok) setLeads(await res.json());
-      } else if (activeTab === "conversations") {
-        const res = await authenticatedFetch(`${API_URL}/conversations/business/${business.id}`);
-        if (res.status === 401) {
-          handleUnauthorized();
-          return;
-        }
-        if (res.ok) {
-          const list = await res.json();
-          setConversations(list);
-          if (selectedConv) {
-            const updated = list.find((c: Conversation) => c.id === selectedConv.id);
-            if (updated) setSelectedConv(updated);
-          }
-        }
-      } else if (activeTab === "appointments") {
-        const res = await authenticatedFetch(`${API_URL}/appointments/business/${business.id}`);
-        if (res.status === 401) {
-          handleUnauthorized();
-          return;
-        }
-        if (res.ok) setAppointments(await res.json());
-      } else if (activeTab === "kb") {
-        const res = await authenticatedFetch(`${API_URL}/business/${business.id}/faq`);
-        if (res.ok) setFaqs(await res.json());
-      } else if (activeTab === "visitor") {
-        const res = await authenticatedFetch(`${API_URL}/business/${business.id}/visitor-tracks`);
-        if (res.status === 401) {
-          handleUnauthorized();
-          return;
-        }
-        if (res.ok) setVisitorTracks(await res.json());
-      } else if (activeTab === "competitor") {
-        const res = await authenticatedFetch(`${API_URL}/business/${business.id}/competitor-analysis`);
-        if (res.status === 401) {
-          handleUnauthorized();
-          return;
-        }
-        if (res.ok) setCompetitorAnalyses(await res.json());
-      } else if (activeTab === "team") {
-        await fetchEmployees();
-      }
-    } catch (err) {
-      console.error("Data refresh failed", err);
-    } finally {
-      setDataLoading(false);
-    }
-  };
-
-  const fetchEmployees = async () => {
-    if (!business) return;
-    try {
-      const res = await authenticatedFetch(`${API_URL}/business/${business.id}/employees`);
-      if (res.status === 401) {
-        handleUnauthorized();
-        return;
-      }
-      if (res.ok) {
-        setEmployees(await res.json());
-      }
-    } catch (err) {
-      console.error("Failed to fetch employees", err);
-    }
-  };
-
-  const handleAddEmployee = async (data: { name: string; email: string; password?: string }) => {
-    if (!business) return;
-    setEmployeeLoading(true);
-    setEmployeeError("");
-    setEmployeeSuccess("");
-    try {
-      const res = await authenticatedFetch(`${API_URL}/business/${business.id}/employees`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          email: data.email,
-          name: data.name,
-          password: data.password || undefined
-        })
-      });
-      const resData = await res.json();
-      if (!res.ok) {
-        throw new Error(resData.message || "Failed to create employee");
-      }
-      setEmployeeSuccess(`Created operator credentials! Temporary password: ${data.password || 'Welcome123!'}`);
-      fetchEmployees();
-    } catch (err: any) {
-      setEmployeeError(err?.message || String(err) || "Failed to create employee");
-    } finally {
-      setEmployeeLoading(false);
-    }
-  };
-
-  // Auth Handlers
-  const handleLogin = async (data: any) => {
-    setAuthError("");
-    setAuthLoading(true);
-    try {
-      const res = await fetch(`${API_URL}/auth/login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: data.email, password: data.password }),
-      });
-      const text = await res.text();
-      const resData = text ? JSON.parse(text) : {};
-      if (!res.ok) {
-        throw new Error(resData.message || "Authentication failed");
-      }
-
-      localStorage.setItem("beacon_token", resData.token);
-      localStorage.setItem("beacon_user", JSON.stringify(resData.user));
-      setBusinessLoading(true);
-      setToken(resData.token);
-      setUser(resData.user);
-    } catch (err: any) {
-      setAuthError(err?.message || String(err) || "An error occurred");
-    } finally {
-      setAuthLoading(false);
-    }
-  };
-
-  const handleRegister = async (data: any) => {
-    setAuthError("");
-    setAuthLoading(true);
-    try {
-      const res = await fetch(`${API_URL}/auth/register`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: data.email,
-          password: data.password,
-          name: data.name,
-        }),
-      });
-      const text = await res.text();
-      const resData = text ? JSON.parse(text) : {};
-      if (!res.ok) {
-        throw new Error(resData.message || "Registration failed");
-      }
-
-      localStorage.setItem("beacon_token", resData.token);
-      localStorage.setItem("beacon_user", JSON.stringify(resData.user));
-      setBusinessLoading(true);
-      setToken(resData.token);
-      setUser(resData.user);
-    } catch (err: any) {
-      setAuthError(err?.message || String(err) || "An error occurred");
-    } finally {
-      setAuthLoading(false);
-    }
-  };
-
-  const handleRequestPasswordReset = async (data: any) => {
-    setAuthError("");
-    setAuthLoading(true);
-    setForgotSuccess(false);
-    try {
-      const res = await fetch(`${API_URL}/auth/request-password-reset`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: data.email }),
-      });
-      const resData = await res.json();
-      if (!res.ok) {
-        throw new Error(resData.message || "Failed to request password reset");
-      }
-      setForgotSuccess(true);
-      resetForgot();
-    } catch (err: any) {
-      setAuthError(err?.message || String(err) || "An error occurred");
-    } finally {
-      setAuthLoading(false);
-    }
-  };
-
-  function handleLogout() {
-    authenticatedFetch(`${API_URL}/auth/logout`, { method: "POST" }).catch(() => {});
-    localStorage.removeItem("beacon_token");
-    localStorage.removeItem("beacon_user");
-    setToken(null);
-    setUser(null);
-    setBusiness(null);
-    setSelectedConv(null);
-    setBusinessLoading(true);
-  }
-
-  // Onboarding Handler
-  const handleOnboard = async (data: any) => {
-    setOnboardLoading(true);
-    try {
-      const res = await authenticatedFetch(`${API_URL}/business`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          companyName: data.companyName,
-          website: data.website,
-          industry: data.industry,
-          description: data.description,
-        }),
-      });
-      if (res.status === 401) {
-        handleUnauthorized();
-        return;
-      }
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.message || "Failed to create profile");
-      }
-      const resData = await res.json();
-      setBusiness(resData);
-      if (resData) {
-        setWhatsappEnabled(resData.whatsappEnabled);
-        setInstagramEnabled(resData.instagramEnabled);
-        setEmailEnabled(resData.emailEnabled);
-        setWhatsappApiKey(resData.whatsappApiKey || "");
-        setInstagramAccountId(resData.instagramAccountId || "");
-        setEmailSmtp(resData.emailSmtp || "");
-        setThemeColor(resData.themeColor || "#10B981");
-        setAgentTone(resData.agentTone || "PROFESSIONAL");
-        setAgentPrompt(resData.agentPrompt || "");
-      }
-    } catch (err: any) {
-      console.error(err);
-      alert(err?.message || String(err) || "An error occurred during onboarding");
-    } finally {
-      setOnboardLoading(false);
-    }
-  };
-
-  // Add FAQ Handler
-  const handleAddFAQ = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!faqTitle || !faqContent || !business) return;
-    setFaqLoading(true);
-    try {
-      const res = await authenticatedFetch(`${API_URL}/business/${business.id}/faq`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({ title: faqTitle, content: faqContent }),
-      });
-      if (res.ok) {
-        setFaqTitle("");
-        setFaqContent("");
-        refreshData();
-      }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setFaqLoading(false);
-    }
-  };
-
-  const handleExportLeads = () => {
-    if (!business) return;
-    window.open(`${API_URL}/leads/business/${business.id}/export`, "_blank");
-  };
-
-  // Delete FAQ Handler
-  const handleDeleteFAQ = async (faqId: string) => {
-    if (!confirm("Are you sure you want to delete this FAQ?")) return;
-    try {
-      const res = await authenticatedFetch(`${API_URL}/business/faq/${faqId}`, {
-        method: "DELETE"
-      });
-      if (res.ok) {
-        refreshData();
-      }
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  // Update Appointment Status
-  const handleUpdateApptStatus = async (apptId: string, status: string) => {
-    try {
-      const res = await authenticatedFetch(`${API_URL}/appointments/${apptId}/status`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({ status }),
-      });
-      if (res.ok) {
-        refreshData();
-      }
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  // Update Lead Status
-  const handleUpdateLeadStatus = async (leadId: string, status: string) => {
-    try {
-      const res = await authenticatedFetch(`${API_URL}/leads/${leadId}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({ status }),
-      });
-      if (res.ok) {
-        refreshData();
-      }
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  // --- V2 Feature Handlers ---
-
-  // Save Channels Integrations settings
-  const handleSaveConnections = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!business) return;
-    setConnectionSaving(true);
-    try {
-      const res = await authenticatedFetch(`${API_URL}/business/${business.id}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          companyName: business.companyName,
-          website: business.website,
-          industry: business.industry,
-          description: business.description,
-          whatsappEnabled,
-          instagramEnabled,
-          emailEnabled,
-          whatsappApiKey,
-          instagramAccountId,
-          emailSmtp,
-          themeColor,
-          agentTone,
-          agentPrompt
-        })
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setBusiness(data);
-        alert("Branding and connectivity configurations saved successfully.");
-      }
-    } catch (e) {
-      console.error(e);
-      alert("Failed to save connectivity parameters.");
-    } finally {
-      setConnectionSaving(false);
-    }
-  };
-
-  // Trigger Multi-Channel incoming message simulation
-  const handleSimulateMessage = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!business || !simMessage) return;
-    setSimLoading(true);
-    setSimStatus("[Simulating] Resolving webhook endpoint...");
-
-    setTimeout(() => setSimStatus(`[Simulating] Creating qualified lead source: ${simChannel}...`), 600);
-    setTimeout(() => setSimStatus("[Simulating] Mapping webhook contents to conversation log..."), 1200);
-    setTimeout(() => setSimStatus("[AI Service] Executing intent scoring & response parsing..."), 1800);
-
-    try {
-      const res = await authenticatedFetch(`${API_URL}/chat/simulate-incoming`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          businessId: business.id,
-          channel: simChannel,
-          message: simMessage,
-          leadName: simLeadName || "Simulated " + simChannel + " Lead",
-          leadPhone: simLeadPhone || null,
-          leadEmail: simLeadEmail || null
-        })
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setTimeout(() => {
-          setSimStatus(`[Success] AI replied: "${data.response}". Simulation complete! Go to Conversations to view.`);
-          setSimMessage("");
-          setSimLeadName("");
-          setSimLeadPhone("");
-          setSimLeadEmail("");
-          setSimLoading(false);
-        }, 2400);
-      } else {
-        throw new Error();
-      }
-    } catch (e) {
-      setTimeout(() => {
-        setSimStatus("[Error] Simulation failed. Check server logs.");
-        setSimLoading(false);
-      }, 2400);
-    }
-  };
-
-  // Trigger website scraper (Auto Learning)
-  const handleStartScrape = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!business || !scraperUrl) return;
-    setScraperLoading(true);
-    setScraperLogs(["[Scraper] Initializing Web Crawler...", `[Scraper] Connecting to ${scraperUrl}...`]);
-
-    setTimeout(() => setScraperLogs(prev => [...prev, "[Crawl] Loading HTML homepage structure..."]), 800);
-    setTimeout(() => setScraperLogs(prev => [...prev, "[Parser] Extracted text blocks (4,000 characters)..."]), 1600);
-    setTimeout(() => setScraperLogs(prev => [...prev, "[AI Service] Querying Gemini for FAQ context extraction..."]), 2400);
-
-    try {
-      const res = await authenticatedFetch(`${API_URL}/business/${business.id}/scrape`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({ url: scraperUrl })
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setTimeout(() => {
-          setScraperLogs(prev => [
-            ...prev,
-            `[Success] Generated and saved ${data.count} new FAQ items directly into your Knowledge Base!`
-          ]);
-          setScraperLoading(false);
-          setScraperUrl("");
-          refreshData();
-        }, 3000);
-      } else {
-        throw new Error();
-      }
-    } catch (e) {
-      setTimeout(() => {
-        setScraperLogs(prev => [...prev, "[Error] Crawl failed. Re-verify the domain parameters."]);
-        setScraperLoading(false);
-      }, 3000);
-    }
-  };
-
-  const handleStartFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!business || !file) return;
-
-    setKbFileName(file.name);
-    setKbUploading(true);
-    setKbProgress(0);
-
-    if (uploadIntervalRef.current) clearInterval(uploadIntervalRef.current);
-
-    uploadIntervalRef.current = setInterval(() => {
-      setKbProgress((prev) => {
-        if (prev >= 95) {
-          if (uploadIntervalRef.current) clearInterval(uploadIntervalRef.current);
-          return 95;
-        }
-        return prev + 15;
-      });
-    }, 150);
-
-    const reader = new FileReader();
-    reader.onload = async (event) => {
-      const text = event.target?.result as string;
-      try {
-        const res = await authenticatedFetch(`${API_URL}/business/${business.id}/import-text`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({ title: file.name, text })
-        });
-        
-        if (uploadIntervalRef.current) clearInterval(uploadIntervalRef.current);
-        setKbProgress(100);
-
-        if (res.ok) {
-          const data = await res.json();
-          setTimeout(() => {
-            alert(`Document imported: AI generated ${data.count} FAQ items directly from "${file.name}"!`);
-            setKbUploading(false);
-            setKbFileName("");
-            setKbProgress(0);
-            refreshData();
-          }, 500);
-        } else {
-          throw new Error();
-        }
-      } catch (err) {
-        if (uploadIntervalRef.current) clearInterval(uploadIntervalRef.current);
-        setTimeout(() => {
-          alert("Failed to process document content. Please try another file.");
-          setKbUploading(false);
-          setKbFileName("");
-          setKbProgress(0);
-        }, 500);
-      }
-    };
-    reader.readAsText(file);
-  };
-
-  // Run competitor analysis scraper
-  const handleStartCompetitor = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!business || !competitorUrl) return;
-    setCompetitorLoading(true);
-    setCompetitorLogs(["[Auditor] Connecting to competitor domain...", `[Auditor] Fetching headers of ${competitorUrl}...`]);
-
-    setTimeout(() => setCompetitorLogs(prev => [...prev, "[Auditor] Extracting service lists and SEO keywords..."]), 800);
-    setTimeout(() => setCompetitorLogs(prev => [...prev, "[AI Service] Generating service compare matrices..."]), 1600);
-    setTimeout(() => setCompetitorLogs(prev => [...prev, "[AI Service] Finding missing offerings & content gaps..."]), 2400);
-
-    try {
-      const res = await authenticatedFetch(`${API_URL}/business/${business.id}/competitor-analysis`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({ competitorUrl })
-      });
-      if (res.ok) {
-        setTimeout(() => {
-          setCompetitorLogs(prev => [...prev, "[Success] Competitor audit analysis completed!"]);
-          setCompetitorLoading(false);
-          setCompetitorUrl("");
-          refreshData();
-        }, 3000);
-      } else {
-        throw new Error();
-      }
-    } catch (e) {
-      setTimeout(() => {
-        setCompetitorLogs(prev => [...prev, "[Error] Audit execution failed. Re-verify competitor domain."]);
-        setCompetitorLoading(false);
-      }, 3000);
-    }
-  };
-
-  // Toggle Human Takeover
-  const handleToggleTakeover = async () => {
-    if (!selectedConv) return;
-    const nextVal = !selectedConv.isHumanTakeover;
-    try {
-      const res = await authenticatedFetch(`${API_URL}/conversations/${selectedConv.id}/takeover`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({ isHumanTakeover: nextVal })
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setSelectedConv(prev => prev ? { ...prev, isHumanTakeover: data.isHumanTakeover } : null);
-        setConversations(prev =>
-          prev.map(c => c.id === data.id ? { ...c, isHumanTakeover: data.isHumanTakeover } : c)
-        );
-      }
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
-  // Send human operator reply
-  const handleSendOperatorReply = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedConv || !operatorReply.trim() || operatorSending) return;
-    setOperatorSending(true);
-    try {
-      const res = await authenticatedFetch(`${API_URL}/chat/operator-reply`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          conversationId: selectedConv.id,
-          message: operatorReply.trim()
-        })
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setOperatorReply("");
-        setSelectedConv(prev => prev ? { ...prev, messages: data.conversation.messages } : null);
-        setConversations(prev =>
-          prev.map(c => c.id === data.conversation.id ? { ...c, messages: data.conversation.messages } : c)
-        );
-      }
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setOperatorSending(false);
-    }
-  };
-
-  if (!mounted) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-950 text-white">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-emerald-500 border-t-transparent"></div>
-      </div>
-    );
-  }
-
-  // RENDER: Auth Gate
-  // RENDER: Auth Gate
+  // 1. RENDER: Auth Gate
   if (!token) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-950 px-4 text-white">
-        <div className="w-full max-w-md space-y-8 rounded-3xl border border-slate-800/80 bg-slate-900/40 p-8 shadow-2xl backdrop-blur-md">
-          
-          {authView === "login" && (
-            <>
-              <div className="text-center">
-                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-400 text-white shadow-lg shadow-emerald-500/20">
-                  <Building className="h-7 w-7" />
-                </div>
-                <h2 className="mt-6 text-3xl font-extrabold tracking-tight bg-gradient-to-r from-emerald-400 to-teal-300 bg-clip-text text-transparent">
-                  Welcome to Beacon AI
-                </h2>
-                <p className="mt-2 text-sm text-slate-400">
-                  Manage your AI Sales Agent and leads
-                </p>
-              </div>
-
-              <form className="mt-8 space-y-6" onSubmit={handleLoginSubmit(handleLogin)}>
-                {authError && (
-                  <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-4 text-sm text-red-400 text-center">
-                    {authError}
-                  </div>
-                )}
-                <div className="space-y-4">
-                  <div>
-                    <label className="text-xs font-semibold uppercase tracking-wider text-slate-400">Email Address</label>
-                    <input
-                      type="email"
-                      {...registerLogin("email")}
-                      placeholder="admin@company.com"
-                      className="mt-1 w-full rounded-xl bg-slate-900 border border-slate-800/80 px-4 py-3 text-sm text-white placeholder-slate-600 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/30 transition-all"
-                    />
-                    {loginErrors.email && (
-                      <p className="text-xs text-rose-400 mt-1">{loginErrors.email.message}</p>
-                    )}
-                  </div>
-                  <div>
-                    <div className="flex justify-between items-center">
-                      <label className="text-xs font-semibold uppercase tracking-wider text-slate-400">Password</label>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setAuthView("forgot");
-                          setAuthError("");
-                          setForgotSuccess(false);
-                        }}
-                        className="text-xs text-emerald-400 hover:text-emerald-300 transition-colors"
-                      >
-                        Forgot Password?
-                      </button>
-                    </div>
-                    <input
-                      type="password"
-                      {...registerLogin("password")}
-                      placeholder="••••••••"
-                      className="mt-1 w-full rounded-xl bg-slate-900 border border-slate-800/80 px-4 py-3 text-sm text-white placeholder-slate-600 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/30 transition-all"
-                    />
-                    {loginErrors.password && (
-                      <p className="text-xs text-rose-400 mt-1">{loginErrors.password.message}</p>
-                    )}
-                  </div>
-                </div>
-
-                <div>
-                  <button
-                    type="submit"
-                    disabled={authLoading}
-                    className="group relative flex w-full justify-center rounded-xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white hover:bg-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 disabled:opacity-50 transition-all shadow-lg cursor-pointer"
-                  >
-                    {authLoading ? (
-                      <span className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent"></span>
-                    ) : (
-                      "Sign In"
-                    )}
-                  </button>
-                </div>
-              </form>
-
-              <div className="text-center">
-                <button
-                  onClick={() => {
+      <div className="relative flex min-h-screen items-center justify-center bg-background px-4 text-foreground transition-all duration-300">
+        <div className="absolute top-6 right-6 z-50">
+          <ThemeToggle />
+        </div>
+        <div className="w-full max-w-md space-y-8 rounded-3xl border border-card-border bg-card/40 p-8 shadow-2xl backdrop-blur-md">
+          <AnimatePresence mode="wait" initial={false}>
+            {authView === "login" && (
+              <motion.div
+                key="login"
+                initial={{ opacity: 0, x: -15 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 15 }}
+                transition={{ duration: 0.2 }}
+              >
+                <LoginForm
+                  onSubmit={handleLogin}
+                  authLoading={authLoading}
+                  authError={authError}
+                  onToggleView={() => {
                     setAuthView("register");
                     setAuthError("");
                   }}
-                  className="text-xs font-medium text-emerald-400 hover:text-emerald-300 transition-colors cursor-pointer"
-                >
-                  Need a portal account? Register here
-                </button>
-              </div>
-            </>
-          )}
+                  onForgotPassword={() => {
+                    setAuthView("forgot");
+                    setAuthError("");
+                  }}
+                />
+              </motion.div>
+            )}
 
-          {authView === "register" && (
-            <>
-              <div className="text-center">
-                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-400 text-white shadow-lg shadow-emerald-500/20">
-                  <Building className="h-7 w-7" />
-                </div>
-                <h2 className="mt-6 text-3xl font-extrabold tracking-tight bg-gradient-to-r from-emerald-400 to-teal-300 bg-clip-text text-transparent">
-                  Create Business Portal
-                </h2>
-                <p className="mt-2 text-sm text-slate-400">
-                  Get started with your AI-powered site widget
-                </p>
-              </div>
-
-              <form className="mt-8 space-y-6" onSubmit={handleRegisterSubmit(handleRegister)}>
-                {authError && (
-                  <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-4 text-sm text-red-400 text-center">
-                    {authError}
-                  </div>
-                )}
-                <div className="space-y-4">
-                  <div>
-                    <label className="text-xs font-semibold uppercase tracking-wider text-slate-400">Name</label>
-                    <input
-                      type="text"
-                      {...registerRegister("name")}
-                      placeholder="John Doe"
-                      className="mt-1 w-full rounded-xl bg-slate-900 border border-slate-800/80 px-4 py-3 text-sm text-white placeholder-slate-600 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/30 transition-all"
-                    />
-                    {registerErrors.name && (
-                      <p className="text-xs text-rose-400 mt-1">{registerErrors.name.message}</p>
-                    )}
-                  </div>
-                  <div>
-                    <label className="text-xs font-semibold uppercase tracking-wider text-slate-400">Email Address</label>
-                    <input
-                      type="email"
-                      {...registerRegister("email")}
-                      placeholder="admin@company.com"
-                      className="mt-1 w-full rounded-xl bg-slate-900 border border-slate-800/80 px-4 py-3 text-sm text-white placeholder-slate-600 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/30 transition-all"
-                    />
-                    {registerErrors.email && (
-                      <p className="text-xs text-rose-400 mt-1">{registerErrors.email.message}</p>
-                    )}
-                  </div>
-                  <div>
-                    <label className="text-xs font-semibold uppercase tracking-wider text-slate-400">Password</label>
-                    <input
-                      type="password"
-                      {...registerRegister("password")}
-                      placeholder="••••••••"
-                      className="mt-1 w-full rounded-xl bg-slate-900 border border-slate-800/80 px-4 py-3 text-sm text-white placeholder-slate-600 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/30 transition-all"
-                    />
-                    {registerErrors.password && (
-                      <p className="text-xs text-rose-400 mt-1">{registerErrors.password.message}</p>
-                    )}
-                  </div>
-                </div>
-
-                <div>
-                  <button
-                    type="submit"
-                    disabled={authLoading}
-                    className="group relative flex w-full justify-center rounded-xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white hover:bg-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 disabled:opacity-50 transition-all shadow-lg cursor-pointer"
-                  >
-                    {authLoading ? (
-                      <span className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent"></span>
-                    ) : (
-                      "Register Agent"
-                    )}
-                  </button>
-                </div>
-              </form>
-
-              <div className="text-center">
-                <button
-                  onClick={() => {
+            {authView === "register" && (
+              <motion.div
+                key="register"
+                initial={{ opacity: 0, x: -15 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 15 }}
+                transition={{ duration: 0.2 }}
+              >
+                <RegisterForm
+                  onSubmit={handleRegister}
+                  authLoading={authLoading}
+                  authError={authError}
+                  onToggleView={() => {
                     setAuthView("login");
                     setAuthError("");
                   }}
-                  className="text-xs font-medium text-emerald-400 hover:text-emerald-300 transition-colors cursor-pointer"
-                >
-                  Already have an account? Sign in
-                </button>
-              </div>
-            </>
-          )}
+                />
+              </motion.div>
+            )}
 
-          {authView === "forgot" && (
-            <>
-              <div className="text-center">
-                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-400 text-white shadow-lg shadow-emerald-500/20">
-                  <KeyRound className="h-7 w-7" />
-                </div>
-                <h2 className="mt-6 text-3xl font-extrabold tracking-tight bg-gradient-to-r from-emerald-400 to-teal-300 bg-clip-text text-transparent">
-                  Recover Password
-                </h2>
-                <p className="mt-2 text-sm text-slate-400">
-                  Enter your email address to receive password recovery link
-                </p>
-              </div>
-
-              {forgotSuccess ? (
-                <div className="mt-8 space-y-6 text-center animate-blur-fade-up">
-                  <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
-                    <CheckCircle className="h-6 w-6" />
-                  </div>
-                  <p className="text-sm text-slate-300">
-                    If the email exists, a password reset link has been logged to the console.
-                  </p>
-                  <button
-                    onClick={() => {
-                      setAuthView("login");
-                      setAuthError("");
-                    }}
-                    className="w-full bg-slate-800 hover:bg-slate-700 text-white rounded-xl py-3 text-sm font-semibold transition-all"
-                  >
-                    Back to Sign In
-                  </button>
-                </div>
-              ) : (
-                <form className="mt-8 space-y-6" onSubmit={handleForgotSubmit(handleRequestPasswordReset)}>
-                  {authError && (
-                    <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-4 text-sm text-red-400 text-center">
-                      {authError}
-                    </div>
-                  )}
-                  <div className="space-y-4">
-                    <div>
-                      <label className="text-xs font-semibold uppercase tracking-wider text-slate-400">Email Address</label>
-                      <input
-                        type="email"
-                        {...registerForgot("email")}
-                        placeholder="admin@company.com"
-                        className="mt-1 w-full rounded-xl bg-slate-900 border border-slate-800/80 px-4 py-3 text-sm text-white placeholder-slate-600 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/30 transition-all"
-                      />
-                      {forgotErrors.email && (
-                        <p className="text-xs text-rose-400 mt-1">{forgotErrors.email.message}</p>
-                      )}
-                    </div>
-                  </div>
-
-                  <div>
-                    <button
-                      type="submit"
-                      disabled={authLoading}
-                      className="group relative flex w-full justify-center rounded-xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white hover:bg-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 disabled:opacity-50 transition-all shadow-lg cursor-pointer"
-                    >
-                      {authLoading ? (
-                        <span className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent"></span>
-                      ) : (
-                        "Request Reset Link"
-                      )}
-                    </button>
-                  </div>
-                </form>
-              )}
-
-              {!forgotSuccess && (
-                <div className="text-center">
-                  <button
-                    onClick={() => {
-                      setAuthView("login");
-                      setAuthError("");
-                    }}
-                    className="text-xs font-medium text-emerald-400 hover:text-emerald-300 transition-colors cursor-pointer"
-                  >
-                    Back to Sign In
-                  </button>
-                </div>
-              )}
-            </>
-          )}
-
+            {authView === "forgot" && (
+              <motion.div
+                key="forgot"
+                initial={{ opacity: 0, x: -15 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 15 }}
+                transition={{ duration: 0.2 }}
+              >
+                <ForgotPasswordForm
+                  onSubmit={handleRequestPasswordReset}
+                  authLoading={authLoading}
+                  authError={authError}
+                  forgotSuccess={forgotSuccess}
+                  onBackToLogin={() => {
+                    setAuthView("login");
+                    setAuthError("");
+                  }}
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </div>
     );
   }
 
-  // RENDER: Loading Gate
+  // 2. RENDER: Loading Gate
   if (token && businessLoading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-950 text-white">
+      <div className="flex min-h-screen items-center justify-center bg-background text-foreground transition-all duration-300">
         <div className="flex flex-col items-center gap-3">
-          <RefreshCw className="h-8 w-8 animate-spin text-emerald-400" />
-          <p className="text-sm text-slate-400">Loading Business Profile...</p>
+          <RefreshCw className="h-8 w-8 animate-spin text-accent-primary" />
+          <p className="text-sm text-muted-text">Loading Business Profile...</p>
         </div>
       </div>
     );
   }
 
-  // RENDER: Onboarding Wizard
+  // 3. RENDER: Onboarding Wizard
   if (!business) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-950 px-4 text-white">
-        <div className="w-full max-w-lg space-y-8 rounded-3xl border border-slate-800/80 bg-slate-900/40 p-8 shadow-2xl backdrop-blur-md">
-          <div className="text-center">
-            <h2 className="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-emerald-400 to-teal-300 bg-clip-text text-transparent">
-              Set Up Your Business Profile
-            </h2>
-            <p className="mt-2 text-sm text-slate-400">
-              Tell Beacon AI about your business so it can qualify leads and answer FAQs accurately.
-            </p>
-          </div>
-
-          <form className="mt-8 space-y-4" onSubmit={handleOnboardSubmit(handleOnboard)}>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div>
-                <label className="text-xs font-semibold uppercase tracking-wider text-slate-400">Company Name</label>
-                <div className="relative mt-1">
-                  <Building className="absolute left-3 top-3.5 h-4.5 w-4.5 text-slate-600" />
-                  <input
-                    type="text"
-                    {...registerOnboard("companyName")}
-                    placeholder="e.g. Acme Agency"
-                    className="w-full rounded-xl bg-slate-900 border border-slate-800/80 pl-10 pr-4 py-3 text-sm text-white focus:border-emerald-500/50 focus:outline-none transition-all"
-                  />
-                </div>
-                {onboardErrors.companyName && (
-                  <p className="text-xs text-rose-400 mt-1">{onboardErrors.companyName.message}</p>
-                )}
-              </div>
-              <div>
-                <label className="text-xs font-semibold uppercase tracking-wider text-slate-400">Website URL</label>
-                <div className="relative mt-1">
-                  <Globe className="absolute left-3 top-3.5 h-4.5 w-4.5 text-slate-600" />
-                  <input
-                    type="text"
-                    {...registerOnboard("website")}
-                    placeholder="e.g. acme.com"
-                    className="w-full rounded-xl bg-slate-900 border border-slate-800/80 pl-10 pr-4 py-3 text-sm text-white focus:border-emerald-500/50 focus:outline-none transition-all"
-                  />
-                </div>
-                {onboardErrors.website && (
-                  <p className="text-xs text-rose-400 mt-1">{onboardErrors.website.message}</p>
-                )}
-              </div>
-            </div>
-
-            <div>
-              <label className="text-xs font-semibold uppercase tracking-wider text-slate-400">Industry</label>
-              <div className="relative mt-1">
-                <Briefcase className="absolute left-3 top-3.5 h-4.5 w-4.5 text-slate-600" />
-                <input
-                  type="text"
-                  {...registerOnboard("industry")}
-                  placeholder="e.g. Marketing, Real Estate, Consulting"
-                  className="w-full rounded-xl bg-slate-900 border border-slate-800/80 pl-10 pr-4 py-3 text-sm text-white focus:border-emerald-500/50 focus:outline-none transition-all"
-                />
-              </div>
-              {onboardErrors.industry && (
-                <p className="text-xs text-rose-400 mt-1">{onboardErrors.industry.message}</p>
-              )}
-            </div>
-
-            <div>
-              <label className="text-xs font-semibold uppercase tracking-wider text-slate-400">Company Description & Services</label>
-              <div className="relative mt-1">
-                <FileText className="absolute left-3 top-3.5 h-4.5 w-4.5 text-slate-600" />
-                <textarea
-                  {...registerOnboard("description")}
-                  rows={4}
-                  placeholder="Describe what your business does, who you serve, pricing structure, and key services..."
-                  className="w-full rounded-xl bg-slate-900 border border-slate-800/80 pl-10 pr-4 py-3 text-sm text-white focus:border-emerald-500/50 focus:outline-none transition-all resize-none"
-                />
-              </div>
-              {onboardErrors.description && (
-                <p className="text-xs text-rose-400 mt-1">{onboardErrors.description.message}</p>
-              )}
-            </div>
-
-            <div>
-              <button
-                type="submit"
-                disabled={onboardLoading}
-                className="group relative flex w-full justify-center rounded-xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white hover:bg-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 disabled:opacity-50 transition-all shadow-lg cursor-pointer"
-              >
-                {onboardLoading ? (
-                  <span className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent"></span>
-                ) : (
-                  "Create Business Profile"
-                )}
-              </button>
-            </div>
-          </form>
-
-          <div className="text-center mt-4">
-            <button
-              onClick={handleLogout}
-              className="text-xs font-medium text-slate-500 hover:text-slate-400 transition-colors cursor-pointer flex items-center justify-center gap-1 mx-auto"
-            >
-              <LogOut className="h-3.5 w-3.5" />
-              Sign Out
-            </button>
-          </div>
+      <div className="relative flex min-h-screen items-center justify-center bg-background px-4 text-foreground transition-all duration-300">
+        <div className="absolute top-6 right-6 z-50">
+          <ThemeToggle />
+        </div>
+        <div className="w-full max-w-lg space-y-8 rounded-3xl border border-card-border bg-card/40 p-8 shadow-2xl backdrop-blur-md">
+          <OnboardingForm
+            onSubmit={handleOnboard}
+            onboardLoading={onboardLoading}
+            onLogout={handleLogout}
+          />
         </div>
       </div>
     );
   }
 
-  // RENDER: Full Dashboard Portal
+  // 4. RENDER: Full Dashboard Portal
   return (
-    <div className="flex h-screen bg-slate-950 text-slate-100 font-sans overflow-hidden">
+    <div className="flex h-screen bg-background text-foreground font-sans overflow-hidden transition-all duration-300">
       {/* Sidebar Layout */}
-      <aside className="w-64 border-r border-slate-900 bg-slate-900/30 flex flex-col justify-between shrink-0">
+      <aside className="w-64 border-r border-card-border bg-card/20 flex flex-col justify-between shrink-0">
         <div className="flex flex-col">
           {/* Logo / Org Name */}
-          <div className="p-6 border-b border-slate-900 flex items-center gap-3">
+          <div className="p-6 border-b border-card-border flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 text-white shadow-md">
               <Activity className="h-5.5 w-5.5" />
             </div>
             <div>
               <h1 className="font-bold text-sm leading-tight text-white">{business.companyName}</h1>
-              <p className="text-[10px] text-emerald-400 font-semibold tracking-wider uppercase">Portal Active</p>
+              <p className="text-[10px] text-accent-primary font-semibold tracking-wider uppercase">Portal Active</p>
             </div>
           </div>
 
@@ -1487,8 +292,8 @@ export default function DashboardPage() {
               onClick={() => setActiveTab("overview")}
               className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-xl transition-all cursor-pointer ${
                 activeTab === "overview"
-                  ? "bg-emerald-600/10 text-emerald-400 border border-emerald-500/20 font-semibold"
-                  : "text-slate-400 hover:bg-slate-900 hover:text-white"
+                  ? "bg-accent-primary/10 text-accent-primary border border-accent-primary/20 font-semibold"
+                  : "text-muted-text hover:bg-card/40 hover:text-foreground"
               }`}
             >
               <TrendingUp className="h-4.5 w-4.5" />
@@ -1498,8 +303,8 @@ export default function DashboardPage() {
               onClick={() => setActiveTab("leads")}
               className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-xl transition-all cursor-pointer ${
                 activeTab === "leads"
-                  ? "bg-emerald-600/10 text-emerald-400 border border-emerald-500/20 font-semibold"
-                  : "text-slate-400 hover:bg-slate-900 hover:text-white"
+                  ? "bg-accent-primary/10 text-accent-primary border border-accent-primary/20 font-semibold"
+                  : "text-muted-text hover:bg-card/40 hover:text-foreground"
               }`}
             >
               <Users className="h-4.5 w-4.5" />
@@ -1509,8 +314,8 @@ export default function DashboardPage() {
               onClick={() => setActiveTab("conversations")}
               className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-xl transition-all cursor-pointer ${
                 activeTab === "conversations"
-                  ? "bg-emerald-600/10 text-emerald-400 border border-emerald-500/20 font-semibold"
-                  : "text-slate-400 hover:bg-slate-900 hover:text-white"
+                  ? "bg-accent-primary/10 text-accent-primary border border-accent-primary/20 font-semibold"
+                  : "text-muted-text hover:bg-card/40 hover:text-foreground"
               }`}
             >
               <MessageSquare className="h-4.5 w-4.5" />
@@ -1520,8 +325,8 @@ export default function DashboardPage() {
               onClick={() => setActiveTab("appointments")}
               className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-xl transition-all cursor-pointer ${
                 activeTab === "appointments"
-                  ? "bg-emerald-600/10 text-emerald-400 border border-emerald-500/20 font-semibold"
-                  : "text-slate-400 hover:bg-slate-900 hover:text-white"
+                  ? "bg-accent-primary/10 text-accent-primary border border-accent-primary/20 font-semibold"
+                  : "text-muted-text hover:bg-card/40 hover:text-foreground"
               }`}
             >
               <Calendar className="h-4.5 w-4.5" />
@@ -1531,20 +336,19 @@ export default function DashboardPage() {
               onClick={() => setActiveTab("kb")}
               className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-xl transition-all cursor-pointer ${
                 activeTab === "kb"
-                  ? "bg-emerald-600/10 text-emerald-400 border border-emerald-500/20 font-semibold"
-                  : "text-slate-400 hover:bg-slate-900 hover:text-white"
+                  ? "bg-accent-primary/10 text-accent-primary border border-accent-primary/20 font-semibold"
+                  : "text-muted-text hover:bg-card/40 hover:text-foreground"
               }`}
             >
               <BookOpen className="h-4.5 w-4.5" />
               Knowledge Base
             </button>
-            
             <button
               onClick={() => setActiveTab("visitor")}
               className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-xl transition-all cursor-pointer ${
                 activeTab === "visitor"
-                  ? "bg-emerald-600/10 text-emerald-400 border border-emerald-500/20 font-semibold"
-                  : "text-slate-400 hover:bg-slate-900 hover:text-white"
+                  ? "bg-accent-primary/10 text-accent-primary border border-accent-primary/20 font-semibold"
+                  : "text-muted-text hover:bg-card/40 hover:text-foreground"
               }`}
             >
               <MapPin className="h-4.5 w-4.5" />
@@ -1557,8 +361,8 @@ export default function DashboardPage() {
                   onClick={() => setActiveTab("competitor")}
                   className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-xl transition-all cursor-pointer ${
                     activeTab === "competitor"
-                      ? "bg-emerald-600/10 text-emerald-400 border border-emerald-500/20 font-semibold"
-                      : "text-slate-400 hover:bg-slate-900 hover:text-white"
+                      ? "bg-accent-primary/10 text-accent-primary border border-accent-primary/20 font-semibold"
+                      : "text-muted-text hover:bg-card/40 hover:text-foreground"
                   }`}
                 >
                   <Compass className="h-4.5 w-4.5" />
@@ -1568,8 +372,8 @@ export default function DashboardPage() {
                   onClick={() => setActiveTab("team")}
                   className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-xl transition-all cursor-pointer ${
                     activeTab === "team"
-                      ? "bg-emerald-600/10 text-emerald-400 border border-emerald-500/20 font-semibold"
-                      : "text-slate-400 hover:bg-slate-900 hover:text-white"
+                      ? "bg-accent-primary/10 text-accent-primary border border-accent-primary/20 font-semibold"
+                      : "text-muted-text hover:bg-card/40 hover:text-foreground"
                   }`}
                 >
                   <Users className="h-4.5 w-4.5" />
@@ -1579,22 +383,22 @@ export default function DashboardPage() {
                   onClick={() => setActiveTab("integrations")}
                   className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-xl transition-all cursor-pointer ${
                     activeTab === "integrations"
-                      ? "bg-emerald-600/10 text-emerald-400 border border-emerald-500/20 font-semibold"
-                      : "text-slate-400 hover:bg-slate-900 hover:text-white"
+                      ? "bg-accent-primary/10 text-accent-primary border border-accent-primary/20 font-semibold"
+                      : "text-muted-text hover:bg-card/40 hover:text-foreground"
                   }`}
                 >
                   <Radio className="h-4.5 w-4.5" />
-                  Integrations settings
+                  Integrations
                 </button>
                 <button
                   onClick={() => setActiveTab("widget")}
                   className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-xl transition-all cursor-pointer ${
                     activeTab === "widget"
-                      ? "bg-emerald-600/10 text-emerald-400 border border-emerald-500/20 font-semibold"
-                      : "text-slate-400 hover:bg-slate-900 hover:text-white"
+                      ? "bg-accent-primary/10 text-accent-primary border border-accent-primary/20 font-semibold"
+                      : "text-muted-text hover:bg-card/40 hover:text-foreground"
                   }`}
                 >
-                  <Code className="h-4.5 w-4.5" />
+                  <CodeIcon className="h-4.5 w-4.5" />
                   Widget Code
                 </button>
               </>
@@ -1603,15 +407,18 @@ export default function DashboardPage() {
         </div>
 
         {/* Footer profile & logout */}
-        <div className="p-4 border-t border-slate-900 space-y-3">
-          <div className="flex items-center gap-3 px-2">
-            <div className="h-9 w-9 rounded-full bg-slate-800 border border-slate-700/50 flex items-center justify-center font-bold text-emerald-400">
-              {user?.name?.charAt(0)?.toUpperCase() || "U"}
+        <div className="p-4 border-t border-card-border space-y-4">
+          <div className="flex items-center justify-between px-2">
+            <div className="flex items-center gap-3 overflow-hidden">
+              <div className="h-9 w-9 rounded-full bg-slate-800 border border-slate-700/50 flex items-center justify-center font-bold text-accent-primary shrink-0">
+                {user?.name?.charAt(0)?.toUpperCase() || "U"}
+              </div>
+              <div className="overflow-hidden">
+                <p className="text-xs font-bold text-white truncate">{user?.name}</p>
+                <p className="text-[10px] text-muted-text truncate">{user?.email}</p>
+              </div>
             </div>
-            <div className="overflow-hidden">
-              <p className="text-xs font-bold text-white truncate">{user?.name}</p>
-              <p className="text-[10px] text-slate-500 truncate">{user?.email}</p>
-            </div>
+            <ThemeToggle />
           </div>
           <button
             onClick={handleLogout}
@@ -1624,23 +431,23 @@ export default function DashboardPage() {
       </aside>
 
       {/* Main Content Area */}
-      <main className="flex-1 flex flex-col overflow-hidden bg-slate-950">
+      <main className="flex-1 flex flex-col overflow-hidden bg-background">
         {/* Top bar */}
-        <header className="h-16 border-b border-slate-900 bg-slate-900/10 flex items-center justify-between px-8 shrink-0">
+        <header className="h-16 border-b border-card-border bg-card/10 flex items-center justify-between px-8 shrink-0">
           <div className="flex items-center gap-3">
             <h2 className="text-lg font-bold capitalize text-white">
-              {activeTab === "kb" ? "Knowledge Base" : 
+              {activeTab === "kb" ? "Knowledge Base" :
                activeTab === "visitor" ? "Visitor Activity Tracking" :
                activeTab === "competitor" ? "Competitor Analysis Audit" :
                activeTab === "integrations" ? "Multi-Channel Settings" :
                activeTab === "team" ? "Team Seats Management" :
                activeTab}
             </h2>
-            {dataLoading && <RefreshCw className="h-4 w-4 animate-spin text-emerald-400" />}
+            {dataLoading && <RefreshCw className="h-4 w-4 animate-spin text-accent-primary" />}
           </div>
           <button
             onClick={refreshData}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg text-slate-400 hover:bg-slate-900 hover:text-white border border-slate-800/80 transition-all cursor-pointer"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg text-muted-text hover:bg-card hover:text-white border border-card-border transition-all cursor-pointer"
           >
             <RefreshCw className="h-3.5 w-3.5" />
             Refresh
@@ -1649,177 +456,188 @@ export default function DashboardPage() {
 
         {/* Dynamic Panels */}
         <div className="flex-1 overflow-y-auto p-8">
-          {dataLoading ? (
-            <SkeletonLoader />
-          ) : (
-            <>
-              {activeTab === "overview" && (
-            <ErrorBoundary>
-              <OverviewTab
-                user={user}
-                stats={stats}
-                recommendations={recommendations}
-                whatsappEnabled={whatsappEnabled}
-                instagramEnabled={instagramEnabled}
-                emailEnabled={emailEnabled}
-                setActiveTab={setActiveTab}
-              />
-            </ErrorBoundary>
-          )}
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={activeTab}
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -12 }}
+              transition={{ duration: 0.2 }}
+              className="h-full"
+            >
+              {dataLoading ? (
+                <SkeletonLoader />
+              ) : (
+                <>
+                  {activeTab === "overview" && (
+                    <ErrorBoundary>
+                      <OverviewTab
+                        user={user}
+                        stats={stats}
+                        recommendations={recommendations}
+                        whatsappEnabled={whatsappEnabled}
+                        instagramEnabled={instagramEnabled}
+                        emailEnabled={emailEnabled}
+                        setActiveTab={setActiveTab}
+                      />
+                    </ErrorBoundary>
+                  )}
 
-          {activeTab === "leads" && (
-            <ErrorBoundary>
-              <LeadsTab
-                leads={leads}
-                searchTerm={searchTerm}
-                setSearchTerm={setSearchTerm}
-                filterStatus={filterStatus}
-                setFilterStatus={setFilterStatus}
-                filterSource={filterSource}
-                setFilterSource={setFilterSource}
-                filterSentiment={filterSentiment}
-                setFilterSentiment={setFilterSentiment}
-                handleExportLeads={handleExportLeads}
-                handleUpdateLeadStatus={handleUpdateLeadStatus}
-              />
-            </ErrorBoundary>
-          )}
+                  {activeTab === "leads" && (
+                    <ErrorBoundary>
+                      <LeadsTab
+                        leads={leads}
+                        searchTerm={searchTerm}
+                        setSearchTerm={setSearchTerm}
+                        filterStatus={filterStatus}
+                        setFilterStatus={setFilterStatus}
+                        filterSource={filterSource}
+                        setFilterSource={setFilterSource}
+                        filterSentiment={filterSentiment}
+                        setFilterSentiment={setFilterSentiment}
+                        handleExportLeads={handleExportLeads}
+                        handleUpdateLeadStatus={handleUpdateLeadStatus}
+                      />
+                    </ErrorBoundary>
+                  )}
 
-          {activeTab === "conversations" && (
-            <ErrorBoundary>
-              <ConversationsTab
-                conversations={conversations}
-                selectedConv={selectedConv}
-                setSelectedConv={setSelectedConv}
-                handleToggleTakeover={handleToggleTakeover}
-                operatorReply={operatorReply}
-                setOperatorReply={setOperatorReply}
-                handleSendOperatorReply={handleSendOperatorReply}
-                operatorSending={operatorSending}
-              />
-            </ErrorBoundary>
-          )}
+                  {activeTab === "conversations" && (
+                    <ErrorBoundary>
+                      <ConversationsTab
+                        conversations={conversations}
+                        selectedConv={selectedConv}
+                        setSelectedConv={setSelectedConv}
+                        handleToggleTakeover={handleToggleTakeover}
+                        operatorReply={operatorReply}
+                        setOperatorReply={setOperatorReply}
+                        handleSendOperatorReply={handleSendOperatorReply}
+                        operatorSending={operatorSending}
+                      />
+                    </ErrorBoundary>
+                  )}
 
-          {activeTab === "appointments" && (
-            <ErrorBoundary>
-              <AppointmentsTab
-                appointments={appointments}
-                handleUpdateApptStatus={handleUpdateApptStatus}
-              />
-            </ErrorBoundary>
-          )}
+                  {activeTab === "appointments" && (
+                    <ErrorBoundary>
+                      <AppointmentsTab
+                        appointments={appointments}
+                        handleUpdateApptStatus={handleUpdateApptStatus}
+                      />
+                    </ErrorBoundary>
+                  )}
 
-          {activeTab === "kb" && (
-            <ErrorBoundary>
-              <KnowledgeBaseTab
-                user={user}
-                business={business}
-                faqs={faqs}
-                scraperUrl={scraperUrl}
-                setScraperUrl={setScraperUrl}
-                scraperLoading={scraperLoading}
-                scraperLogs={scraperLogs}
-                handleStartScrape={handleStartScrape}
-                kbUploading={kbUploading}
-                kbFileName={kbFileName}
-                kbProgress={kbProgress}
-                handleStartFileUpload={handleStartFileUpload}
-                faqTitle={faqTitle}
-                setFaqTitle={setFaqTitle}
-                faqContent={faqContent}
-                setFaqContent={setFaqContent}
-                faqLoading={faqLoading}
-                handleAddFAQ={handleAddFAQ}
-                handleDeleteFAQ={handleDeleteFAQ}
-              />
-            </ErrorBoundary>
-          )}
+                  {activeTab === "kb" && (
+                    <ErrorBoundary>
+                      <KnowledgeBaseTab
+                        user={user}
+                        business={business}
+                        faqs={faqs}
+                        scraperUrl={scraperUrl}
+                        setScraperUrl={setScraperUrl}
+                        scraperLoading={scraperLoading}
+                        scraperLogs={scraperLogs}
+                        handleStartScrape={handleStartScrape}
+                        kbUploading={kbUploading}
+                        kbFileName={kbFileName}
+                        kbProgress={kbProgress}
+                        handleStartFileUpload={handleStartFileUpload}
+                        faqTitle={faqTitle}
+                        setFaqTitle={setFaqTitle}
+                        faqContent={faqContent}
+                        setFaqContent={setFaqContent}
+                        faqLoading={faqLoading}
+                        handleAddFAQ={handleAddFAQ}
+                        handleDeleteFAQ={handleDeleteFAQ}
+                      />
+                    </ErrorBoundary>
+                  )}
 
-          {activeTab === "visitor" && (
-            <ErrorBoundary>
-              <VisitorTracksTab
-                visitorTracks={visitorTracks}
-              />
-            </ErrorBoundary>
-          )}
+                  {activeTab === "visitor" && (
+                    <ErrorBoundary>
+                      <VisitorTracksTab
+                        visitorTracks={visitorTracks}
+                      />
+                    </ErrorBoundary>
+                  )}
 
-          {activeTab === "competitor" && (
-            <ErrorBoundary>
-              <CompetitorTab
-                competitorUrl={competitorUrl}
-                setCompetitorUrl={setCompetitorUrl}
-                competitorLoading={competitorLoading}
-                competitorLogs={competitorLogs}
-                handleStartCompetitor={handleStartCompetitor}
-                competitorAnalyses={competitorAnalyses}
-                business={business}
-              />
-            </ErrorBoundary>
-          )}
+                  {activeTab === "competitor" && (
+                    <ErrorBoundary>
+                      <CompetitorTab
+                        competitorUrl={competitorUrl}
+                        setCompetitorUrl={setCompetitorUrl}
+                        competitorLoading={competitorLoading}
+                        competitorLogs={competitorLogs}
+                        handleStartCompetitor={handleStartCompetitor}
+                        competitorAnalyses={competitorAnalyses}
+                        business={business}
+                      />
+                    </ErrorBoundary>
+                  )}
 
-          {activeTab === "team" && (
-            <ErrorBoundary>
-              <TeamTab
-                employees={employees}
-                employeeError={employeeError}
-                employeeSuccess={employeeSuccess}
-                employeeLoading={employeeLoading}
-                handleAddEmployee={handleAddEmployee}
-              />
-            </ErrorBoundary>
-          )}
+                  {activeTab === "team" && (
+                    <ErrorBoundary>
+                      <TeamTab
+                        employees={employees}
+                        employeeError={employeeError}
+                        employeeSuccess={employeeSuccess}
+                        employeeLoading={employeeLoading}
+                        handleAddEmployee={handleAddEmployee}
+                      />
+                    </ErrorBoundary>
+                  )}
 
-          {activeTab === "widget" && (
-            <ErrorBoundary>
-              <WidgetTab
-                business={business}
-                API_URL={API_URL}
-              />
-            </ErrorBoundary>
-          )}
+                  {activeTab === "widget" && (
+                    <ErrorBoundary>
+                      <WidgetTab
+                        business={business}
+                        API_URL={API_URL}
+                      />
+                    </ErrorBoundary>
+                  )}
 
-          {activeTab === "integrations" && (
-            <ErrorBoundary>
-              <IntegrationsTab
-                business={business}
-                whatsappEnabled={whatsappEnabled}
-                setWhatsappEnabled={setWhatsappEnabled}
-                whatsappApiKey={whatsappApiKey}
-                setWhatsappApiKey={setWhatsappApiKey}
-                instagramEnabled={instagramEnabled}
-                setInstagramEnabled={setInstagramEnabled}
-                instagramAccountId={instagramAccountId}
-                setInstagramAccountId={setInstagramAccountId}
-                emailEnabled={emailEnabled}
-                setEmailEnabled={setEmailEnabled}
-                emailSmtp={emailSmtp}
-                setEmailSmtp={setEmailSmtp}
-                themeColor={themeColor}
-                setThemeColor={setThemeColor}
-                agentTone={agentTone}
-                setAgentTone={setAgentTone}
-                agentPrompt={agentPrompt}
-                setAgentPrompt={setAgentPrompt}
-                connectionSaving={connectionSaving}
-                handleSaveConnections={handleSaveConnections}
-                simChannel={simChannel}
-                setSimChannel={setSimChannel}
-                simLeadName={simLeadName}
-                setSimLeadName={setSimLeadName}
-                simLeadPhone={simLeadPhone}
-                setSimLeadPhone={setSimLeadPhone}
-                simLeadEmail={simLeadEmail}
-                setSimLeadEmail={setSimLeadEmail}
-                simMessage={simMessage}
-                setSimMessage={setSimMessage}
-                simLoading={simLoading}
-                simStatus={simStatus}
-                handleSimulateMessage={handleSimulateMessage}
-              />
-            </ErrorBoundary>
-          )}
-            </>
-          )}
+                  {activeTab === "integrations" && (
+                    <ErrorBoundary>
+                      <IntegrationsTab
+                        business={business}
+                        whatsappEnabled={whatsappEnabled}
+                        setWhatsappEnabled={setWhatsappEnabled}
+                        whatsappApiKey={whatsappApiKey}
+                        setWhatsappApiKey={setWhatsappApiKey}
+                        instagramEnabled={instagramEnabled}
+                        setInstagramEnabled={setInstagramEnabled}
+                        instagramAccountId={instagramAccountId}
+                        setInstagramAccountId={setInstagramAccountId}
+                        emailEnabled={emailEnabled}
+                        setEmailEnabled={setEmailEnabled}
+                        emailSmtp={emailSmtp}
+                        setEmailSmtp={setEmailSmtp}
+                        themeColor={themeColor}
+                        setThemeColor={setThemeColor}
+                        agentTone={agentTone}
+                        setAgentTone={setAgentTone}
+                        agentPrompt={agentPrompt}
+                        setAgentPrompt={setAgentPrompt}
+                        connectionSaving={connectionSaving}
+                        handleSaveConnections={handleSaveConnections}
+                        simChannel={simChannel}
+                        setSimChannel={setSimChannel}
+                        simLeadName={simLeadName}
+                        setSimLeadName={setSimLeadName}
+                        simLeadPhone={simLeadPhone}
+                        setSimLeadPhone={setSimLeadPhone}
+                        simLeadEmail={simLeadEmail}
+                        setSimLeadEmail={setSimLeadEmail}
+                        simMessage={simMessage}
+                        setSimMessage={setSimMessage}
+                        simLoading={simLoading}
+                        simStatus={simStatus}
+                        handleSimulateMessage={handleSimulateMessage}
+                      />
+                    </ErrorBoundary>
+                  )}
+                </>
+              )}
+            </motion.div>
+          </AnimatePresence>
         </div>
       </main>
     </div>

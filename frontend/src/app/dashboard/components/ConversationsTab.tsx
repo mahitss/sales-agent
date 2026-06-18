@@ -1,15 +1,7 @@
-import DOMPurify from "isomorphic-dompurify";
+import React from "react";
 import { MessageSquare, ShieldAlert, Bot, User, Send } from "lucide-react";
-
-interface Conversation {
-  id: string;
-  leadId: string | null;
-  lead: any | null;
-  messages: Array<{ role: "user" | "model"; content: string }>;
-  channel: string;
-  isHumanTakeover: boolean;
-  updatedAt: string;
-}
+import { motion, AnimatePresence } from "framer-motion";
+import { Conversation } from "@/hooks/useDashboardData";
 
 interface ConversationsTabProps {
   conversations: Conversation[];
@@ -32,21 +24,17 @@ export const ConversationsTab: React.FC<ConversationsTabProps> = ({
   handleSendOperatorReply,
   operatorSending,
 }) => {
-  const sanitizeHtml = (str: string): string => {
-    if (!str) return "";
-    return DOMPurify.sanitize(str);
-  };
 
   return (
-    <div className="flex h-[calc(100vh-12rem)] border border-slate-900 rounded-2xl overflow-hidden bg-slate-900/10">
+    <div className="flex h-[calc(100vh-12rem)] border border-card-border rounded-2xl overflow-hidden bg-card/5 shadow-sm">
       {/* Left pane: conversations list */}
-      <div className="w-1/3 border-r border-slate-900 flex flex-col">
-        <div className="p-4 border-b border-slate-900 font-semibold text-xs uppercase tracking-wider text-slate-500">
+      <div className="w-1/3 border-r border-card-border flex flex-col bg-card/10">
+        <div className="p-4 border-b border-card-border font-semibold text-xs uppercase tracking-wider text-muted-text bg-card/25">
           All Chats
         </div>
-        <div className="flex-1 overflow-y-auto divide-y divide-slate-900/40">
+        <div className="flex-1 overflow-y-auto divide-y divide-card-border/30">
           {conversations.length === 0 ? (
-            <div className="p-6 text-center text-slate-500 text-sm">
+            <div className="p-6 text-center text-muted-text text-sm">
               No conversations log available.
             </div>
           ) : (
@@ -58,8 +46,8 @@ export const ConversationsTab: React.FC<ConversationsTabProps> = ({
                 <button
                   key={c.id}
                   onClick={() => setSelectedConv(c)}
-                  className={`w-full text-left p-4 hover:bg-slate-900/30 transition-all cursor-pointer ${
-                    isSelected ? "bg-slate-900/50 border-l-2 border-emerald-500" : ""
+                  className={`w-full text-left p-4 hover:bg-card/20 transition-all cursor-pointer ${
+                    isSelected ? "bg-card/40 border-l-2 border-accent-primary" : ""
                   }`}
                 >
                   <div className="flex justify-between items-start">
@@ -71,12 +59,12 @@ export const ConversationsTab: React.FC<ConversationsTabProps> = ({
                         }`}></span>
                       )}
                       {leadName === "Anonymous Visitor" ? (
-                        <span className="italic font-normal text-slate-500">Anonymous</span>
+                        <span className="italic font-normal text-muted-text">Anonymous</span>
                       ) : (
                         leadName
                       )}
                     </span>
-                    <span className="text-[10px] text-slate-500 shrink-0">
+                    <span className="text-[10px] text-muted-text shrink-0">
                       {new Date(c.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </span>
                   </div>
@@ -89,11 +77,11 @@ export const ConversationsTab: React.FC<ConversationsTabProps> = ({
       </div>
 
       {/* Right pane: chat viewer */}
-      <div className="flex-1 flex flex-col bg-slate-950">
+      <div className="flex-1 flex flex-col bg-card/5">
         {selectedConv ? (
           <>
             {/* Header */}
-            <div className="px-6 py-4 border-b border-slate-900 flex items-center justify-between">
+            <div className="px-6 py-4 border-b border-card-border flex items-center justify-between bg-card/15">
               <div>
                 <div className="flex items-center gap-2">
                   <h4 className="font-bold text-sm text-white">
@@ -108,7 +96,7 @@ export const ConversationsTab: React.FC<ConversationsTabProps> = ({
                     {selectedConv.channel}
                   </span>
                 </div>
-                <div className="text-xs text-slate-500 mt-0.5">
+                <div className="text-xs text-muted-text mt-0.5">
                   {selectedConv.lead?.email ? `${selectedConv.lead.email} • ` : ""}
                   {selectedConv.lead?.phone ? `${selectedConv.lead.phone} • ` : ""}
                   {selectedConv.lead?.budget ? `Budget: ${selectedConv.lead.budget}` : ""}
@@ -122,7 +110,7 @@ export const ConversationsTab: React.FC<ConversationsTabProps> = ({
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
                     selectedConv.isHumanTakeover
                       ? "bg-red-500/15 text-red-400 border-red-500/25 hover:bg-red-500/20"
-                      : "bg-emerald-600/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-600/20"
+                      : "bg-accent-primary/10 text-accent-primary border-accent-primary/20 hover:bg-accent-primary/20"
                   }`}
                 >
                   <ShieldAlert className="h-4 w-4" />
@@ -151,37 +139,42 @@ export const ConversationsTab: React.FC<ConversationsTabProps> = ({
 
             {/* Chat Bubble List */}
             <div className="flex-1 p-6 overflow-y-auto space-y-4">
-              {selectedConv.messages.map((m, idx) => {
-                const isUser = m.role === "user";
-                return (
-                  <div
-                    key={idx}
-                    className={`flex items-start gap-3 ${isUser ? "justify-end" : "justify-start"}`}
-                  >
-                    {!isUser && (
-                      <div className="h-7.5 w-7.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center justify-center shrink-0">
-                        <Bot className="h-4 w-4" />
+              <AnimatePresence initial={false}>
+                {selectedConv.messages.map((m, idx) => {
+                  const isUser = m.role === "user";
+                  return (
+                    <motion.div
+                      key={idx}
+                      initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                      animate={{ opacity: 1, scale: 1, y: 0 }}
+                      transition={{ duration: 0.2, ease: "easeOut" }}
+                      className={`flex items-start gap-3 ${isUser ? "justify-end" : "justify-start"}`}
+                    >
+                      {!isUser && (
+                        <div className="h-7.5 w-7.5 rounded-lg bg-accent-primary/10 text-accent-primary border border-accent-primary/20 flex items-center justify-center shrink-0">
+                          <Bot className="h-4 w-4" />
+                        </div>
+                      )}
+                      <div className={`max-w-[70%] px-4 py-2.5 rounded-2xl text-sm leading-relaxed ${
+                        isUser
+                          ? "bg-accent-primary text-white rounded-tr-none shadow-md"
+                          : "bg-card border border-card-border text-slate-200 rounded-tl-none shadow-sm"
+                      }`}>
+                        {m.content}
                       </div>
-                    )}
-                    <div className={`max-w-[70%] px-4 py-3 rounded-2xl text-sm leading-relaxed ${
-                      isUser
-                        ? "bg-emerald-600 text-white rounded-tr-none shadow-md"
-                        : "bg-slate-900 text-slate-200 rounded-tl-none border border-slate-800/80 shadow-sm"
-                    }`}>
-                      {m.content}
-                    </div>
-                    {isUser && (
-                      <div className="h-7.5 w-7.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-500 flex items-center justify-center shrink-0">
-                        <User className="h-4 w-4" />
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+                      {isUser && (
+                        <div className="h-7.5 w-7.5 rounded-lg bg-card border border-card-border text-muted-text flex items-center justify-center shrink-0">
+                          <User className="h-4 w-4" />
+                        </div>
+                      )}
+                    </motion.div>
+                  );
+                })}
+              </AnimatePresence>
             </div>
 
             {/* Manual Messaging Input Panel */}
-            <div className="p-4 border-t border-slate-900 bg-slate-950">
+            <div className="p-4 border-t border-card-border bg-card/5">
               {selectedConv.isHumanTakeover ? (
                 <form onSubmit={handleSendOperatorReply} className="flex gap-2">
                   <input
@@ -189,27 +182,27 @@ export const ConversationsTab: React.FC<ConversationsTabProps> = ({
                     value={operatorReply}
                     onChange={(e) => setOperatorReply(e.target.value)}
                     placeholder="Type a manual response to user..."
-                    className="flex-1 rounded-xl bg-slate-900 border border-slate-800 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-red-500/50"
+                    className="flex-1 rounded-xl bg-card border border-card-border px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-red-500/50"
                   />
                   <button
                     type="submit"
                     disabled={!operatorReply.trim() || operatorSending}
-                    className="bg-red-600 hover:bg-red-500 text-white font-semibold rounded-xl px-5 py-2.5 text-sm flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                    className="bg-red-600 hover:bg-red-500 text-white font-semibold rounded-xl px-5 py-2.5 text-sm flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition-colors"
                   >
                     <Send className="h-4 w-4" />
                     Send
                   </button>
                 </form>
               ) : (
-                <p className="text-center text-xs text-slate-500 py-2">
+                <p className="text-center text-xs text-muted-text py-2">
                   💡 Click <strong>Take Over Chat</strong> at the top to pause AI and message this visitor manually.
                 </p>
               )}
             </div>
           </>
         ) : (
-          <div className="flex-1 flex flex-col items-center justify-center text-slate-500">
-            <MessageSquare className="h-10 w-10 text-slate-700 mb-2" />
+          <div className="flex-1 flex flex-col items-center justify-center text-muted-text">
+            <MessageSquare className="h-10 w-10 text-card-border mb-2" />
             <p className="text-sm">Select a conversation from the sidebar to view transcript</p>
           </div>
         )}

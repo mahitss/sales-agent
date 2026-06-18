@@ -7,11 +7,16 @@ export const api = axios.create({
   withCredentials: true, // Crucial for sending/receiving httpOnly cookies
 });
 
+interface FailedRequest {
+  resolve: (token: string | null) => void;
+  reject: (error: unknown) => void;
+}
+
 // Queue to hold requests that are waiting for the refresh token call to complete
 let isRefreshing = false;
-let failedQueue: any[] = [];
+let failedQueue: FailedRequest[] = [];
 
-const processQueue = (error: any, token: string | null = null) => {
+const processQueue = (error: unknown, token: string | null = null) => {
   failedQueue.forEach((prom) => {
     if (error) {
       prom.reject(error);
@@ -57,7 +62,7 @@ api.interceptors.response.use(
     ) {
       if (isRefreshing) {
         // Queue the request
-        return new Promise((resolve, reject) => {
+        return new Promise<string | null>((resolve, reject) => {
           failedQueue.push({ resolve, reject });
         })
           .then((token) => {

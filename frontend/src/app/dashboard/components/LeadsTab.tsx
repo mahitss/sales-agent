@@ -1,5 +1,6 @@
 import React from "react";
 import { FileText } from "lucide-react";
+import { motion } from "framer-motion";
 
 interface Lead {
   id: string;
@@ -42,15 +43,15 @@ export const LeadsTab: React.FC<LeadsTabProps> = ({
   handleUpdateLeadStatus,
 }) => {
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-10">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h3 className="text-xl font-bold text-white">Leads Log</h3>
-          <p className="text-xs text-slate-500 mt-1">Visitors qualified and captured by the AI agent</p>
+          <p className="text-xs text-muted-text mt-1">Visitors qualified and captured by the AI agent</p>
         </div>
         <button
           onClick={handleExportLeads}
-          className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-xl px-5 py-2.5 text-xs flex items-center gap-1.5 cursor-pointer shadow-md self-start md:self-auto"
+          className="bg-accent-primary hover:bg-accent-hover text-white font-semibold rounded-xl px-5 py-2.5 text-xs flex items-center gap-1.5 cursor-pointer shadow-md self-start md:self-auto transition-colors"
         >
           <FileText className="h-4 w-4" />
           Export Leads (CSV)
@@ -58,23 +59,23 @@ export const LeadsTab: React.FC<LeadsTabProps> = ({
       </div>
 
       {/* Filters container */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 p-4 rounded-2xl border border-slate-900 bg-slate-900/10">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 p-4 rounded-2xl border border-card-border bg-card/10">
         <div>
-          <label className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Search Visitor</label>
+          <label className="text-[10px] font-bold uppercase tracking-wide text-muted-text">Search Visitor</label>
           <input
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Name, email or phone..."
-            className="mt-1 w-full rounded-xl bg-slate-950 border border-slate-900 px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500/50 placeholder-slate-700"
+            className="mt-1 w-full rounded-xl bg-card border border-card-border px-3 py-2.5 text-xs text-white focus:outline-none focus:border-accent-primary/50 placeholder-slate-700 transition-all"
           />
         </div>
         <div>
-          <label className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Status</label>
+          <label className="text-[10px] font-bold uppercase tracking-wide text-muted-text">Status</label>
           <select
             value={filterStatus}
             onChange={(e) => setFilterStatus(e.target.value)}
-            className="mt-1 w-full rounded-xl bg-slate-950 border border-slate-900 px-3 py-2 text-xs text-white focus:outline-none"
+            className="mt-1 w-full rounded-xl bg-card border border-card-border px-3 py-2.5 text-xs text-white focus:outline-none focus:border-accent-primary/50 cursor-pointer"
           >
             <option value="ALL">All Statuses</option>
             <option value="HOT">HOT</option>
@@ -83,11 +84,11 @@ export const LeadsTab: React.FC<LeadsTabProps> = ({
           </select>
         </div>
         <div>
-          <label className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Source Channel</label>
+          <label className="text-[10px] font-bold uppercase tracking-wide text-muted-text">Source Channel</label>
           <select
             value={filterSource}
             onChange={(e) => setFilterSource(e.target.value)}
-            className="mt-1 w-full rounded-xl bg-slate-950 border border-slate-900 px-3 py-2 text-xs text-white focus:outline-none"
+            className="mt-1 w-full rounded-xl bg-card border border-card-border px-3 py-2.5 text-xs text-white focus:outline-none focus:border-accent-primary/50 cursor-pointer"
           >
             <option value="ALL">All Channels</option>
             <option value="WIDGET">WIDGET</option>
@@ -97,11 +98,11 @@ export const LeadsTab: React.FC<LeadsTabProps> = ({
           </select>
         </div>
         <div>
-          <label className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Sentiment</label>
+          <label className="text-[10px] font-bold uppercase tracking-wide text-muted-text">Sentiment</label>
           <select
             value={filterSentiment}
             onChange={(e) => setFilterSentiment(e.target.value)}
-            className="mt-1 w-full rounded-xl bg-slate-950 border border-slate-900 px-3 py-2 text-xs text-white focus:outline-none"
+            className="mt-1 w-full rounded-xl bg-card border border-card-border px-3 py-2.5 text-xs text-white focus:outline-none focus:border-accent-primary/50 cursor-pointer"
           >
             <option value="ALL">All Sentiments</option>
             <option value="Positive">Positive</option>
@@ -112,9 +113,9 @@ export const LeadsTab: React.FC<LeadsTabProps> = ({
         </div>
       </div>
 
-      <div className="overflow-hidden border border-slate-900 rounded-2xl bg-slate-900/10">
-        <table className="w-full border-collapse text-left text-sm">
-          <thead className="bg-slate-900/50 border-b border-slate-900 text-xs font-semibold uppercase text-slate-400">
+      <div className="overflow-x-auto border border-card-border rounded-2xl bg-card/10">
+        <table className="w-full border-collapse text-left text-sm min-w-[800px]">
+          <thead className="bg-card border-b border-card-border text-xs font-semibold uppercase text-muted-text">
             <tr>
               <th className="px-6 py-4">Name</th>
               <th className="px-6 py-4">Email</th>
@@ -127,7 +128,7 @@ export const LeadsTab: React.FC<LeadsTabProps> = ({
               <th className="px-6 py-4">Date Captured</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-900/60">
+          <tbody className="divide-y divide-card-border/60">
             {(() => {
               const filteredLeads = leads.filter(l => {
                 const matchesSearch = !searchTerm || 
@@ -143,14 +144,14 @@ export const LeadsTab: React.FC<LeadsTabProps> = ({
               if (filteredLeads.length === 0) {
                 return (
                   <tr>
-                    <td colSpan={9} className="px-6 py-12 text-center text-slate-500">
+                    <td colSpan={9} className="px-6 py-12 text-center text-muted-text">
                       No matching leads found. Try adjusting your search filters!
                     </td>
                   </tr>
                 );
               }
 
-              return filteredLeads.map((l) => {
+              return filteredLeads.map((l, index) => {
                 const sentiment = l.sentiment || "Neutral";
                 const sentimentBadge = 
                   sentiment === "Positive" ? "bg-green-500/10 text-green-400 border border-green-500/20" :
@@ -165,10 +166,16 @@ export const LeadsTab: React.FC<LeadsTabProps> = ({
                   "bg-red-500";
 
                 return (
-                  <tr key={l.id} className="hover:bg-slate-900/20 transition-colors">
+                  <motion.tr
+                    key={l.id}
+                    initial={{ opacity: 0, y: 5 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: Math.min(index * 0.03, 0.3), duration: 0.2 }}
+                    className="hover:bg-card/25 transition-colors"
+                  >
                     <td className="px-6 py-4 font-semibold text-slate-200">
                       {l.name === "Anonymous Visitor" ? (
-                        <span className="italic text-slate-500">Anonymous Visitor</span>
+                        <span className="italic text-muted-text">Anonymous Visitor</span>
                       ) : (
                         l.name
                       )}
@@ -190,15 +197,15 @@ export const LeadsTab: React.FC<LeadsTabProps> = ({
                       <select
                         value={l.status}
                         onChange={(e) => handleUpdateLeadStatus(l.id, e.target.value)}
-                        className={`rounded-lg border border-transparent px-2.5 py-1 text-xs font-bold focus:outline-none transition-all cursor-pointer ${
+                        className={`rounded-lg border border-transparent px-2.5 py-1 text-xs font-bold focus:outline-none transition-all cursor-pointer bg-transparent ${
                           l.status === "HOT" ? "bg-red-500/10 text-red-400 border-red-500/20" :
                           l.status === "WARM" ? "bg-amber-500/10 text-amber-400 border-amber-500/20" :
                           "bg-blue-500/10 text-blue-400 border-blue-500/20"
                         }`}
                       >
-                        <option value="HOT" className="bg-slate-950 text-red-400">HOT</option>
-                        <option value="WARM" className="bg-slate-950 text-amber-400">WARM</option>
-                        <option value="COLD" className="bg-slate-950 text-blue-400">COLD</option>
+                        <option value="HOT" className="bg-card text-red-400">HOT</option>
+                        <option value="WARM" className="bg-card text-amber-400">WARM</option>
+                        <option value="COLD" className="bg-card text-blue-400">COLD</option>
                       </select>
                     </td>
                     <td className="px-6 py-4">
@@ -212,15 +219,15 @@ export const LeadsTab: React.FC<LeadsTabProps> = ({
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-2">
                         <span className="text-xs font-bold text-slate-300 w-8">{score}%</span>
-                        <div className="w-16 bg-slate-900 h-2 rounded-full overflow-hidden">
+                        <div className="w-16 bg-card-border/40 h-2 rounded-full overflow-hidden">
                           <div className={`h-full rounded-full ${scoreColor}`} style={{ width: `${score}%` }}></div>
                         </div>
                       </div>
                     </td>
-                    <td className="px-6 py-4 text-xs text-slate-500">
+                    <td className="px-6 py-4 text-xs text-muted-text">
                       {new Date(l.createdAt).toLocaleDateString()}
                     </td>
-                  </tr>
+                  </motion.tr>
                 );
               });
             })()}

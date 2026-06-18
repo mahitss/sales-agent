@@ -15,15 +15,15 @@ interface VisitorTracksTabProps {
 
 export const VisitorTracksTab: React.FC<VisitorTracksTabProps> = ({ visitorTracks }) => {
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-10">
       <div>
         <h3 className="text-xl font-bold text-white">Live Visitor Tracking</h3>
-        <p className="text-xs text-slate-500 mt-1">Geographic parameters, pages viewed, and stay duration recorded by Beacon script triggers</p>
+        <p className="text-xs text-muted-text mt-1">Geographic parameters, pages viewed, and stay duration recorded by Beacon script triggers</p>
       </div>
 
-      <div className="overflow-hidden border border-slate-900 rounded-2xl bg-slate-900/10">
-        <table className="w-full border-collapse text-left text-sm">
-          <thead className="bg-slate-900/50 border-b border-slate-900 text-xs font-semibold uppercase text-slate-400">
+      <div className="overflow-x-auto border border-card-border rounded-2xl bg-card/10 shadow-sm">
+        <table className="w-full border-collapse text-left text-sm min-w-[700px]">
+          <thead className="bg-card border-b border-card-border text-xs font-semibold uppercase text-muted-text">
             <tr>
               <th className="px-6 py-4">Location</th>
               <th className="px-6 py-4">Pages Viewed</th>
@@ -31,16 +31,16 @@ export const VisitorTracksTab: React.FC<VisitorTracksTabProps> = ({ visitorTrack
               <th className="px-6 py-4">Log Timestamp</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-900/60">
+          <tbody className="divide-y divide-card-border/60">
             {visitorTracks.length === 0 ? (
               <tr>
-                <td colSpan={4} className="px-6 py-12 text-center text-slate-500">
+                <td colSpan={4} className="px-6 py-12 text-center text-muted-text">
                   No visitor activities tracked yet. Open the Widget Sandbox preview to register test logs automatically.
                 </td>
               </tr>
             ) : (
               visitorTracks.map((vt) => (
-                <tr key={vt.id} className="hover:bg-slate-900/20 transition-colors">
+                <tr key={vt.id} className="hover:bg-card/25 transition-colors">
                   <td className="px-6 py-4 font-semibold text-slate-200 flex items-center gap-2">
                     <MapPin className="h-4 w-4 text-red-400 shrink-0" />
                     {vt.location}
@@ -48,7 +48,7 @@ export const VisitorTracksTab: React.FC<VisitorTracksTabProps> = ({ visitorTrack
                   <td className="px-6 py-4">
                     <div className="flex flex-wrap gap-1.5">
                       {vt.pagesViewed.map((page, i) => (
-                        <span key={i} className="px-2 py-0.5 rounded bg-slate-950 border border-slate-900 text-[10px] text-slate-400 font-mono">
+                        <span key={i} className="px-2 py-0.5 rounded bg-card border border-card-border text-[10px] text-muted-text font-mono">
                           {page}
                         </span>
                       ))}
@@ -57,7 +57,7 @@ export const VisitorTracksTab: React.FC<VisitorTracksTabProps> = ({ visitorTrack
                   <td className="px-6 py-4 text-slate-300">
                     {Math.floor(vt.duration / 60)}m {vt.duration % 60}s
                   </td>
-                  <td className="px-6 py-4 text-xs text-slate-500">
+                  <td className="px-6 py-4 text-xs text-muted-text">
                     {new Date(vt.createdAt).toLocaleTimeString()} ({new Date(vt.createdAt).toLocaleDateString()})
                   </td>
                 </tr>

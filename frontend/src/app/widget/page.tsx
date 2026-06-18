@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
-import { Send, X, Bot, User, Phone, Mail, UserCheck } from "lucide-react";
+import { Send, X, Bot, User, UserCheck } from "lucide-react";
 
 interface Message {
   role: "user" | "model";
@@ -40,10 +40,13 @@ function WidgetContent() {
   const [lead, setLead] = useState<Lead | null>(null);
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true);
   }, []);
 
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(() => {
+    return businessId ? null : "No Business ID specified. Widget cannot initialize.";
+  });
   const [historyLoading, setHistoryLoading] = useState(false);
 
   const [visitorToken, setVisitorToken] = useState<string | null>(null);
@@ -55,7 +58,7 @@ function WidgetContent() {
   const playNotificationSound = () => {
     if (typeof window === "undefined") return;
     try {
-      const AudioCtxClass = window.AudioContext || (window as any).webkitAudioContext;
+      const AudioCtxClass = window.AudioContext || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
       if (!AudioCtxClass) return;
       const audioCtx = new AudioCtxClass();
       if (audioCtx.state === "suspended") {
@@ -93,10 +96,7 @@ function WidgetContent() {
 
   // Load business info
   useEffect(() => {
-    if (!businessId) {
-      setError("No Business ID specified. Widget cannot initialize.");
-      return;
-    }
+    if (!businessId) return;
 
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
 
@@ -211,7 +211,7 @@ function WidgetContent() {
       try {
         const url = new URL(document.referrer);
         referrerPath = url.pathname + url.search;
-      } catch (e) {
+      } catch {
         referrerPath = document.referrer || "/";
       }
     }
@@ -449,10 +449,10 @@ function WidgetContent() {
               setLead(meta.lead);
             }
           }
-        } catch (e) {}
+        } catch {}
       }
 
-    } catch (err: any) {
+    } catch (err) {
       console.error("Streaming error:", err);
       // Remove the last model message (which was empty) or change it to error message
       setMessages((prev) => {
@@ -621,7 +621,7 @@ function WidgetContent() {
             placeholder="Type your message..."
             aria-label="Chat message input"
             className="flex-1 rounded-xl bg-slate-900 border border-slate-800/80 px-4 py-2.5 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-1 disabled:opacity-50 transition-all"
-            style={{ "--tw-ring-color": themeColor } as any}
+            style={{ "--tw-ring-color": themeColor } as React.CSSProperties}
           />
           <button
             type="submit"
