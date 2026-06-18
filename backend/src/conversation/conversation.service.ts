@@ -15,7 +15,7 @@ export class ConversationService {
     }
     return {
       ...conversation,
-      messages: JSON.parse(conversation.messages),
+      messages: conversation.messages as any[],
     };
   }
 
@@ -37,7 +37,7 @@ export class ConversationService {
     return {
       data: list.map((item) => ({
         ...item,
-        messages: JSON.parse(item.messages),
+        messages: item.messages as any[],
       })),
       nextCursor,
     };
@@ -53,14 +53,14 @@ export class ConversationService {
         data: {
           leadId,
           businessId,
-          messages: '[]',
+          messages: [],
         },
       });
     }
 
     return {
       ...conversation,
-      messages: JSON.parse(conversation.messages),
+      messages: conversation.messages as any[],
     };
   }
 
@@ -68,12 +68,12 @@ export class ConversationService {
     const conversation = await this.prisma.conversation.update({
       where: { id },
       data: {
-        messages: JSON.stringify(messages),
+        messages,
       },
     });
     return {
       ...conversation,
-      messages: JSON.parse(conversation.messages),
+      messages: conversation.messages as any[],
     };
   }
 
@@ -84,7 +84,7 @@ export class ConversationService {
     });
     return {
       ...conversation,
-      messages: JSON.parse(conversation.messages),
+      messages: conversation.messages as any[],
     };
   }
 
@@ -103,7 +103,7 @@ export class ConversationService {
       c.channel,
       String(c.isHumanTakeover),
       c.createdAt.toISOString(),
-      c.messages,
+      JSON.stringify(c.messages),
     ]);
 
     const csvContent = [
@@ -127,7 +127,7 @@ export class ConversationService {
       channel: c.channel,
       isHumanTakeover: c.isHumanTakeover,
       createdAt: c.createdAt,
-      messages: JSON.parse(c.messages),
+      messages: c.messages as any[],
     }));
   }
 }

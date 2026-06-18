@@ -1,4 +1,4 @@
-import { Controller, Post, Body, HttpCode, HttpStatus, Res, Req, UseGuards } from '@nestjs/common';
+import { Controller, Post, Get, Body, HttpCode, HttpStatus, Res, Req, UseGuards } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { RegisterDto, LoginDto, VerifyEmailDto, RequestPasswordResetDto, ResetPasswordDto } from './dto/auth.dto';
@@ -22,9 +22,19 @@ export class AuthController {
     });
   }
 
+  private setAccessTokenCookie(response: express.Response, token: string) {
+    response.cookie('beacon_token', token, {
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 15 * 60 * 1000, // 15 minutes matching access token expiration
+    });
+  }
+
   @Post('register')
   async register(@Body() dto: RegisterDto, @Res({ passthrough: true }) response: express.Response) {
     const result = await this.authService.register(dto);
+    this.setAccessTokenCookie(response, result.token);
     this.setRefreshTokenCookie(response, result.refreshToken);
     return {
       user: result.user,
@@ -49,6 +59,7 @@ export class AuthController {
       refreshToken: string;
     };
 
+    this.setAccessTokenCookie(response, successResult.token);
     this.setRefreshTokenCookie(response, successResult.refreshToken);
     return {
       user: successResult.user,
@@ -61,6 +72,7 @@ export class AuthController {
   async refresh(@Req() request: express.Request, @Res({ passthrough: true }) response: express.Response) {
     const refreshToken = request.cookies['beacon_refresh_token'];
     const result = await this.authService.refresh(refreshToken);
+    this.setAccessTokenCookie(response, result.token);
     this.setRefreshTokenCookie(response, result.refreshToken);
     return {
       token: result.token,
@@ -161,10 +173,45 @@ export class AuthController {
     @Res({ passthrough: true }) response: express.Response
   ) {
     const result = await this.authService.verify2FA(tempToken, code);
+    this.setAccessTokenCookie(response, result.token);
     this.setRefreshTokenCookie(response, result.refreshToken);
     return {
       user: result.user,
       token: result.token,
     };
+  }
+
+  @Post('resend-verification')
+  @HttpCode(HttpStatus.OK)
+  async resendVerification(@Body('email') email: string) {
+    return this.authService.resendVerificationEmail(email);
+  }
+
+  @UseGuards(AuthGuard)
+  @Post('change-email')
+  @HttpCode(HttpStatus.OK)
+  async changeEmail(@Req() req, @Body('newEmail') newEmail: string) {
+    return this.authService.changeEmail(req.user.sub, newEmail);
+  }
+
+  @UseGuards(AuthGuard)
+  @Post('delete-account')
+  @HttpCode(HttpStatus.OK)
+  async deleteAccount(@Req() req) {
+    return this.authService.deleteAccount(req.user.sub);
+  }
+
+  @UseGuards(AuthGuard)
+  @Get('sessions')
+  @HttpCode(HttpStatus.OK)
+  async getSessions(@Req() req) {
+    return this.authService.getActiveSessions(req.user.sub);
+  }
+
+  @UseGuards(AuthGuard)
+  @Post('sessions/revoke')
+  @HttpCode(HttpStatus.OK)
+  async revokeSession(@Req() req, @Body('sessionId') sessionId: string) {
+    return this.authService.revokeSession(req.user.sub, sessionId);
   }
 }

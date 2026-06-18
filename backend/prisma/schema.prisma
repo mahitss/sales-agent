@@ -101,7 +101,7 @@ model Conversation {
   lead            Lead?     @relation(fields: [leadId], references: [id], onDelete: SetNull)
   businessId      String
   business        Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  messages        String    @default("[]") // JSON string of message history: [{role: "user"|"model", content: "..."}]
+  messages        Json      @default("[]") // Native JSON/JSONB of message history: [{role: "user"|"model", content: "..."}]
   channel         String    @default("WIDGET") // WIDGET, WHATSAPP, INSTAGRAM, EMAIL
   isHumanTakeover Boolean   @default(false)
   createdAt       DateTime  @default(now())

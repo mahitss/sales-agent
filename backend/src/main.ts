@@ -19,6 +19,13 @@ Sentry.init({
 });
 
 async function bootstrap() {
+  const jwtSecret = process.env.JWT_SECRET;
+  if (!jwtSecret || jwtSecret === 'super-secret-key-change-me-in-production') {
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('FATAL: JWT_SECRET environment variable is required and cannot be default placeholder in production!');
+    }
+  }
+
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     logger: process.env.NODE_ENV === 'production' 
       ? ['error', 'warn', 'log'] 

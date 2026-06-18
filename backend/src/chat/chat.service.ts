@@ -50,7 +50,7 @@ export class ChatService {
         data: {
           leadId: lead.id,
           businessId,
-          messages: '[]',
+          messages: [],
           channel: channel || 'WIDGET',
         },
       });
@@ -58,14 +58,14 @@ export class ChatService {
 
     // --- Human Takeover Bypass ---
     if (conversation?.isHumanTakeover) {
-      const messageHistory = JSON.parse(conversation.messages);
+      const messageHistory = conversation.messages as any[];
       messageHistory.push({ role: 'user', content: message });
       
       conversation = await this.prisma.conversation.update({
         where: { id: conversation.id },
         data: {
           leadId: lead.id,
-          messages: JSON.stringify(messageHistory),
+          messages: messageHistory,
         },
       });
 
@@ -80,7 +80,7 @@ export class ChatService {
     }
 
     // Parse messages history
-    const messageHistory = JSON.parse(conversation.messages);
+    const messageHistory = conversation.messages as any[];
 
     // Add current user message
     messageHistory.push({ role: 'user', content: message });
@@ -226,21 +226,21 @@ export class ChatService {
         data: {
           leadId: lead.id,
           businessId,
-          messages: '[]',
+          messages: [],
           channel: channel || 'WIDGET',
         },
       });
     }
 
     if (conversation?.isHumanTakeover) {
-      const messageHistory = JSON.parse(conversation.messages);
+      const messageHistory = conversation.messages as any[];
       messageHistory.push({ role: 'user', content: message });
       
       conversation = await this.prisma.conversation.update({
         where: { id: conversation.id },
         data: {
           leadId: lead.id,
-          messages: JSON.stringify(messageHistory),
+          messages: messageHistory,
         },
       });
 
@@ -267,7 +267,7 @@ export class ChatService {
       throw new Error('Business profile not found');
     }
 
-    const messageHistory = JSON.parse(conversation.messages);
+    const messageHistory = conversation.messages as any[];
     messageHistory.push({ role: 'user', content: message });
 
     let aiServiceUrl = process.env.AI_SERVICE_URL || 'http://localhost:8000';
@@ -518,7 +518,7 @@ export class ChatService {
       where: { id: conversation.id },
       data: {
         leadId: lead.id,
-        messages: JSON.stringify(messageHistory),
+        messages: messageHistory,
       },
     });
   }
@@ -598,13 +598,13 @@ export class ChatService {
       throw new Error('Conversation not found');
     }
 
-    const messageHistory = JSON.parse(conversation.messages);
+    const messageHistory = conversation.messages as any[];
     messageHistory.push({ role: 'model', content: message });
 
     conversation = await this.prisma.conversation.update({
       where: { id: conversationId },
       data: {
-        messages: JSON.stringify(messageHistory),
+        messages: messageHistory,
       },
     });
 
@@ -661,7 +661,7 @@ export class ChatService {
           leadId: lead.id,
           businessId,
           channel,
-          messages: '[]',
+          messages: [],
         },
       });
     }

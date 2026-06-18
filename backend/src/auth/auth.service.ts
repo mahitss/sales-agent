@@ -1,4 +1,4 @@
-import { Injectable, ConflictException, UnauthorizedException, Logger } from '@nestjs/common';
+import { Injectable, ConflictException, UnauthorizedException, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
@@ -423,5 +423,90 @@ export class AuthService {
       },
       ...tokens,
     };
+  }
+
+  async resendVerificationEmail(email: string) {
+    const user = await this.prisma.user.findUnique({ where: { email } });
+    if (!user) {
+      return { success: true, message: 'If the email exists and is not verified, a new verification link has been sent.' };
+    }
+    if (user.isVerified) {
+      return { success: true, message: 'If the email exists and is not verified, a new verification link has been sent.' };
+    }
+
+    const verificationToken = crypto.randomUUID();
+    const verificationTokenExp = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        verificationToken,
+        verificationTokenExp,
+      },
+    });
+
+    await this.emailService.sendVerificationEmail(user.email, verificationToken);
+    return { success: true, message: 'If the email exists and is not verified, a new verification link has been sent.' };
+  }
+
+  async changeEmail(userId: string, newEmail: string) {
+    const existing = await this.prisma.user.findUnique({ where: { email: newEmail } });
+    if (existing) {
+      throw new ConflictException('Email address is already in use.');
+    }
+
+    const verificationToken = crypto.randomUUID();
+    const verificationTokenExp = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        email: newEmail,
+        isVerified: false,
+        verificationToken,
+        verificationTokenExp,
+      },
+    });
+
+    await this.emailService.sendVerificationEmail(newEmail, verificationToken);
+    return { success: true, message: 'Email changed successfully. Please verify your new email address.' };
+  }
+
+  async deleteAccount(userId: string) {
+    await this.prisma.user.delete({ where: { id: userId } });
+    return { success: true, message: 'Account deleted successfully' };
+  }
+
+  async getActiveSessions(userId: string) {
+    const sessions = await this.prisma.refreshToken.findMany({
+      where: {
+        userId,
+        revoked: false,
+        expiresAt: { gte: new Date() },
+      },
+      select: {
+        id: true,
+        createdAt: true,
+        expiresAt: true,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    return sessions;
+  }
+
+  async revokeSession(userId: string, sessionId: string) {
+    const session = await this.prisma.refreshToken.findFirst({
+      where: { id: sessionId, userId },
+    });
+    if (!session) {
+      throw new NotFoundException('Session not found');
+    }
+
+    await this.prisma.refreshToken.update({
+      where: { id: sessionId },
+      data: { revoked: true },
+    });
+
+    return { success: true, message: 'Session revoked successfully' };
   }
 }

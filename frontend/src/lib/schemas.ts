@@ -1,14 +1,22 @@
 import { z } from "zod";
 
+const passwordValidation = z
+  .string()
+  .min(8, "Password must be at least 8 characters long")
+  .regex(
+    /^(?=.*[a-z])(?=.*[A-Z])(?=.*[\d\W])/,
+    "Password must contain at least one uppercase letter, one lowercase letter, and one number or special character"
+  );
+
 export const authSchema = z.object({
   email: z.string().email("Please provide a valid email address"),
-  password: z.string().min(6, "Password must be at least 6 characters"),
+  password: passwordValidation,
   name: z.string().optional(),
 });
 
 export const resetPasswordSchema = z
   .object({
-    password: z.string().min(6, "Password must be at least 6 characters"),
+    password: passwordValidation,
     confirmPassword: z.string(),
   })
   .refine((data) => data.password === data.confirmPassword, {
@@ -53,7 +61,7 @@ export const loginSchema = z.object({
 export const registerSchema = z.object({
   name: z.string().min(1, "Name is required"),
   email: z.string().email("Please provide a valid email address"),
-  password: z.string().min(6, "Password must be at least 6 characters"),
+  password: passwordValidation,
 });
 
 export const forgotPasswordSchema = z.object({

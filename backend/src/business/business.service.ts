@@ -269,8 +269,8 @@ export class BusinessService {
       const created = await this.prisma.knowledgeBase.create({
         data: {
           businessId,
-          title: faq.title,
-          content: faq.content,
+          title: this.sanitizeHtml(faq.title),
+          content: this.sanitizeHtml(faq.content),
         },
       });
       createdFAQs.push(created);

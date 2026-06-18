@@ -1,22 +1,18 @@
-import { Injectable, NestMiddleware, HttpException, HttpStatus } from '@nestjs/common';
+import { Injectable, NestMiddleware, HttpException, HttpStatus, Logger } from '@nestjs/common';
 import { Request, Response, NextFunction } from 'express';
+import { RedisService } from '../redis/redis.service';
 
 const ipCache = new Map<string, { count: number; resetTime: number }>();
 
 @Injectable()
 export class RateLimiterMiddleware implements NestMiddleware {
-  use(req: Request, res: Response, next: NextFunction) {
+  private readonly logger = new Logger('RateLimiter');
+
+  constructor(private redisService: RedisService) {}
+
+  async use(req: Request, res: Response, next: NextFunction) {
     const ip = req.ip || req.headers['x-forwarded-for']?.toString() || 'unknown';
     const now = Date.now();
-
-    // Prevent memory leak by cleaning up expired entries when size is large
-    if (ipCache.size > 1000) {
-      for (const [key, val] of ipCache.entries()) {
-        if (now > val.resetTime) {
-          ipCache.delete(key);
-        }
-      }
-    }
 
     const isSensitive =
       req.path.includes('/auth/login') ||
@@ -40,23 +36,94 @@ export class RateLimiterMiddleware implements NestMiddleware {
       limit = 50; // Moderate: anonymous users get 50 requests per minute
     }
 
-    const windowMs = 60 * 1000; // 1 minute window
-    const cacheKey = `${ip}:${isSensitive ? 'sensitive' : isChat ? 'chat' : isAuth ? 'auth' : 'anon'}`;
+    const windowSec = 60;
+    const category = isSensitive ? 'sensitive' : isChat ? 'chat' : isAuth ? 'auth' : 'anon';
+    const redisClient = (this.redisService as any).client;
 
-    const record = ipCache.get(cacheKey);
-    if (!record) {
-      ipCache.set(cacheKey, { count: 1, resetTime: now + windowMs });
-      return next();
+    // 1. Check for Active IP Ban
+    if (redisClient) {
+      try {
+        const isBanned = await this.redisService.get(`ban:${ip}`);
+        if (isBanned) {
+          throw new HttpException(
+            'This IP address has been temporarily blocked due to excessive requests. Please try again in 15 minutes.',
+            HttpStatus.TOO_MANY_REQUESTS,
+          );
+        }
+      } catch (err: any) {
+        if (err instanceof HttpException) throw err;
+        this.logger.error(`Redis ban check failed: ${err.message}`);
+      }
     }
 
-    if (now > record.resetTime) {
-      record.count = 1;
-      record.resetTime = now + windowMs;
-      return next();
+    // 2. Perform Rate Limiting
+    let count = 0;
+    let fallbackUsed = false;
+
+    if (redisClient) {
+      try {
+        const rateKey = `rate-limit:${ip}:${category}`;
+        const currentCount = await redisClient.incr(rateKey);
+        if (currentCount === 1) {
+          await redisClient.expire(rateKey, windowSec);
+        }
+        count = currentCount;
+      } catch (err: any) {
+        this.logger.error(`Redis rate limiting failed: ${err.message}. Falling back to in-memory.`);
+        fallbackUsed = true;
+      }
+    } else {
+      fallbackUsed = true;
     }
 
-    record.count++;
-    if (record.count > limit) {
+    if (fallbackUsed) {
+      // In-memory rate limiting fallback
+      const cacheKey = `${ip}:${category}`;
+      if (ipCache.size > 1000) {
+        for (const [key, val] of ipCache.entries()) {
+          if (now > val.resetTime) {
+            ipCache.delete(key);
+          }
+        }
+      }
+
+      const record = ipCache.get(cacheKey);
+      if (!record || now > record.resetTime) {
+        ipCache.set(cacheKey, { count: 1, resetTime: now + windowSec * 1000 });
+        count = 1;
+      } else {
+        record.count++;
+        count = record.count;
+      }
+    }
+
+    // 3. Set standard API Rate Limit Headers
+    res.setHeader('X-RateLimit-Limit', limit.toString());
+    res.setHeader('X-RateLimit-Remaining', Math.max(0, limit - count).toString());
+
+    // 4. Handle Limit Exceeded
+    if (count > limit) {
+      if (redisClient) {
+        try {
+          const violationKey = `violations:${ip}`;
+          const violations = await redisClient.incr(violationKey);
+          if (violations === 1) {
+            await redisClient.expire(violationKey, 900); // 15 mins
+          }
+          if (violations >= 3) {
+            await this.redisService.set(`ban:${ip}`, 'true', 900); // Ban for 15 mins
+            this.logger.warn(`IP ${ip} temporarily banned for 15 minutes due to repeated rate limit violations.`);
+            throw new HttpException(
+              'This IP address has been temporarily blocked due to excessive requests. Please try again in 15 minutes.',
+              HttpStatus.TOO_MANY_REQUESTS,
+            );
+          }
+        } catch (err: any) {
+          if (err instanceof HttpException) throw err;
+          this.logger.error(`Redis violation tracking failed: ${err.message}`);
+        }
+      }
+
       throw new HttpException(
         isSensitive
           ? 'Too many authentication attempts. Please try again in a minute.'

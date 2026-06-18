@@ -1,0 +1,174 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                    String         @id @default(uuid())
+  email                 String         @unique
+  name                  String
+  password              String
+  role                  String         @default("ADMIN") // ADMIN, OPERATOR, VISITOR
+  isVerified            Boolean        @default(false)
+  verificationToken     String?
+  verificationTokenExp  DateTime?
+  resetToken            String?
+  resetTokenExp         DateTime?
+  twoFactorSecret       String?
+  twoFactorEnabled      Boolean        @default(false)
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+  businesses            Business[]     @relation("BusinessOwner")
+  refreshTokens         RefreshToken[]
+}
+
+model Business {
+  id                  String               @id @default(uuid())
+  companyName         String
+  website             String
+  industry            String
+  description         String
+  agentTone           String               @default("Professional")
+  agentPrompt         String               @default("You are a helpful sales assistant.")
+  widgetGreeting      String?              @default("Hello! How can we help you today?")
+  widgetRules         String?              @default("[]")
+  widgetPosition      String?              @default("bottom-right")
+  ownerId             String
+  owner               User                 @relation("BusinessOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  knowledgeBases      KnowledgeBase[]
+  leads               Lead[]
+  visitorTracks       VisitorTrack[]
+  competitorAnalyses  CompetitorAnalysis[]
+  recommendations     Recommendation[]
+  conversations       Conversation[]
+
+  @@index([ownerId])
+}
+
+model KnowledgeBase {
+  id         String   @id @default(uuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  title      String
+  content    String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([businessId])
+}
+
+model Lead {
+  id              String        @id @default(uuid())
+  businessId      String
+  business        Business      @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  name            String        @default("Anonymous Visitor")
+  email           String?
+  phone           String?
+  source          String        @default("WIDGET") // WIDGET, WHATSAPP, INSTAGRAM, EMAIL
+  status          String        @default("COLD") // COLD, WARM, HOT, QUALIFIED
+  sentiment       String        @default("Neutral")
+  budget          String?
+  engagementScore Int           @default(10)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  conversations   Conversation[]
+  appointments    Appointment[]
+
+  @@index([businessId])
+  @@index([businessId, status, createdAt])
+  @@index([businessId, createdAt])
+}
+
+model Conversation {
+  id              String    @id @default(uuid())
+  leadId          String?
+  lead            Lead?     @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  businessId      String
+  business        Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  messages        Json      @default("[]")
+  channel         String    @default("WIDGET") // WIDGET, WHATSAPP, INSTAGRAM, EMAIL
+  isHumanTakeover Boolean   @default(false)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([businessId])
+  @@index([businessId, createdAt])
+  @@index([leadId])
+}
+
+model Appointment {
+  id         String   @id @default(uuid())
+  leadId     String
+  lead       Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  date       String
+  time       String
+  status     String   @default("PENDING") // PENDING, CONFIRMED, CANCELLED
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([businessId])
+  @@index([businessId, createdAt])
+  @@index([leadId])
+}
+
+model VisitorTrack {
+  id         String   @id @default(uuid())
+  visitorId  String
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  pageUrl    String
+  referrer   String?
+  duration   Int      @default(0) // time spent on page in seconds
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([businessId])
+  @@index([businessId, createdAt])
+  @@index([visitorId])
+}
+
+model CompetitorAnalysis {
+  id            String   @id @default(uuid())
+  businessId    String
+  business      Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  competitorUrl String
+  analysis      String   @default("{}") // JSON string of serviceCompare, missingOfferings, contentGaps
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([businessId])
+}
+
+model Recommendation {
+  id         String   @id @default(uuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  title      String
+  content    String
+  priority   String   @default("MEDIUM") // HIGH, MEDIUM, LOW
+  category   String   @default("LEAD")   // LEAD, COMPETITOR, KB
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([businessId])
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  revoked   Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
