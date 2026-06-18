@@ -23,8 +23,8 @@ venv/
 var/
 bin/
 include/
-lib/
-lib64/
+/lib/
+/lib64/
 pyvenv.cfg
 pip-selfcheck.json
 

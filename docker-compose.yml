@@ -47,6 +47,14 @@ services:
       - FRONTEND_URL=http://localhost:3000
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+      - SMTP_HOST=
+      - SMTP_PORT=587
+      - SMTP_USER=
+      - SMTP_PASS=
+      - SMTP_FROM=no-reply@beacon-sales.com
+      - WEBHOOK_SECRET=webhook-secret-key
+      - LAUNCHDARKLY_SDK_KEY=
+      - NODE_ENV=production
     depends_on:
       - ai-service
       - postgres
@@ -67,6 +75,14 @@ services:
       - FRONTEND_URL=http://localhost:3000
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+      - SMTP_HOST=
+      - SMTP_PORT=587
+      - SMTP_USER=
+      - SMTP_PASS=
+      - SMTP_FROM=no-reply@beacon-sales.com
+      - WEBHOOK_SECRET=webhook-secret-key
+      - LAUNCHDARKLY_SDK_KEY=
+      - NODE_ENV=production
     depends_on:
       - ai-service
       - postgres
@@ -93,6 +109,8 @@ services:
       - "3000:3000"
     environment:
       - NEXT_PUBLIC_API_URL=http://localhost:4000
+      - NEXT_PUBLIC_WIDGET_SCRIPT_URL=http://localhost:4000/widget/logicra-widget.js
+      - NEXT_PUBLIC_SENTRY_DSN=
     depends_on:
       - nginx
     restart: always
