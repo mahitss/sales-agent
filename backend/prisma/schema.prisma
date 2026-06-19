@@ -26,8 +26,12 @@ model User {
   updatedAt            DateTime       @updatedAt
   businesses           Business[]
   refreshTokens        RefreshToken[]
+  activityLogs         ActivityLog[]
+  organizationId       String?
+  organization         Organization?  @relation(fields: [organizationId], references: [id], onDelete: SetNull)
 
   @@index([businessId])
+  @@index([organizationId])
 }
 
 model Business {
@@ -51,8 +55,9 @@ model Business {
   widgetRules        String?              @default("[]")
   widgetPosition     String?              @default("bottom-right")
   createdAt          DateTime             @default(now())
-  updatedAt          DateTime             @updatedAt
-  leads              Lead[]
+  googleSheetsSpreadsheetId String?
+  googleSheetsEnabled       Boolean              @default(false)
+  leads                     Lead[]
   conversations      Conversation[]
   appointments       Appointment[]
   knowledgeBases     KnowledgeBase[]
@@ -60,6 +65,13 @@ model Business {
   competitorAnalyses CompetitorAnalysis[]
   recommendations    Recommendation[]
   employees          User[]               @relation("BusinessEmployees")
+  organizationId     String?
+  organization       Organization?        @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  subscription       Subscription?
+  feedbacks          Feedback[]
+  aiCostLogs         AICostLog[]
+
+  @@index([organizationId])
 }
 
 model KnowledgeBase {
@@ -90,6 +102,13 @@ model Lead {
   updatedAt       DateTime       @updatedAt
   conversations Conversation[]
   appointments Appointment[]
+
+  // New Relations
+  intelligence      LeadIntelligence?
+  score             LeadScore?
+  enrichment        CompanyEnrichment?
+  revenuePrediction RevenuePrediction?
+  googleSheetsSync  GoogleSheetsSyncLog?
 
   @@index([businessId])
   @@index([businessId, createdAt])
@@ -180,4 +199,165 @@ model RefreshToken {
 
   @@index([userId])
 }
+
+model LeadIntelligence {
+  id                String    @id @default(uuid())
+  leadId            String    @unique
+  lead              Lead      @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  summary           String
+  goals             String
+  painPoints        String
+  requestedServices String[]  @default([])
+  timeline          String
+  objections        String
+  recommendedAction String
+  purchaseReadiness String
+  conversionRisk    String
+  frequentTopics    String[]  @default([])
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([leadId])
+}
+
+model LeadScore {
+  id                  String    @id @default(uuid())
+  leadId              String    @unique
+  lead              Lead      @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  score               Int
+  classification      String    // HOT, WARM, COLD
+  dealProbability     Float     // Decimal value e.g. 0.84 for 84%
+  urgency             String
+  decisionMakerStatus String
+  businessSize        String
+  serviceMatch        String
+  engagement          Int
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  @@index([leadId])
+}
+
+model CompanyEnrichment {
+  id                 String    @id @default(uuid())
+  leadId             String    @unique
+  lead               Lead      @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  companyName        String
+  website            String?
+  industry           String?
+  description        String?
+  companySize        String?
+  country            String?
+  socialLinks        Json      @default("{}") // LinkedIn, Twitter, etc.
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  @@index([leadId])
+}
+
+model RevenuePrediction {
+  id             String    @id @default(uuid())
+  leadId         String    @unique
+  lead           Lead      @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  estimatedValue Float
+  probability    Float
+  expectedValue  Float     // Calculated: estimatedValue * probability
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([leadId])
+}
+
+model GoogleSheetsSyncLog {
+  id             String    @id @default(uuid())
+  leadId         String    @unique
+  lead           Lead      @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  spreadsheetId  String
+  status         String    @default("PENDING") // PENDING, SUCCESS, FAILED
+  attempts       Int       @default(0)
+  errorMessage   String?
+  syncedAt       DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([leadId])
+}
+
+model Organization {
+  id          String   @id @default(uuid())
+  name        String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Relations
+  members     User[]
+  businesses  Business[]
+}
+
+model UserInvitation {
+  id          String   @id @default(uuid())
+  email       String
+  role        String   @default("EMPLOYEE")
+  businessId  String
+  token       String   @unique
+  status      String   @default("PENDING") // PENDING, ACCEPTED, EXPIRED
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model ActivityLog {
+  id          String   @id @default(uuid())
+  userId      String?
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action      String   // e.g. "AUTH_LOGIN", "LEAD_QUALIFY", "SHEET_SYNC", "BILLING_UPDATE"
+  description String
+  ipAddress   String?
+  metadata    Json     @default("{}")
+  createdAt   DateTime @default(now())
+  
+  @@index([userId])
+  @@index([action])
+}
+
+model Subscription {
+  id                   String    @id @default(uuid())
+  businessId           String    @unique
+  business             Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  stripeCustomerId     String?
+  stripeSubscriptionId String?   @unique
+  status               String    @default("TRIALING") // ACTIVE, CANCELED, PAST_DUE, TRIALING
+  planId               String    @default("free") // free, growth, enterprise
+  currentPeriodStart   DateTime  @default(now())
+  currentPeriodEnd     DateTime  @default(now())
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+}
+
+model Feedback {
+  id          String   @id @default(uuid())
+  businessId  String
+  business    Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  name        String
+  email       String
+  category    String   // FEEDBACK, BUG, FEATURE_REQUEST, SUPPORT
+  content     String
+  status      String   @default("NEW") // NEW, IN_PROGRESS, RESOLVED
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model AICostLog {
+  id          String   @id @default(uuid())
+  businessId  String
+  business    Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  model       String   // e.g. "gemini-2.5-flash"
+  promptTokens Int
+  completionTokens Int
+  cost        Float    // Calculated cost in USD
+  action      String   // e.g. "chat", "lead_analysis", "faq_extract"
+  createdAt   DateTime @default(now())
+}
+
+
 

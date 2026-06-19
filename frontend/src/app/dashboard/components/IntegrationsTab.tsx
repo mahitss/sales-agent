@@ -16,6 +16,10 @@ interface IntegrationsTabProps {
   setEmailEnabled: (val: boolean) => void;
   emailSmtp: string;
   setEmailSmtp: (val: string) => void;
+  googleSheetsSpreadsheetId: string;
+  setGoogleSheetsSpreadsheetId: (val: string) => void;
+  googleSheetsEnabled: boolean;
+  setGoogleSheetsEnabled: (val: boolean) => void;
   themeColor: string;
   setThemeColor: (val: string) => void;
   agentTone: string;
@@ -52,6 +56,10 @@ export const IntegrationsTab: React.FC<IntegrationsTabProps> = ({
   setEmailEnabled,
   emailSmtp,
   setEmailSmtp,
+  googleSheetsSpreadsheetId,
+  setGoogleSheetsSpreadsheetId,
+  googleSheetsEnabled,
+  setGoogleSheetsEnabled,
   themeColor,
   setThemeColor,
   agentTone,
@@ -149,6 +157,36 @@ export const IntegrationsTab: React.FC<IntegrationsTabProps> = ({
                 placeholder="SMTP Connection URL (e.g. smtp.mailgun.org:587)"
                 className="w-full rounded-xl bg-card border border-card-border px-4 py-2.5 text-xs text-white focus:outline-none focus:border-accent-primary/50 transition-all"
               />
+            )}
+          </div>
+
+          {/* Google Sheets Sync */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex flex-col">
+                <span className="font-bold text-sm text-slate-200">Google Sheets Sync Integration</span>
+                <span className="text-[10px] text-muted-text">Real-time bi-directional pipeline sync for leads database</span>
+              </div>
+              <input
+                type="checkbox"
+                checked={googleSheetsEnabled}
+                onChange={(e) => setGoogleSheetsEnabled(e.target.checked)}
+                className="h-4 w-4 text-accent-primary bg-card border border-card-border rounded focus:ring-accent-primary cursor-pointer transition-all"
+              />
+            </div>
+            {googleSheetsEnabled && (
+              <div className="space-y-2">
+                <input
+                  type="text"
+                  value={googleSheetsSpreadsheetId}
+                  onChange={(e) => setGoogleSheetsSpreadsheetId(e.target.value)}
+                  placeholder="Spreadsheet ID (Leave blank to automatically create a new sheet!)"
+                  className="w-full rounded-xl bg-card border border-card-border px-4 py-2.5 text-xs text-white focus:outline-none focus:border-accent-primary/50 transition-all font-mono"
+                />
+                <p className="text-[10px] text-slate-400">
+                  Invite the service account email as editor: <code className="bg-card px-1.5 py-0.5 rounded text-accent-primary border border-card-border font-mono break-all">beacon-sync@sales-agent-ai.iam.gserviceaccount.com</code>
+                </p>
+              </div>
             )}
           </div>
 

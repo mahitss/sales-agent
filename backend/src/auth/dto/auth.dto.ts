@@ -16,6 +16,9 @@ export class RegisterDto {
 
   @IsOptional()
   role?: string;
+
+  @IsOptional()
+  inviteToken?: string;
 }
 
 export class LoginDto {

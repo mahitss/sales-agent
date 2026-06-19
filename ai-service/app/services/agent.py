@@ -71,6 +71,60 @@ class CompetitorAnalysisResponse(BaseModel):
     contentGaps: List[str] = Field(description="SEO content gaps or keyword areas we should cover.")
 
 
+class ScoringFactors(BaseModel):
+    budget: str = Field(description="Scoring assessment of budget.")
+    urgency: str = Field(description="Scoring assessment of urgency.")
+    timeline: str = Field(description="Scoring assessment of timeline.")
+    decision_maker_status: str = Field(description="Is this contact a decision-maker?")
+    business_size: str = Field(description="Calculated size of customer's business.")
+    service_match: str = Field(description="Assessment of service match level.")
+    engagement: int = Field(description="Engagement score value 0-100.")
+
+class LeadScoring(BaseModel):
+    score: int = Field(description="Lead intelligence score 0-100.")
+    deal_probability: float = Field(description="Probability of closing project (0.0 to 1.0).")
+    classification: str = Field(description="One of: HOT, WARM, COLD.")
+    factors: ScoringFactors = Field(description="Scoring engine calculation factors.")
+
+class SummaryAndAnalysis(BaseModel):
+    summary: str = Field(description="1-2 sentences overview of this lead's needs.")
+    goals: str = Field(description="Customer business goals.")
+    pain_points: str = Field(description="Current friction or issues described.")
+    requested_services: List[str] = Field(description="List of requested services matching features.")
+    timeline: str = Field(description="Lead timeline constraint description.")
+    objections: str = Field(description="Stated hesitations or concerns.")
+    recommended_action: str = Field(description="Recommended follow-up action for human agent.")
+
+class CompanyInfo(BaseModel):
+    company_name: str = Field(description="Extracted company name.")
+    website: Optional[str] = Field(None, description="Extracted website URL.")
+    industry: Optional[str] = Field(None, description="Extracted industry name.")
+    description: Optional[str] = Field(None, description="Extracted company description.")
+    company_size: Optional[str] = Field(None, description="Extracted company size range.")
+    country: Optional[str] = Field(None, description="Extracted country.")
+    social_links: Dict[str, str] = Field(default={}, description="Links to social profiles.")
+
+class ConversationIntelligence(BaseModel):
+    intent: str = Field(description="Primary intent of conversation.")
+    purchase_readiness: str = Field(description="Estimated readiness level (High, Medium, Low).")
+    sentiment: str = Field(description="Sentiment polarity: Positive, Neutral, Negative.")
+    objections: str = Field(description="Summary of main objections raised.")
+    frequent_topics: List[str] = Field(description="Frequently mentioned terms or topics.")
+    conversion_risk: str = Field(description="Risk assessment for conversion (High, Medium, Low).")
+
+class RevenuePredictionModel(BaseModel):
+    estimated_value: float = Field(description="Estimated total deal value in Rupees. If range, use average. If not mentioned, estimate based on industry averages.")
+    deal_probability: float = Field(description="Probability of closing project (0.0 to 1.0).")
+    expected_revenue: float = Field(description="Calculated expected revenue: estimated_value * deal_probability.")
+
+class AnalyzeLeadResponse(BaseModel):
+    summary: SummaryAndAnalysis = Field(description="AI Lead Summary analysis.")
+    scoring: LeadScoring = Field(description="Lead scoring metrics.")
+    enrichment: CompanyInfo = Field(description="Enriched company details.")
+    intelligence: ConversationIntelligence = Field(description="Conversation intent analytics.")
+    revenue: RevenuePredictionModel = Field(description="Expected value parameters.")
+
+
 class AIAgentService:
     def __init__(self):
         self.api_key = os.getenv("GEMINI_API_KEY")
@@ -498,3 +552,114 @@ class AIAgentService:
                 missingOfferings=["Detailed competitor comparison metrics"],
                 contentGaps=["SEO optimization target terms"]
             )
+
+    # --- Advanced Lead Intelligence Service ---
+    def analyze_lead(self, messages: List[Dict[str, str]], business_context: Dict[str, Any]) -> AnalyzeLeadResponse:
+        if not self.client:
+            return self._mock_lead_analysis(messages, business_context)
+
+        try:
+            # Build conversation log text
+            conv_log = ""
+            for msg in messages:
+                role_label = "Customer" if msg["role"] == "user" else "Assistant"
+                conv_log += f"{role_label}: {msg['content']}\n"
+
+            prompt = (
+                f"You are an elite business analyst and sales intelligence agent. Your job is to analyze the conversation history between a customer lead and our AI assistant.\n\n"
+                f"Business Details:\n"
+                f"- Name: {business_context.get('companyName')}\n"
+                f"- Website: {business_context.get('website')}\n"
+                f"- Industry: {business_context.get('industry')}\n"
+                f"- Description: {business_context.get('description')}\n\n"
+                f"Conversation Log:\n"
+                f"{conv_log}\n"
+                f"Perform lead analysis, scoring, company enrichment, and expected project revenue estimation. Return the structured JSON response matching the schema."
+            )
+
+            max_retries = 3
+            backoff_factor = 0.5
+            for attempt in range(max_retries):
+                try:
+                    response = self.client.models.generate_content(
+                        model='gemini-2.5-flash',
+                        contents=prompt,
+                        config=types.GenerateContentConfig(
+                            response_mime_type="application/json",
+                            response_schema=AnalyzeLeadResponse,
+                            temperature=0.2,
+                        )
+                    )
+                    return AnalyzeLeadResponse.model_validate_json(response.text)
+                except Exception as e:
+                    logger.warning(f"Gemini API lead analysis attempt {attempt + 1} failed: {e}")
+                    if attempt == max_retries - 1:
+                        raise e
+                    time.sleep(backoff_factor * (2 ** attempt))
+
+        except Exception as e:
+            logger.exception("Error in Gemini lead analysis pipeline")
+            return self._mock_lead_analysis(messages, business_context)
+
+    def _mock_lead_analysis(self, messages: List[Dict[str, str]], business_context: Dict[str, Any]) -> AnalyzeLeadResponse:
+        # Fallback simple analyzer when offline or error occurs
+        last_message = messages[-1]["content"] if messages else ""
+        
+        estimated_val = 50000.0
+        msg_lower = last_message.lower()
+        if "100" in msg_lower or "lakh" in msg_lower or "1,00" in msg_lower:
+            estimated_val = 100000.0
+        elif "20" in msg_lower or "25" in msg_lower:
+            estimated_val = 25000.0
+            
+        prob = 0.70
+        if "now" in msg_lower or "immediate" in msg_lower or "urgent" in msg_lower:
+            prob = 0.90
+            
+        return AnalyzeLeadResponse(
+            summary=SummaryAndAnalysis(
+                summary="Lead is inquiring about services. Interested in standard packaging.",
+                goals="Streamline sales operations and qualify visitors 24/7.",
+                pain_points="Losing visitors during off-hours, high lead dropoff.",
+                requested_services=["AI Chat Widget Setup", "Multi-Channel Inbox Integration"],
+                timeline="30 days",
+                objections="None stated yet",
+                recommended_action="Email follow-up to coordinate custom demo call."
+            ),
+            scoring=LeadScoring(
+                score=85,
+                deal_probability=prob,
+                classification="HOT",
+                factors=ScoringFactors(
+                    budget="Standard",
+                    urgency="High",
+                    timeline="Immediate",
+                    decision_maker_status="Undetermined",
+                    business_size="SMB",
+                    service_match="High Match",
+                    engagement=80
+                )
+            ),
+            enrichment=CompanyInfo(
+                company_name=business_context.get("companyName", "Acme Corp"),
+                website="https://theirwebsite.com",
+                industry=business_context.get("industry", "Technology"),
+                description="A client enterprise using Beacon AI widget.",
+                company_size="10-50",
+                country="India",
+                social_links={"linkedin": "https://linkedin.com/company/acme"}
+            ),
+            intelligence=ConversationIntelligence(
+                intent="Service Inquiry",
+                purchase_readiness="High",
+                sentiment="Positive",
+                objections="None",
+                frequent_topics=["pricing", "customization"],
+                conversion_risk="Low"
+            ),
+            revenue=RevenuePredictionModel(
+                estimated_value=estimated_val,
+                deal_probability=prob,
+                expected_revenue=estimated_val * prob
+            )
+        )

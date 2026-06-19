@@ -30,6 +30,14 @@ export interface BusinessInfo {
   whatsappApiKey?: string;
   instagramAccountId?: string;
   emailSmtp?: string;
+  googleSheetsSpreadsheetId?: string;
+  googleSheetsEnabled: boolean;
+  subscription?: {
+    id: string;
+    planId: string;
+    status: string;
+    currentPeriodEnd: string;
+  } | null;
 }
 
 export interface FAQItem {
@@ -98,6 +106,10 @@ export interface DashboardStats {
   coldLeads: number;
   appointments: number;
   conversionRate: number;
+  totalExpectedRevenue: number;
+  revenueForecast: number;
+  averageLeadScore: number;
+  leadConversionRate: number;
 }
 
 export type TabType =
@@ -110,7 +122,9 @@ export type TabType =
   | "visitor"
   | "competitor"
   | "integrations"
-  | "team";
+  | "team"
+  | "billing"
+  | "activity";
 
 export function useDashboardData() {
   const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
@@ -169,6 +183,10 @@ export function useDashboardData() {
     coldLeads: 0,
     appointments: 0,
     conversionRate: 0,
+    totalExpectedRevenue: 0,
+    revenueForecast: 0,
+    averageLeadScore: 0,
+    leadConversionRate: 0,
   });
 
   const [selectedConv, setSelectedConv] = useState<Conversation | null>(null);
@@ -205,6 +223,8 @@ export function useDashboardData() {
   const [whatsappApiKey, setWhatsappApiKey] = useState("");
   const [instagramAccountId, setInstagramAccountId] = useState("");
   const [emailSmtp, setEmailSmtp] = useState("");
+  const [googleSheetsSpreadsheetId, setGoogleSheetsSpreadsheetId] = useState("");
+  const [googleSheetsEnabled, setGoogleSheetsEnabled] = useState(false);
   const [connectionSaving, setConnectionSaving] = useState(false);
 
   // Widget settings
@@ -231,6 +251,9 @@ export function useDashboardData() {
   const [employeeLoading, setEmployeeLoading] = useState(false);
   const [employeeError, setEmployeeError] = useState("");
   const [employeeSuccess, setEmployeeSuccess] = useState("");
+
+  // Audit activity logs
+  const [activityLogs, setActivityLogs] = useState<any[]>([]);
 
   const uploadIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -276,6 +299,8 @@ export function useDashboardData() {
           setWhatsappApiKey(data.whatsappApiKey || "");
           setInstagramAccountId(data.instagramAccountId || "");
           setEmailSmtp(data.emailSmtp || "");
+          setGoogleSheetsSpreadsheetId(data.googleSheetsSpreadsheetId || "");
+          setGoogleSheetsEnabled(data.googleSheetsEnabled || false);
           setThemeColor(data.themeColor || "#10B981");
           setAgentTone(data.agentTone || "PROFESSIONAL");
           setAgentPrompt(data.agentPrompt || "");
@@ -353,6 +378,13 @@ export function useDashboardData() {
         if (res.ok) setCompetitorAnalyses(await res.json());
       } else if (activeTab === "team") {
         await fetchEmployees();
+      } else if (activeTab === "activity") {
+        const res = await authenticatedFetch(`${API_URL}/business/${business.id}/activities`);
+        if (res.status === 401) {
+          handleUnauthorized();
+          return;
+        }
+        if (res.ok) setActivityLogs(await res.json());
       }
     } catch (err) {
       console.error("Data refresh failed", err);
@@ -532,6 +564,8 @@ export function useDashboardData() {
         setWhatsappApiKey(resData.whatsappApiKey || "");
         setInstagramAccountId(resData.instagramAccountId || "");
         setEmailSmtp(resData.emailSmtp || "");
+        setGoogleSheetsSpreadsheetId(resData.googleSheetsSpreadsheetId || "");
+        setGoogleSheetsEnabled(resData.googleSheetsEnabled || false);
         setThemeColor(resData.themeColor || "#10B981");
         setAgentTone(resData.agentTone || "PROFESSIONAL");
         setAgentPrompt(resData.agentPrompt || "");
@@ -570,6 +604,11 @@ export function useDashboardData() {
   const handleExportLeads = () => {
     if (!business) return;
     window.open(`${API_URL}/leads/business/${business.id}/export`, "_blank");
+  };
+
+  const handleExportLeadsExcel = () => {
+    if (!business) return;
+    window.open(`${API_URL}/leads/business/${business.id}/export/excel`, "_blank");
   };
 
   const handleDeleteFAQ = async (faqId: string) => {
@@ -635,6 +674,8 @@ export function useDashboardData() {
           whatsappApiKey,
           instagramAccountId,
           emailSmtp,
+          googleSheetsSpreadsheetId,
+          googleSheetsEnabled,
           themeColor,
           agentTone,
           agentPrompt,
@@ -880,6 +921,76 @@ export function useDashboardData() {
     }
   };
 
+  const handleStripeCheckout = async (planId: string) => {
+    if (!business) return;
+    try {
+      const returnUrl = window.location.origin + "/dashboard";
+      const res = await authenticatedFetch(`${API_URL}/stripe/checkout-session`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ businessId: business.id, planId, returnUrl }),
+      });
+      if (res.ok) {
+        const { url } = await res.json();
+        window.location.href = url;
+      } else {
+        const errData = await res.json();
+        alert(errData.message || "Failed to initiate Stripe checkout");
+      }
+    } catch (e) {
+      console.error(e);
+      alert("Error contacting payment gateway");
+    }
+  };
+
+  const handleStripePortal = async () => {
+    if (!business) return;
+    try {
+      const returnUrl = window.location.origin + "/dashboard";
+      const res = await authenticatedFetch(`${API_URL}/stripe/billing-portal`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ businessId: business.id, returnUrl }),
+      });
+      if (res.ok) {
+        const { url } = await res.json();
+        window.location.href = url;
+      } else {
+        const errData = await res.json();
+        alert(errData.message || "Failed to load Stripe billing portal");
+      }
+    } catch (e) {
+      console.error(e);
+      alert("Error contacting payment gateway");
+    }
+  };
+
+  // Complete mock payment if redirect payload is in the URL
+  useEffect(() => {
+    if (typeof window !== "undefined" && token && business) {
+      const params = new URLSearchParams(window.location.search);
+      const mockSession = params.get("mock_session_id");
+      const planId = params.get("plan_id");
+      const businessId = params.get("business_id");
+      if (mockSession && planId && businessId === business.id) {
+        authenticatedFetch(`${API_URL}/stripe/mock-checkout-success`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ businessId, planId }),
+        })
+          .then((res) => {
+            if (res.ok) {
+              const newUrl = window.location.pathname;
+              window.history.replaceState({}, document.title, newUrl);
+              fetchBusiness();
+            }
+          })
+          .catch((err) => console.error("Mock checkout completion failed", err));
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token, business?.id]);
+
   // Fetch business info
   useEffect(() => {
     if (token) {
@@ -1067,6 +1178,7 @@ export function useDashboardData() {
     handleOnboard,
     handleAddFAQ,
     handleExportLeads,
+    handleExportLeadsExcel,
     handleDeleteFAQ,
     handleUpdateApptStatus,
     handleUpdateLeadStatus,
@@ -1077,5 +1189,12 @@ export function useDashboardData() {
     handleStartCompetitor,
     handleToggleTakeover,
     handleSendOperatorReply,
+    googleSheetsSpreadsheetId,
+    setGoogleSheetsSpreadsheetId,
+    googleSheetsEnabled,
+    setGoogleSheetsEnabled,
+    activityLogs,
+    handleStripeCheckout,
+    handleStripePortal,
   };
 }

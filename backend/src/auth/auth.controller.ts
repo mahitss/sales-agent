@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Body, HttpCode, HttpStatus, Res, Req, UseGuards } from '@nestjs/common';
+import { Controller, Post, Get, Body, HttpCode, HttpStatus, Res, Req, UseGuards, Param, BadRequestException } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { RegisterDto, LoginDto, VerifyEmailDto, RequestPasswordResetDto, ResetPasswordDto } from './dto/auth.dto';
@@ -213,5 +213,19 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   async revokeSession(@Req() req, @Body('sessionId') sessionId: string) {
     return this.authService.revokeSession(req.user.sub, sessionId);
+  }
+
+  @Get('invite/verify/:token')
+  async verifyInvitation(@Param('token') token: string) {
+    return this.authService.verifyInvitation(token);
+  }
+
+  @UseGuards(AuthGuard)
+  @Post('invite')
+  async createInvitation(@Body() body: { email: string; businessId: string; role: string }) {
+    if (!body.email || !body.businessId) {
+      throw new BadRequestException('Missing required fields: email, businessId');
+    }
+    return this.authService.createInvitation(body.email, body.businessId, body.role || 'EMPLOYEE');
   }
 }

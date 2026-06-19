@@ -14,7 +14,9 @@ import {
   MapPin,
   Compass,
   Radio,
-  Activity
+  Activity,
+  CreditCard,
+  History
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -37,6 +39,10 @@ const CompetitorTab = dynamic(() => import("./components/CompetitorTab").then(m 
 const TeamTab = dynamic(() => import("./components/TeamTab").then(m => m.TeamTab), { ssr: false });
 const WidgetTab = dynamic(() => import("./components/WidgetTab").then(m => m.WidgetTab), { ssr: false });
 const IntegrationsTab = dynamic(() => import("./components/IntegrationsTab").then(m => m.IntegrationsTab), { ssr: false });
+const BillingTab = dynamic(() => import("./components/BillingTab").then(m => m.BillingTab), { ssr: false });
+const ActivityTab = dynamic(() => import("./components/ActivityTab").then(m => m.ActivityTab), { ssr: false });
+
+import { FeedbackModal } from "@/components/FeedbackModal";
 
 const SkeletonLoader = () => (
   <div className="space-y-6 animate-pulse">
@@ -51,6 +57,7 @@ const SkeletonLoader = () => (
 );
 
 export default function DashboardPage() {
+  const [isFeedbackOpen, setIsFeedbackOpen] = React.useState(false);
   const {
     API_URL,
     token,
@@ -158,6 +165,14 @@ export default function DashboardPage() {
     handleStartCompetitor,
     handleToggleTakeover,
     handleSendOperatorReply,
+    googleSheetsSpreadsheetId,
+    setGoogleSheetsSpreadsheetId,
+    googleSheetsEnabled,
+    setGoogleSheetsEnabled,
+    handleExportLeadsExcel,
+    activityLogs,
+    handleStripeCheckout,
+    handleStripePortal,
   } = useDashboardData();
 
   // 1. RENDER: Auth Gate
@@ -401,13 +416,42 @@ export default function DashboardPage() {
                   <CodeIcon className="h-4.5 w-4.5" />
                   Widget Code
                 </button>
+                <button
+                  onClick={() => setActiveTab("billing")}
+                  className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-xl transition-all cursor-pointer ${
+                    activeTab === "billing"
+                      ? "bg-accent-primary/10 text-accent-primary border border-accent-primary/20 font-semibold"
+                      : "text-muted-text hover:bg-card/40 hover:text-foreground"
+                  }`}
+                >
+                  <CreditCard className="h-4.5 w-4.5" />
+                  Plans & Billing
+                </button>
+                <button
+                  onClick={() => setActiveTab("activity")}
+                  className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-xl transition-all cursor-pointer ${
+                    activeTab === "activity"
+                      ? "bg-accent-primary/10 text-accent-primary border border-accent-primary/20 font-semibold"
+                      : "text-muted-text hover:bg-card/40 hover:text-foreground"
+                  }`}
+                >
+                  <History className="h-4.5 w-4.5" />
+                  Audit Activity Logs
+                </button>
               </>
             )}
           </nav>
         </div>
 
         {/* Footer profile & logout */}
-        <div className="p-4 border-t border-card-border space-y-4">
+        <div className="p-4 border-t border-card-border space-y-3">
+          <button
+            onClick={() => setIsFeedbackOpen(true)}
+            className="w-full flex items-center gap-3 px-4 py-2 text-xs font-semibold rounded-xl text-accent-primary hover:bg-accent-primary/5 hover:text-white border border-transparent hover:border-accent-primary/10 transition-all cursor-pointer"
+          >
+            <MessageSquare className="h-4.5 w-4.5" />
+            Submit Feedback
+          </button>
           <div className="flex items-center justify-between px-2">
             <div className="flex items-center gap-3 overflow-hidden">
               <div className="h-9 w-9 rounded-full bg-slate-800 border border-slate-700/50 flex items-center justify-center font-bold text-accent-primary shrink-0">
@@ -496,6 +540,7 @@ export default function DashboardPage() {
                         filterSentiment={filterSentiment}
                         setFilterSentiment={setFilterSentiment}
                         handleExportLeads={handleExportLeads}
+                        handleExportLeadsExcel={handleExportLeadsExcel}
                         handleUpdateLeadStatus={handleUpdateLeadStatus}
                       />
                     </ErrorBoundary>
@@ -594,6 +639,24 @@ export default function DashboardPage() {
                     </ErrorBoundary>
                   )}
 
+                  {activeTab === "billing" && (
+                    <ErrorBoundary>
+                      <BillingTab
+                        business={business}
+                        handleStripeCheckout={handleStripeCheckout}
+                        handleStripePortal={handleStripePortal}
+                      />
+                    </ErrorBoundary>
+                  )}
+
+                  {activeTab === "activity" && (
+                    <ErrorBoundary>
+                      <ActivityTab
+                        activityLogs={activityLogs}
+                      />
+                    </ErrorBoundary>
+                  )}
+
                   {activeTab === "integrations" && (
                     <ErrorBoundary>
                       <IntegrationsTab
@@ -610,6 +673,10 @@ export default function DashboardPage() {
                         setEmailEnabled={setEmailEnabled}
                         emailSmtp={emailSmtp}
                         setEmailSmtp={setEmailSmtp}
+                        googleSheetsSpreadsheetId={googleSheetsSpreadsheetId}
+                        setGoogleSheetsSpreadsheetId={setGoogleSheetsSpreadsheetId}
+                        googleSheetsEnabled={googleSheetsEnabled}
+                        setGoogleSheetsEnabled={setGoogleSheetsEnabled}
                         themeColor={themeColor}
                         setThemeColor={setThemeColor}
                         agentTone={agentTone}
@@ -640,6 +707,14 @@ export default function DashboardPage() {
           </AnimatePresence>
         </div>
       </main>
+      <FeedbackModal
+        isOpen={isFeedbackOpen}
+        onClose={() => setIsFeedbackOpen(false)}
+        businessId={business.id}
+        apiUrl={API_URL}
+        userEmail={user?.email}
+        userName={user?.name}
+      />
     </div>
   );
 }

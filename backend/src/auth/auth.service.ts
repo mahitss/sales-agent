@@ -27,6 +27,30 @@ export class AuthService {
   }
 
   async register(dto: RegisterDto) {
+    let resolvedRole = dto.role || 'ADMIN';
+    let resolvedBusinessId: string | null = null;
+    let isVerified = false;
+    let invitationId: string | null = null;
+
+    if (dto.inviteToken) {
+      const invitation = await this.prisma.userInvitation.findFirst({
+        where: {
+          token: dto.inviteToken,
+          status: 'PENDING',
+          expiresAt: { gte: new Date() },
+        },
+      });
+
+      if (!invitation) {
+        throw new ConflictException('Invalid or expired team invitation token');
+      }
+
+      resolvedRole = invitation.role;
+      resolvedBusinessId = invitation.businessId;
+      isVerified = true; // Email verified since they accepted email invitation
+      invitationId = invitation.id;
+    }
+
     const existing = await this.prisma.user.findUnique({
       where: { email: dto.email },
     });
@@ -35,20 +59,40 @@ export class AuthService {
     }
 
     const hashedPassword = await bcrypt.hash(dto.password, 10);
-    const verificationToken = crypto.randomUUID();
-    const verificationTokenExp = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+    const verificationToken = isVerified ? null : crypto.randomUUID();
+    const verificationTokenExp = isVerified ? null : new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
 
     const user = await this.prisma.user.create({
       data: {
         email: dto.email,
         name: dto.name,
         password: hashedPassword,
-        role: dto.role || 'ADMIN',
+        role: resolvedRole,
+        businessId: resolvedBusinessId,
         verificationToken,
         verificationTokenExp,
-        isVerified: false,
+        isVerified,
       },
     });
+
+    if (invitationId) {
+      await this.prisma.userInvitation.update({
+        where: { id: invitationId },
+        data: { status: 'ACCEPTED' },
+      });
+      
+      // Add employee user to business list
+      if (resolvedBusinessId) {
+        await this.prisma.business.update({
+          where: { id: resolvedBusinessId },
+          data: {
+            employees: {
+              connect: { id: user.id }
+            }
+          }
+        });
+      }
+    }
 
     // Generate token pair (access token + refresh token)
     const tokens = await this.generateTokensPair(user.id, user.email, user.role);
@@ -56,7 +100,9 @@ export class AuthService {
     // Save refresh token to db
     await this.saveRefreshToken(user.id, tokens.refreshToken);
 
-    await this.emailService.sendVerificationEmail(user.email, verificationToken);
+    if (!isVerified && verificationToken) {
+      await this.emailService.sendVerificationEmail(user.email, verificationToken);
+    }
 
     return {
       user: {
@@ -509,4 +555,59 @@ export class AuthService {
 
     return { success: true, message: 'Session revoked successfully' };
   }
+
+  async createInvitation(email: string, businessId: string, role: string) {
+    const token = crypto.randomUUID();
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 7); // 7 days
+
+    const business = await this.prisma.business.findUnique({
+      where: { id: businessId },
+    });
+
+    if (!business) {
+      throw new NotFoundException('Business workspace not found');
+    }
+
+    const invitation = await this.prisma.userInvitation.create({
+      data: {
+        email,
+        role,
+        businessId,
+        token,
+        status: 'PENDING',
+        expiresAt,
+      },
+    });
+
+    const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000';
+    const inviteUrl = `${frontendUrl}/register?token=${token}`;
+
+    // Send email invite asynchronously
+    await this.emailService.sendInviteEmail(email, 'Team Member', business.companyName, inviteUrl);
+
+    return { success: true, invitation };
+  }
+
+  async verifyInvitation(token: string) {
+    const invitation = await this.prisma.userInvitation.findUnique({
+      where: { token },
+    });
+
+    if (!invitation || invitation.status !== 'PENDING' || invitation.expiresAt < new Date()) {
+      throw new ConflictException('Invalid or expired team invitation token');
+    }
+
+    const business = await this.prisma.business.findUnique({
+      where: { id: invitation.businessId },
+    });
+
+    return {
+      email: invitation.email,
+      role: invitation.role,
+      businessName: business?.companyName || 'Beacon Workspace',
+      token: invitation.token,
+    };
+  }
 }
+

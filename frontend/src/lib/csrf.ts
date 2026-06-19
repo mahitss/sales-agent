@@ -5,9 +5,8 @@ export function getCsrfToken(): string | null {
 }
 
 export function createSecureFetch(baseUrl: string) {
-  const csrfToken = getCsrfToken();
-
   return async (endpoint: string, options: RequestInit = {}) => {
+    const csrfToken = getCsrfToken();
     const headers = {
       ...options.headers,
       "Content-Type": "application/json",

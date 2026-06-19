@@ -82,7 +82,7 @@ describe('AuthService', () => {
         role: 'ADMIN',
         createdAt: new Date(),
         updatedAt: new Date(),
-      };
+      } as any;
 
       jest.spyOn(prisma.user, 'findUnique').mockResolvedValue(null);
       jest.spyOn(prisma.user, 'create').mockResolvedValue(mockCreatedUser);
@@ -123,7 +123,7 @@ describe('AuthService', () => {
       (bcrypt.compare as jest.Mock).mockResolvedValue(true);
       jest.spyOn(jwt, 'signAsync').mockResolvedValue('mock-jwt-token');
 
-      const result = await service.login(dto);
+      const result = (await service.login(dto)) as any;
 
       expect(prisma.user.findUnique).toHaveBeenCalledWith({ where: { email: dto.email } });
       expect(result.token).toBe('mock-jwt-token');

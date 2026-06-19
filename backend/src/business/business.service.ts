@@ -36,6 +36,8 @@ export class BusinessService {
         widgetGreeting: dto.widgetGreeting ?? 'Hello! How can we help you today?',
         widgetRules: dto.widgetRules ?? '[]',
         widgetPosition: dto.widgetPosition ?? 'bottom-right',
+        googleSheetsSpreadsheetId: dto.googleSheetsSpreadsheetId,
+        googleSheetsEnabled: dto.googleSheetsEnabled ?? false,
       },
     });
   }
@@ -45,7 +47,7 @@ export class BusinessService {
     if (role === 'ADMIN') {
       business = await this.prisma.business.findFirst({
         where: { ownerId: userId },
-        include: { knowledgeBases: true },
+        include: { knowledgeBases: true, subscription: true },
       });
     } else {
       const employee = await this.prisma.user.findUnique({
@@ -54,7 +56,7 @@ export class BusinessService {
       if (employee && employee.businessId) {
         business = await this.prisma.business.findUnique({
           where: { id: employee.businessId },
-          include: { knowledgeBases: true },
+          include: { knowledgeBases: true, subscription: true },
         });
       }
     }
@@ -67,7 +69,7 @@ export class BusinessService {
   async getById(businessId: string) {
     const business = await this.prisma.business.findUnique({
       where: { id: businessId },
-      include: { knowledgeBases: true },
+      include: { knowledgeBases: true, subscription: true },
     });
     if (!business) {
       throw new NotFoundException('Business profile not found');
@@ -101,6 +103,8 @@ export class BusinessService {
         widgetGreeting: dto.widgetGreeting ?? 'Hello! How can we help you today?',
         widgetRules: dto.widgetRules ?? '[]',
         widgetPosition: dto.widgetPosition ?? 'bottom-right',
+        googleSheetsSpreadsheetId: dto.googleSheetsSpreadsheetId,
+        googleSheetsEnabled: dto.googleSheetsEnabled ?? false,
       },
     });
 

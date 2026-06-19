@@ -52,6 +52,16 @@ export class LeadController {
     return res.status(200).send(json);
   }
 
+  @UseGuards(AuthGuard, RolesGuard)
+  @Roles('ADMIN')
+  @Get('business/:businessId/export/excel')
+  async exportLeadsExcel(@Param('businessId') businessId: string, @Res() res: express.Response) {
+    const buffer = await this.leadService.exportLeadsToExcel(businessId);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename=leads-${businessId}.xlsx`);
+    return res.status(200).send(buffer);
+  }
+
   @UseGuards(AuthGuard)
   @Get(':id')
   async getById(@Param('id') id: string) {

@@ -12,7 +12,8 @@ from app.services.agent import (
     AIAgentService,
     AgentResponse,
     ExtractFAQsResponse,
-    CompetitorAnalysisResponse
+    CompetitorAnalysisResponse,
+    AnalyzeLeadResponse
 )
 from dotenv import load_dotenv
 
@@ -114,6 +115,10 @@ class CompetitorAnalysisPayload(BaseModel):
     scraped_text: str
     my_business: Dict[str, Any]
 
+class AnalyzeLeadPayload(BaseModel):
+    messages: List[Dict[str, Any]]
+    business_context: Dict[str, Any]
+
 agent_service = AIAgentService()
 
 @app.get("/")
@@ -178,6 +183,18 @@ def competitor_analysis_endpoint(payload: CompetitorAnalysisPayload):
         return result
     except Exception as e:
         logger.exception("Error in competitor-analysis endpoint")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/analyze-lead", response_model=AnalyzeLeadResponse)
+def analyze_lead_endpoint(payload: AnalyzeLeadPayload):
+    try:
+        result = agent_service.analyze_lead(
+            messages=payload.messages,
+            business_context=payload.business_context
+        )
+        return result
+    except Exception as e:
+        logger.exception("Error in analyze-lead endpoint")
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":

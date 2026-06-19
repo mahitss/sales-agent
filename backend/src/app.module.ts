@@ -20,6 +20,9 @@ import { EmailModule } from './common/email/email.module';
 import { QueueModule } from './common/queues/queue.module';
 import { FeatureFlagModule } from './common/feature-flags/feature-flag.module';
 import { validate } from './common/env.validation';
+import { StripeModule } from './common/stripe/stripe.module';
+import { ActivityLogModule } from './common/activity-logs/activity-log.module';
+import { AICostModule } from './common/ai-cost/ai-cost.module';
 
 @Module({
   imports: [
@@ -42,6 +45,9 @@ import { validate } from './common/env.validation';
     AppointmentModule,
     ConversationModule,
     ChatModule,
+    StripeModule,
+    ActivityLogModule,
+    AICostModule,
   ],
   controllers: [AppController, HealthController, MetricsController],
   providers: [AppService],

@@ -64,6 +64,14 @@ export class CreateBusinessDto {
   @IsOptional()
   @IsString()
   widgetPosition?: string;
+
+  @IsOptional()
+  @IsString()
+  googleSheetsSpreadsheetId?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  googleSheetsEnabled?: boolean;
 }
 
 export class CreateFAQDto {

@@ -26,6 +26,7 @@ interface LeadsTabProps {
   filterSentiment: string;
   setFilterSentiment: (val: string) => void;
   handleExportLeads: () => void;
+  handleExportLeadsExcel: () => void;
   handleUpdateLeadStatus: (leadId: string, status: string) => void;
 }
 
@@ -40,6 +41,7 @@ export const LeadsTab: React.FC<LeadsTabProps> = ({
   filterSentiment,
   setFilterSentiment,
   handleExportLeads,
+  handleExportLeadsExcel,
   handleUpdateLeadStatus,
 }) => {
   return (
@@ -49,13 +51,22 @@ export const LeadsTab: React.FC<LeadsTabProps> = ({
           <h3 className="text-xl font-bold text-white">Leads Log</h3>
           <p className="text-xs text-muted-text mt-1">Visitors qualified and captured by the AI agent</p>
         </div>
-        <button
-          onClick={handleExportLeads}
-          className="bg-accent-primary hover:bg-accent-hover text-white font-semibold rounded-xl px-5 py-2.5 text-xs flex items-center gap-1.5 cursor-pointer shadow-md self-start md:self-auto transition-colors"
-        >
-          <FileText className="h-4 w-4" />
-          Export Leads (CSV)
-        </button>
+        <div className="flex gap-3 self-start md:self-auto">
+          <button
+            onClick={handleExportLeads}
+            className="border border-card-border hover:bg-card bg-card/40 text-slate-300 font-semibold rounded-xl px-4 py-2.5 text-xs flex items-center gap-1.5 cursor-pointer transition-all shadow-sm"
+          >
+            <FileText className="h-4 w-4 text-muted-text" />
+            CSV Export
+          </button>
+          <button
+            onClick={handleExportLeadsExcel}
+            className="bg-accent-primary hover:bg-accent-hover text-white font-semibold rounded-xl px-4 py-2.5 text-xs flex items-center gap-1.5 cursor-pointer shadow-md transition-colors"
+          >
+            <FileText className="h-4 w-4" />
+            Excel Export (XLSX)
+          </button>
+        </div>
       </div>
 
       {/* Filters container */}

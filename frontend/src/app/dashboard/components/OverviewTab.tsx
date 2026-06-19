@@ -1,5 +1,5 @@
 import React from "react";
-import { Users, Award, CalendarDays, TrendingUp, Brain } from "lucide-react";
+import { Users, Award, CalendarDays, TrendingUp, Brain, DollarSign, LineChart, Percent, CheckSquare } from "lucide-react";
 import { motion } from "framer-motion";
 import { UserInfo, DashboardStats, TabType, Recommendation } from "@/hooks/useDashboardData";
 
@@ -71,6 +71,39 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
                 <span className="text-4xl font-black text-white">{item.val}</span>
                 <div className={`p-2.5 rounded-xl ${item.color}`}>
                   <Icon className="h-5.5 w-5.5" />
+                </div>
+              </div>
+            </motion.div>
+          );
+        })}
+      </div>
+
+      {/* Revenue & Intelligence Forecasting Row */}
+      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+        {[
+          { label: "Expected Revenue", val: `₹${(stats.totalExpectedRevenue || 0).toLocaleString()}`, icon: DollarSign, color: "text-amber-400 bg-amber-500/10", desc: "Deal Value × Probability" },
+          { label: "Revenue Pipeline", val: `₹${(stats.revenueForecast || 0).toLocaleString()}`, icon: LineChart, color: "text-emerald-400 bg-emerald-500/10", desc: "Unweighted potential value" },
+          { label: "Appointment Conv. Rate", val: `${stats.leadConversionRate || 0}%`, icon: Percent, color: "text-teal-400 bg-teal-500/10", desc: "Leads with booked calls" },
+          { label: "Avg. Lead Score", val: `${stats.averageLeadScore || 0} / 100`, icon: CheckSquare, color: "text-accent-primary bg-accent-primary/10", desc: "AI quality score average" }
+        ].map((item, idx) => {
+          const Icon = item.icon;
+          return (
+            <motion.div
+              key={idx + 4}
+              custom={idx + 4}
+              initial="hidden"
+              animate="visible"
+              variants={cardVariants}
+              className="rounded-2xl border border-card-border bg-card/25 p-5 flex flex-col justify-between hover:border-card-border/80 hover:bg-card/50 transition-all shadow-inner"
+            >
+              <div className="flex flex-col">
+                <span className="text-xs font-semibold uppercase tracking-wider text-muted-text">{item.label}</span>
+                <span className="text-[10px] text-muted-text/70 mt-0.5">{item.desc}</span>
+              </div>
+              <div className="flex items-baseline justify-between mt-4">
+                <span className="text-3xl font-black text-slate-100">{item.val}</span>
+                <div className={`p-2.5 rounded-xl ${item.color}`}>
+                  <Icon className="h-5 w-5" />
                 </div>
               </div>
             </motion.div>
