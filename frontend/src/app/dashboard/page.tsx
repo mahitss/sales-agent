@@ -16,7 +16,9 @@ import {
   Radio,
   Activity,
   CreditCard,
-  History
+  History,
+  Sparkles,
+  Zap
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -41,6 +43,7 @@ const WidgetTab = dynamic(() => import("./components/WidgetTab").then(m => m.Wid
 const IntegrationsTab = dynamic(() => import("./components/IntegrationsTab").then(m => m.IntegrationsTab), { ssr: false });
 const BillingTab = dynamic(() => import("./components/BillingTab").then(m => m.BillingTab), { ssr: false });
 const ActivityTab = dynamic(() => import("./components/ActivityTab").then(m => m.ActivityTab), { ssr: false });
+const AutomationsTab = dynamic(() => import("./components/AutomationsTab").then(m => m.AutomationsTab), { ssr: false });
 
 import { FeedbackModal } from "@/components/FeedbackModal";
 
@@ -173,6 +176,14 @@ export default function DashboardPage() {
     activityLogs,
     handleStripeCheckout,
     handleStripePortal,
+    outreachSequences,
+    workflowRules,
+    notifications,
+    removeNotification,
+    handleScheduleOutreach,
+    handleToggleWorkflowRule,
+    handleEnrichCompany,
+    handleFindEmails,
   } = useDashboardData();
 
   // 1. RENDER: Auth Gate
@@ -417,6 +428,17 @@ export default function DashboardPage() {
                   Widget Code
                 </button>
                 <button
+                  onClick={() => setActiveTab("automations")}
+                  className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-xl transition-all cursor-pointer ${
+                    activeTab === "automations"
+                      ? "bg-accent-primary/10 text-accent-primary border border-accent-primary/20 font-semibold"
+                      : "text-muted-text hover:bg-card/40 hover:text-foreground"
+                  }`}
+                >
+                  <Zap className="h-4.5 w-4.5" />
+                  Automations
+                </button>
+                <button
                   onClick={() => setActiveTab("billing")}
                   className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-xl transition-all cursor-pointer ${
                     activeTab === "billing"
@@ -542,6 +564,10 @@ export default function DashboardPage() {
                         handleExportLeads={handleExportLeads}
                         handleExportLeadsExcel={handleExportLeadsExcel}
                         handleUpdateLeadStatus={handleUpdateLeadStatus}
+                        outreachSequences={outreachSequences}
+                        handleScheduleOutreach={handleScheduleOutreach}
+                        handleEnrichCompany={handleEnrichCompany}
+                        handleFindEmails={handleFindEmails}
                       />
                     </ErrorBoundary>
                   )}
@@ -657,6 +683,16 @@ export default function DashboardPage() {
                     </ErrorBoundary>
                   )}
 
+                  {activeTab === "automations" && (
+                    <ErrorBoundary>
+                      <AutomationsTab
+                        workflowRules={workflowRules}
+                        outreachSequences={outreachSequences}
+                        handleToggleWorkflowRule={handleToggleWorkflowRule}
+                      />
+                    </ErrorBoundary>
+                  )}
+
                   {activeTab === "integrations" && (
                     <ErrorBoundary>
                       <IntegrationsTab
@@ -707,6 +743,31 @@ export default function DashboardPage() {
           </AnimatePresence>
         </div>
       </main>
+      {/* Toast Notification Tray */}
+      <div className="fixed bottom-6 right-6 z-50 space-y-2 pointer-events-none">
+        <AnimatePresence>
+          {notifications.map((notif) => (
+            <motion.div
+              key={notif.id}
+              initial={{ opacity: 0, y: 15, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              transition={{ duration: 0.2 }}
+              onClick={() => removeNotification(notif.id)}
+              className="pointer-events-auto p-4 rounded-2xl border bg-slate-950/95 shadow-xl max-w-sm flex items-start gap-3 border-card-border cursor-pointer hover:border-slate-800"
+            >
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shrink-0">
+                <Sparkles className="h-4.5 w-4.5" />
+              </div>
+              <div className="overflow-hidden">
+                <p className="text-xs font-bold text-white truncate">{notif.title}</p>
+                <p className="text-[10px] text-muted-text mt-0.5 leading-relaxed truncate">{notif.content}</p>
+              </div>
+            </motion.div>
+          ))}
+        </AnimatePresence>
+      </div>
+
       <FeedbackModal
         isOpen={isFeedbackOpen}
         onClose={() => setIsFeedbackOpen(false)}

@@ -70,6 +70,7 @@ model Business {
   subscription       Subscription?
   feedbacks          Feedback[]
   aiCostLogs         AICostLog[]
+  workflowRules      WorkflowRule[]
 
   @@index([organizationId])
 }
@@ -109,6 +110,7 @@ model Lead {
   enrichment        CompanyEnrichment?
   revenuePrediction RevenuePrediction?
   googleSheetsSync  GoogleSheetsSyncLog?
+  outreachSequences OutreachSequence[]
 
   @@index([businessId])
   @@index([businessId, createdAt])
@@ -357,6 +359,34 @@ model AICostLog {
   cost        Float    // Calculated cost in USD
   action      String   // e.g. "chat", "lead_analysis", "faq_extract"
   createdAt   DateTime @default(now())
+}
+
+model OutreachSequence {
+  id           String   @id @default(uuid())
+  leadId       String
+  lead         Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  template     String   // e.g. "INTRO_PITCH", "FOLLOW_UP"
+  subject      String
+  body         String
+  status       String   @default("SCHEDULED") // SCHEDULED, SENT, FAILED
+  scheduledFor DateTime
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([leadId])
+}
+
+model WorkflowRule {
+  id         String   @id @default(uuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  trigger    String   // e.g. "STATUS_HOT", "NEW_LEAD"
+  action     String   // e.g. "EMAIL_OUTREACH", "SHEET_SYNC"
+  isEnabled  Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([businessId])
 }
 
 

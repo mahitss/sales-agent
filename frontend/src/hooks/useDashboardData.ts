@@ -124,7 +124,8 @@ export type TabType =
   | "integrations"
   | "team"
   | "billing"
-  | "activity";
+  | "activity"
+  | "automations";
 
 export function useDashboardData() {
   const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
@@ -254,6 +255,11 @@ export function useDashboardData() {
 
   // Audit activity logs
   const [activityLogs, setActivityLogs] = useState<any[]>([]);
+
+  // CRM, Outreach, & Automations
+  const [outreachSequences, setOutreachSequences] = useState<any[]>([]);
+  const [workflowRules, setWorkflowRules] = useState<any[]>([]);
+  const [notifications, setNotifications] = useState<Array<{ id: string; title: string; content: string; type: string; timestamp: Date }>>([]);
 
   const uploadIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -385,6 +391,14 @@ export function useDashboardData() {
           return;
         }
         if (res.ok) setActivityLogs(await res.json());
+      } else if (activeTab === "automations") {
+        const res = await authenticatedFetch(`${API_URL}/crm/business/${business.id}/workflow-rules`);
+        if (res.status === 401) {
+          handleUnauthorized();
+          return;
+        }
+        if (res.ok) setWorkflowRules(await res.json());
+        fetchOutreachSequences();
       }
     } catch (err) {
       console.error("Data refresh failed", err);
@@ -640,6 +654,100 @@ export function useDashboardData() {
     }
   };
 
+  const addNotification = (title: string, content: string, type: "info" | "success" | "warning" = "info") => {
+    const id = Math.random().toString(36).substring(7);
+    setNotifications((prev) => [
+      { id, title, content, type, timestamp: new Date() },
+      ...prev.slice(0, 19),
+    ]);
+  };
+
+  const removeNotification = (id: string) => {
+    setNotifications((prev) => prev.filter((n) => n.id !== id));
+  };
+
+  const fetchOutreachSequences = async () => {
+    if (!business) return;
+    try {
+      const res = await authenticatedFetch(`${API_URL}/crm/business/${business.id}/outreach`);
+      if (res.ok) setOutreachSequences(await res.json());
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleScheduleOutreach = async (leadId: string, template: string, subject: string, bodyText: string, delayMinutes?: number) => {
+    if (!business) return false;
+    try {
+      const res = await authenticatedFetch(`${API_URL}/crm/business/${business.id}/outreach`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ leadId, template, subject, bodyText, delayMinutes }),
+      });
+      if (res.ok) {
+        addNotification("Sequence Scheduled", `Campaign template ${template} scheduled.`, "success");
+        fetchOutreachSequences();
+        return true;
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    return false;
+  };
+
+  const handleToggleWorkflowRule = async (ruleId: string, isEnabled: boolean) => {
+    if (!business) return;
+    try {
+      const res = await authenticatedFetch(`${API_URL}/crm/workflow-rules/${ruleId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isEnabled }),
+      });
+      if (res.ok) {
+        addNotification("Automation Updated", `Workflow rule configuration updated.`, "success");
+        const rulesRes = await authenticatedFetch(`${API_URL}/crm/business/${business.id}/workflow-rules`);
+        if (rulesRes.ok) setWorkflowRules(await rulesRes.json());
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleEnrichCompany = async (leadId: string, domain: string) => {
+    try {
+      const res = await authenticatedFetch(`${API_URL}/crm/company/enrich`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ leadId, domain }),
+      });
+      if (res.ok) {
+        addNotification("Company Enriched", `Profile data scraped for ${domain}`, "success");
+        refreshData();
+        return await res.json();
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    return null;
+  };
+
+  const handleFindEmails = async (domain: string) => {
+    try {
+      const res = await authenticatedFetch(`${API_URL}/crm/company/email-finder`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ domain }),
+      });
+      if (res.ok) {
+        addNotification("Domain Scanned", `Verified business contacts discovered.`, "success");
+        return await res.json();
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    return null;
+  };
+
   const handleUpdateLeadStatus = async (leadId: string, status: string) => {
     try {
       const res = await authenticatedFetch(`${API_URL}/leads/${leadId}`, {
@@ -648,6 +756,7 @@ export function useDashboardData() {
         body: JSON.stringify({ status }),
       });
       if (res.ok) {
+        addNotification("Lead Status Updated", `Lead status successfully shifted to ${status}.`, "success");
         refreshData();
       }
     } catch (err) {
@@ -1196,5 +1305,14 @@ export function useDashboardData() {
     activityLogs,
     handleStripeCheckout,
     handleStripePortal,
+    outreachSequences,
+    workflowRules,
+    notifications,
+    addNotification,
+    removeNotification,
+    handleScheduleOutreach,
+    handleToggleWorkflowRule,
+    handleEnrichCompany,
+    handleFindEmails,
   };
 }
