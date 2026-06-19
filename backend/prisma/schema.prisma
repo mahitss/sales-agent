@@ -389,5 +389,24 @@ model WorkflowRule {
   @@index([businessId])
 }
 
+model Waitlist {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  name      String?
+  status    String   @default("PENDING") // PENDING, APPROVED, CONVERTED
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Referral {
+  id           String   @id @default(uuid())
+  code         String   @unique
+  referrerId   String
+  referrerName String
+  refereeEmail String?  @unique
+  status       String   @default("PENDING") // PENDING, CONVERTED
+  createdAt    DateTime @default(now())
+}
+
 
 

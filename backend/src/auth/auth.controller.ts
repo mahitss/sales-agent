@@ -228,4 +228,44 @@ export class AuthController {
     }
     return this.authService.createInvitation(body.email, body.businessId, body.role || 'EMPLOYEE');
   }
+
+  @Post('waitlist')
+  async registerWaitlist(@Body() body: { email: string; name?: string }) {
+    if (!body.email) {
+      throw new BadRequestException('Missing required field: email');
+    }
+    return this.authService.addToWaitlist(body.email, body.name);
+  }
+
+  @Post('referral/claim')
+  async claimReferral(@Body() body: { code: string; email: string }) {
+    if (!body.code || !body.email) {
+      throw new BadRequestException('Missing required fields: code, email');
+    }
+    return this.authService.claimReferral(body.code, body.email);
+  }
+
+  @UseGuards(AuthGuard)
+  @Get('waitlist')
+  async getWaitlist() {
+    return this.authService.getWaitlist();
+  }
+
+  @UseGuards(AuthGuard)
+  @Post('waitlist/:id/approve')
+  async approveWaitlist(@Param('id') id: string) {
+    return this.authService.approveWaitlistEntry(id);
+  }
+
+  @UseGuards(AuthGuard)
+  @Get('referrals')
+  async getReferrals(@Req() req) {
+    return this.authService.getReferrals(req.user.sub);
+  }
+
+  @UseGuards(AuthGuard)
+  @Post('referral')
+  async createReferral(@Req() req) {
+    return this.authService.generateReferralCode(req.user.sub);
+  }
 }

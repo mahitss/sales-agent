@@ -20,6 +20,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
   whatsappEnabled,
   instagramEnabled,
   emailEnabled,
+  setActiveTab,
 }) => {
   const totalVisitors = stats.totalLeads * 3 + 28;
   const visitorsPct = 100;
@@ -109,6 +110,62 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
             </motion.div>
           );
         })}
+      </div>
+
+      {/* Onboarding Checklist Tour */}
+      <div className="rounded-2xl border border-card-border bg-card/20 p-6 space-y-4 shadow-sm">
+        <h4 className="font-bold text-sm uppercase tracking-wider text-muted-text flex items-center gap-2">
+          <CheckSquare className="h-4.5 w-4.5 text-accent-primary" />
+          Guided Workspace Setup Checklist
+        </h4>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          {[
+            {
+              title: "Connect Multi-Channel Links",
+              desc: "Setup WhatsApp, Instagram, or email inbound webhook routes.",
+              completed: whatsappEnabled || instagramEnabled || emailEnabled,
+              tab: "integrations" as TabType,
+            },
+            {
+              title: "Train AI Knowledge Base",
+              desc: "Import company files or URLs to train your conversational sales agents.",
+              completed: stats.totalLeads > 0 || recommendations.length > 0, // Mock fallback
+              tab: "kb" as TabType,
+            },
+            {
+              title: "Qualify Visitor Leads",
+              desc: "Use widget previews to qualified cold visitors into scored pipeline leads.",
+              completed: stats.totalLeads > 0,
+              tab: "leads" as TabType,
+            },
+            {
+              title: "Configure Custom Prompts",
+              desc: "Adjust branding themes, positions, and tone rules for widget scripts.",
+              completed: true, // Seeded default
+              tab: "widget" as TabType,
+            },
+          ].map((item, idx) => (
+            <div
+              key={idx}
+              onClick={() => setActiveTab(item.tab)}
+              className={`p-4 border rounded-xl flex flex-col justify-between h-36 cursor-pointer transition-all hover:bg-card/45 relative overflow-hidden ${
+                item.completed ? "border-emerald-500/20 bg-emerald-500/[0.01]" : "border-card-border bg-card/10"
+              }`}
+            >
+              <div>
+                <div className="flex items-center justify-between">
+                  <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded tracking-wide border ${
+                    item.completed ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" : "bg-slate-800 text-slate-400 border-slate-700/50"
+                  }`}>
+                    {item.completed ? "COMPLETED" : "TODO"}
+                  </span>
+                </div>
+                <h5 className="text-xs font-bold text-slate-200 mt-3">{item.title}</h5>
+                <p className="text-[10px] text-muted-text mt-1.5 leading-relaxed">{item.desc}</p>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Recommendations Engine Section */}

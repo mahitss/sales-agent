@@ -125,7 +125,8 @@ export type TabType =
   | "team"
   | "billing"
   | "activity"
-  | "automations";
+  | "automations"
+  | "settings";
 
 export function useDashboardData() {
   const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
@@ -260,6 +261,15 @@ export function useDashboardData() {
   const [outreachSequences, setOutreachSequences] = useState<any[]>([]);
   const [workflowRules, setWorkflowRules] = useState<any[]>([]);
   const [notifications, setNotifications] = useState<Array<{ id: string; title: string; content: string; type: string; timestamp: Date }>>([]);
+
+  // Growth & Settings
+  const [waitlist, setWaitlist] = useState<any[]>([]);
+  const [waitlistLoading, setWaitlistLoading] = useState(false);
+  const [referrals, setReferrals] = useState<any[]>([]);
+  const [referralMetrics, setReferralMetrics] = useState<any>({ totalCount: 0, convertedCount: 0, conversionRate: 0 });
+  const [referralsLoading, setReferralsLoading] = useState(false);
+  const [sessions, setSessions] = useState<any[]>([]);
+  const [sessionsLoading, setSessionsLoading] = useState(false);
 
   const uploadIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -399,6 +409,10 @@ export function useDashboardData() {
         }
         if (res.ok) setWorkflowRules(await res.json());
         fetchOutreachSequences();
+      } else if (activeTab === "settings") {
+        await fetchWaitlist();
+        await fetchReferrals();
+        await fetchSessions();
       }
     } catch (err) {
       console.error("Data refresh failed", err);
@@ -420,6 +434,120 @@ export function useDashboardData() {
       }
     } catch (err) {
       console.error("Failed to fetch employees", err);
+    }
+  };
+
+  const fetchWaitlist = async () => {
+    setWaitlistLoading(true);
+    try {
+      const res = await authenticatedFetch(`${API_URL}/auth/waitlist`);
+      if (res.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+      if (res.ok) {
+        setWaitlist(await res.json());
+      }
+    } catch (err) {
+      console.error("Failed to fetch waitlist", err);
+    } finally {
+      setWaitlistLoading(false);
+    }
+  };
+
+  const handleApproveWaitlist = async (id: string) => {
+    try {
+      const res = await authenticatedFetch(`${API_URL}/auth/waitlist/${id}/approve`, {
+        method: "POST",
+      });
+      if (res.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+      if (res.ok) {
+        addNotification("Waitlist Approved", "User has been approved and invited successfully.", "success");
+        fetchWaitlist();
+      } else {
+        alert("Failed to approve waitlist user.");
+      }
+    } catch (err) {
+      console.error("Failed to approve waitlist entry", err);
+    }
+  };
+
+  const fetchReferrals = async () => {
+    setReferralsLoading(true);
+    try {
+      const res = await authenticatedFetch(`${API_URL}/auth/referrals`);
+      if (res.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+      if (res.ok) {
+        const data = await res.json();
+        setReferrals(data.referrals || []);
+        setReferralMetrics(data.metrics || { totalCount: 0, convertedCount: 0, conversionRate: 0 });
+      }
+    } catch (err) {
+      console.error("Failed to fetch referrals", err);
+    } finally {
+      setReferralsLoading(false);
+    }
+  };
+
+  const handleCreateReferral = async () => {
+    try {
+      const res = await authenticatedFetch(`${API_URL}/auth/referral`, {
+        method: "POST",
+      });
+      if (res.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+      if (res.ok) {
+        addNotification("Referral Code Created", "Your referral link is ready to share!", "success");
+        fetchReferrals();
+      }
+    } catch (err) {
+      console.error("Failed to create referral code", err);
+    }
+  };
+
+  const fetchSessions = async () => {
+    setSessionsLoading(true);
+    try {
+      const res = await authenticatedFetch(`${API_URL}/auth/sessions`);
+      if (res.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+      if (res.ok) {
+        setSessions(await res.json());
+      }
+    } catch (err) {
+      console.error("Failed to fetch sessions", err);
+    } finally {
+      setSessionsLoading(false);
+    }
+  };
+
+  const handleRevokeSession = async (sessionId: string) => {
+    try {
+      const res = await authenticatedFetch(`${API_URL}/auth/sessions/revoke`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionId }),
+      });
+      if (res.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+      if (res.ok) {
+        addNotification("Session Revoked", "Active login session has been closed.", "success");
+        fetchSessions();
+      }
+    } catch (err) {
+      console.error("Failed to revoke session", err);
     }
   };
 
@@ -1314,5 +1442,15 @@ export function useDashboardData() {
     handleToggleWorkflowRule,
     handleEnrichCompany,
     handleFindEmails,
+    waitlist,
+    waitlistLoading,
+    referrals,
+    referralMetrics,
+    referralsLoading,
+    sessions,
+    sessionsLoading,
+    handleApproveWaitlist,
+    handleCreateReferral,
+    handleRevokeSession,
   };
 }

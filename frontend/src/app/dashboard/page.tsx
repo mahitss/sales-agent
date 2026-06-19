@@ -18,7 +18,8 @@ import {
   CreditCard,
   History,
   Sparkles,
-  Zap
+  Zap,
+  Settings
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -44,6 +45,8 @@ const IntegrationsTab = dynamic(() => import("./components/IntegrationsTab").the
 const BillingTab = dynamic(() => import("./components/BillingTab").then(m => m.BillingTab), { ssr: false });
 const ActivityTab = dynamic(() => import("./components/ActivityTab").then(m => m.ActivityTab), { ssr: false });
 const AutomationsTab = dynamic(() => import("./components/AutomationsTab").then(m => m.AutomationsTab), { ssr: false });
+const SettingsTab = dynamic(() => import("./components/SettingsTab").then(m => m.SettingsTab), { ssr: false });
+const CommandPalette = dynamic(() => import("@/components/CommandPalette").then(m => m.CommandPalette), { ssr: false });
 
 import { FeedbackModal } from "@/components/FeedbackModal";
 
@@ -61,6 +64,18 @@ const SkeletonLoader = () => (
 
 export default function DashboardPage() {
   const [isFeedbackOpen, setIsFeedbackOpen] = React.useState(false);
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = React.useState(false);
+
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setIsCommandPaletteOpen((prev) => !prev);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
   const {
     API_URL,
     token,
@@ -184,6 +199,16 @@ export default function DashboardPage() {
     handleToggleWorkflowRule,
     handleEnrichCompany,
     handleFindEmails,
+    waitlist,
+    waitlistLoading,
+    referrals,
+    referralMetrics,
+    referralsLoading,
+    sessions,
+    sessionsLoading,
+    handleApproveWaitlist,
+    handleCreateReferral,
+    handleRevokeSession,
   } = useDashboardData();
 
   // 1. RENDER: Auth Gate
@@ -460,6 +485,17 @@ export default function DashboardPage() {
                   <History className="h-4.5 w-4.5" />
                   Audit Activity Logs
                 </button>
+                <button
+                  onClick={() => setActiveTab("settings")}
+                  className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-xl transition-all cursor-pointer ${
+                    activeTab === "settings"
+                      ? "bg-accent-primary/10 text-accent-primary border border-accent-primary/20 font-semibold"
+                      : "text-muted-text hover:bg-card/40 hover:text-foreground"
+                  }`}
+                >
+                  <Settings className="h-4.5 w-4.5" />
+                  Workspace Settings
+                </button>
               </>
             )}
           </nav>
@@ -507,9 +543,17 @@ export default function DashboardPage() {
                activeTab === "competitor" ? "Competitor Analysis Audit" :
                activeTab === "integrations" ? "Multi-Channel Settings" :
                activeTab === "team" ? "Team Seats Management" :
+               activeTab === "settings" ? "Workspace Growth Settings" :
                activeTab}
             </h2>
             {dataLoading && <RefreshCw className="h-4 w-4 animate-spin text-accent-primary" />}
+            <button
+              onClick={() => setIsCommandPaletteOpen(true)}
+              className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 text-[10px] text-muted-text border border-card-border hover:border-slate-700 rounded-lg hover:bg-card/45 hover:text-white transition-all cursor-pointer font-medium ml-2"
+            >
+              <span>Search...</span>
+              <kbd className="bg-slate-800 text-slate-400 px-1 py-0.2 rounded border border-slate-700 font-sans text-[8px] font-bold">Ctrl+K</kbd>
+            </button>
           </div>
           <button
             onClick={refreshData}
@@ -693,6 +737,23 @@ export default function DashboardPage() {
                     </ErrorBoundary>
                   )}
 
+                  {activeTab === "settings" && (
+                    <ErrorBoundary>
+                      <SettingsTab
+                        waitlist={waitlist}
+                        waitlistLoading={waitlistLoading}
+                        referrals={referrals}
+                        referralMetrics={referralMetrics}
+                        referralsLoading={referralsLoading}
+                        sessions={sessions}
+                        sessionsLoading={sessionsLoading}
+                        handleApproveWaitlist={handleApproveWaitlist}
+                        handleCreateReferral={handleCreateReferral}
+                        handleRevokeSession={handleRevokeSession}
+                      />
+                    </ErrorBoundary>
+                  )}
+
                   {activeTab === "integrations" && (
                     <ErrorBoundary>
                       <IntegrationsTab
@@ -775,6 +836,17 @@ export default function DashboardPage() {
         apiUrl={API_URL}
         userEmail={user?.email}
         userName={user?.name}
+      />
+
+      <CommandPalette
+        isOpen={isCommandPaletteOpen}
+        onClose={() => setIsCommandPaletteOpen(false)}
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        leads={leads}
+        setSearchTerm={setSearchTerm}
+        handleLogout={handleLogout}
+        onOpenFeedback={() => setIsFeedbackOpen(true)}
       />
     </div>
   );

@@ -609,5 +609,116 @@ export class AuthService {
       token: invitation.token,
     };
   }
+
+  async addToWaitlist(email: string, name?: string) {
+    const existing = await this.prisma.waitlist.findUnique({
+      where: { email },
+    });
+    if (existing) {
+      return { success: true, entry: existing, msg: 'Already on waitlist.' };
+    }
+    const entry = await this.prisma.waitlist.create({
+      data: { email, name, status: 'PENDING' },
+    });
+    return { success: true, entry, msg: 'Added to waitlist!' };
+  }
+
+  async claimReferral(code: string, refereeEmail: string) {
+    const referral = await this.prisma.referral.findUnique({
+      where: { code },
+    });
+    if (!referral) {
+      throw new NotFoundException('Referral code not found.');
+    }
+    if (referral.status === 'CONVERTED') {
+      throw new ConflictException('Referral code has already been claimed.');
+    }
+    const updated = await this.prisma.referral.update({
+      where: { id: referral.id },
+      data: { refereeEmail, status: 'CONVERTED' },
+    });
+    return { success: true, referral: updated, msg: 'Referral claimed!' };
+  }
+
+  async getWaitlist() {
+    return this.prisma.waitlist.findMany({
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async approveWaitlistEntry(id: string) {
+    const entry = await this.prisma.waitlist.findUnique({
+      where: { id },
+    });
+    if (!entry) {
+      throw new NotFoundException('Waitlist entry not found');
+    }
+
+    const updated = await this.prisma.waitlist.update({
+      where: { id },
+      data: { status: 'APPROVED' },
+    });
+
+    // Invite to default workspace if one exists
+    const firstBusiness = await this.prisma.business.findFirst();
+    let invite: any = null;
+    if (firstBusiness) {
+      try {
+        invite = await this.createInvitation(entry.email, firstBusiness.id, 'EMPLOYEE');
+      } catch (err) {
+        // Silently skip if invite creation fails (e.g. unique constraint)
+      }
+    }
+
+    return { success: true, entry: updated, invite, msg: 'Waitlisted user approved!' };
+  }
+
+  async getReferrals(userId: string) {
+    const referrals = await this.prisma.referral.findMany({
+      where: { referrerId: userId },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const totalCount = referrals.length;
+    const convertedCount = referrals.filter(r => r.status === 'CONVERTED').length;
+    const conversionRate = totalCount > 0 ? Math.round((convertedCount / totalCount) * 100) : 0;
+
+    return {
+      referrals,
+      metrics: {
+        totalCount,
+        convertedCount,
+        conversionRate,
+      }
+    };
+  }
+
+  async generateReferralCode(userId: string, userName?: string) {
+    let finalName = userName;
+    if (!finalName) {
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+      });
+      finalName = user?.name || 'User';
+    }
+
+    const existing = await this.prisma.referral.findFirst({
+      where: { referrerId: userId },
+    });
+    if (existing) {
+      return { success: true, referral: existing, msg: 'Already have a referral code.' };
+    }
+
+    const code = 'REF-' + Math.random().toString(36).substring(2, 8).toUpperCase();
+    const referral = await this.prisma.referral.create({
+      data: {
+        code,
+        referrerId: userId,
+        referrerName: finalName,
+        status: 'PENDING',
+      }
+    });
+    return { success: true, referral, msg: 'Referral code generated successfully!' };
+  }
 }
 
