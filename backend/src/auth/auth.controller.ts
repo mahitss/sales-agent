@@ -268,4 +268,37 @@ export class AuthController {
   async createReferral(@Req() req) {
     return this.authService.generateReferralCode(req.user.sub);
   }
+
+  @Get('sso/saml')
+  async initiateSSO(@Res() response: express.Response) {
+    const ssoRedirectUrl = 'https://mock-identity-provider.com/sso/saml/login?clientId=beacon-saas';
+    return response.send({
+      message: 'SAML SSO integration initiated',
+      redirectUrl: ssoRedirectUrl,
+    });
+  }
+
+  @Post('sso/callback')
+  async handleSSOCallback(
+    @Body() body: { samlResponse: string },
+    @Res() response: express.Response
+  ) {
+    if (!body.samlResponse) {
+      throw new BadRequestException('Missing SAMLResponse token assertion');
+    }
+
+    const mockEmail = 'sso-enterprise-user@company.com';
+    const mockName = 'Enterprise SSO User';
+
+    const result = await this.authService.loginOrCreateSSOUser(mockEmail, mockName);
+
+    this.setAccessTokenCookie(response, result.accessToken);
+    this.setRefreshTokenCookie(response, result.refreshToken);
+
+    return response.send({
+      success: true,
+      user: result.user,
+      token: result.accessToken,
+    });
+  }
 }

@@ -3,12 +3,14 @@ import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../common/redis/redis.service';
 import { CreateLeadDto, UpdateLeadDto } from './dto/lead.dto';
 import * as ExcelJS from 'exceljs';
+import { WebhookSubscriptionService } from '../common/webhooks/webhook-subscription.service';
 
 @Injectable()
 export class LeadService {
   constructor(
     private prisma: PrismaService,
     private redisService: RedisService,
+    private webhookService: WebhookSubscriptionService,
   ) {}
 
   async create(dto: CreateLeadDto) {
@@ -25,6 +27,10 @@ export class LeadService {
     });
 
     await this.redisService.del(`business:${dto.businessId}:lead-stats`).catch(() => {});
+    
+    // Outbound webhook notification
+    this.webhookService.publish(lead.businessId, 'lead.created', lead).catch(() => {});
+
     return lead;
   }
 
@@ -39,6 +45,13 @@ export class LeadService {
     });
 
     await this.redisService.del(`business:${existing.businessId}:lead-stats`).catch(() => {});
+
+    // Outbound webhook notifications
+    if (updated.status !== existing.status && (updated.status === 'HOT' || updated.status === 'WARM')) {
+      this.webhookService.publish(updated.businessId, 'lead.qualified', updated).catch(() => {});
+    }
+    this.webhookService.publish(updated.businessId, 'lead.updated', updated).catch(() => {});
+
     return updated;
   }
 

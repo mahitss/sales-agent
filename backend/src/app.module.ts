@@ -23,6 +23,7 @@ import { validate } from './common/env.validation';
 import { StripeModule } from './common/stripe/stripe.module';
 import { ActivityLogModule } from './common/activity-logs/activity-log.module';
 import { AICostModule } from './common/ai-cost/ai-cost.module';
+import { WebhookSubscriptionModule } from './common/webhooks/webhook-subscription.module';
 
 @Module({
   imports: [
@@ -48,6 +49,7 @@ import { AICostModule } from './common/ai-cost/ai-cost.module';
     StripeModule,
     ActivityLogModule,
     AICostModule,
+    WebhookSubscriptionModule,
   ],
   controllers: [AppController, HealthController, MetricsController],
   providers: [AppService],

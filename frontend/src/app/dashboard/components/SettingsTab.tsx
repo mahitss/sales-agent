@@ -12,7 +12,13 @@ import {
   Key,
   CheckCircle,
   HelpCircle,
-  Clock
+  Clock,
+  Terminal,
+  Activity,
+  Trash2,
+  Lock,
+  Eye,
+  AlertTriangle
 } from "lucide-react";
 
 interface SettingsTabProps {
@@ -30,6 +36,18 @@ interface SettingsTabProps {
   handleApproveWaitlist: (id: string) => void;
   handleCreateReferral: () => void;
   handleRevokeSession: (sessionId: string) => void;
+
+  // Public Developer API Keys
+  apiKeys: any[];
+  apiKeysLoading: boolean;
+  handleCreateApiKey: (name: string, expiresDays?: number) => Promise<string | null>;
+  handleRevokeApiKey: (id: string) => void;
+
+  // Outbound Webhooks
+  webhooks: any[];
+  webhooksLoading: boolean;
+  handleCreateWebhook: (url: string, events: string[]) => void;
+  handleDeleteWebhook: (id: string) => void;
 }
 
 export const SettingsTab: React.FC<SettingsTabProps> = ({
@@ -43,11 +61,30 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
   handleApproveWaitlist,
   handleCreateReferral,
   handleRevokeSession,
+  apiKeys,
+  apiKeysLoading,
+  handleCreateApiKey,
+  handleRevokeApiKey,
+  webhooks,
+  webhooksLoading,
+  handleCreateWebhook,
+  handleDeleteWebhook,
 }) => {
   const [copied, setCopied] = useState(false);
 
+  // API Key Form State
+  const [newKeyName, setNewKeyName] = useState("");
+  const [keyExpiresDays, setKeyExpiresDays] = useState(90);
+  const [generatedRawKey, setGeneratedRawKey] = useState<string | null>(null);
+  const [keyCopied, setKeyCopied] = useState(false);
+  const [keyGenerating, setKeyGenerating] = useState(false);
+
+  // Webhook Form State
+  const [webhookUrl, setWebhookUrl] = useState("");
+  const [selectedEvents, setSelectedEvents] = useState<string[]>(["lead.created", "lead.qualified"]);
+
   // Generate Referral URL based on the user's active code
-  const userReferral = referrals.length > 0 ? referrals[0] : null; // Use first referral row as active user's code
+  const userReferral = referrals.length > 0 ? referrals[0] : null; 
   const referralCode = userReferral ? userReferral.code : "";
   const shareUrl = typeof window !== "undefined" 
     ? `${window.location.origin}/register?ref=${referralCode}` 
@@ -60,12 +97,50 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const handleCopyGeneratedKey = () => {
+    if (!generatedRawKey) return;
+    navigator.clipboard.writeText(generatedRawKey);
+    setKeyCopied(true);
+    setTimeout(() => setKeyCopied(false), 2000);
+  };
+
+  const onSubmitApiKey = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newKeyName.trim()) return;
+    setKeyGenerating(true);
+    setGeneratedRawKey(null);
+    try {
+      const rawKey = await handleCreateApiKey(newKeyName, keyExpiresDays > 0 ? keyExpiresDays : undefined);
+      if (rawKey) {
+        setGeneratedRawKey(rawKey);
+        setNewKeyName("");
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setKeyGenerating(false);
+    }
+  };
+
+  const onSubmitWebhook = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!webhookUrl.trim() || selectedEvents.length === 0) return;
+    handleCreateWebhook(webhookUrl, selectedEvents);
+    setWebhookUrl("");
+  };
+
+  const handleToggleEvent = (event: string) => {
+    setSelectedEvents(prev => 
+      prev.includes(event) ? prev.filter(e => e !== event) : [...prev, event]
+    );
+  };
+
   return (
     <div className="space-y-8 pb-10">
       {/* Title */}
       <div>
         <h3 className="text-xl font-bold text-white">SaaS Settings & Growth Center</h3>
-        <p className="text-xs text-muted-text mt-1">Examine user onboarding waitlists, refer new users for rewards, and revoke untrusted login sessions.</p>
+        <p className="text-xs text-muted-text mt-1">Examine onboarding waitlists, referrals, active sessions, developer API Keys, and outbound webhooks.</p>
       </div>
 
       {/* Grid: Metrics Cards for Referrals */}
@@ -247,6 +322,222 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
         </div>
       </div>
 
+      {/* Developer API Keys Section */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <div className="rounded-2xl border border-card-border bg-card/20 p-6 space-y-4 shadow-sm">
+          <h4 className="font-bold text-sm uppercase tracking-wider text-muted-text flex items-center gap-2">
+            <Terminal className="h-4.5 w-4.5 text-accent-primary" />
+            Developer API Keys
+          </h4>
+          <p className="text-xs text-muted-text">
+            Generate programmatic keys to pull lead intelligence, qualify campaigns, and sync records with external CRMs.
+          </p>
+
+          <form onSubmit={onSubmitApiKey} className="space-y-3">
+            <div className="flex gap-2">
+              <input
+                type="text"
+                placeholder="Key Name (e.g. Apollo Sync)"
+                value={newKeyName}
+                onChange={(e) => setNewKeyName(e.target.value)}
+                className="flex-1 rounded-xl bg-card border border-card-border px-3 py-2 text-xs text-white focus:outline-none"
+              />
+              <select
+                value={keyExpiresDays}
+                onChange={(e) => setKeyExpiresDays(Number(e.target.value))}
+                className="rounded-xl bg-card border border-card-border px-3 py-2 text-xs text-slate-300 focus:outline-none"
+              >
+                <option value={30}>30 Days</option>
+                <option value={90}>90 Days</option>
+                <option value={365}>365 Days</option>
+                <option value={0}>Never Expire</option>
+              </select>
+              <button
+                type="submit"
+                disabled={keyGenerating}
+                className="bg-accent-primary hover:bg-accent-primary-hover px-4 py-2 rounded-xl text-xs font-bold text-white transition-all cursor-pointer"
+              >
+                {keyGenerating ? "..." : "Generate"}
+              </button>
+            </div>
+          </form>
+
+          {/* Secure One-time Key Display Banner */}
+          {generatedRawKey && (
+            <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 space-y-2.5">
+              <div className="flex items-center gap-2 text-amber-400 text-xs font-bold">
+                <AlertTriangle className="h-4 w-4 shrink-0" />
+                Copy this key now. It will not be shown again.
+              </div>
+              <div className="flex gap-2 items-center">
+                <input
+                  type="text"
+                  readOnly
+                  value={generatedRawKey}
+                  className="flex-1 bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-[10px] font-mono text-emerald-400"
+                />
+                <button
+                  onClick={handleCopyGeneratedKey}
+                  className="bg-slate-800 hover:bg-slate-700 text-slate-300 p-2 rounded-lg text-xs cursor-pointer"
+                >
+                  {keyCopied ? "Copied" : "Copy"}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* API Keys Table */}
+          <div className="mt-4 pt-4 border-t border-card-border/50">
+            {apiKeysLoading ? (
+              <div className="py-6 flex justify-center"><RefreshCw className="h-5 w-5 animate-spin text-accent-primary" /></div>
+            ) : apiKeys.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-card-border p-6 text-center text-xs text-muted-text">
+                No active Developer API keys configured.
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="border-b border-card-border text-muted-text uppercase tracking-wider text-[10px] font-bold">
+                      <th className="py-2">Name</th>
+                      <th className="py-2">Last Used</th>
+                      <th className="py-2">Expires</th>
+                      <th className="py-2 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {apiKeys.map((keyRec) => (
+                      <tr key={keyRec.id} className="border-b border-card-border/40 hover:bg-card/10 text-slate-300">
+                        <td className="py-3">
+                          <p className="font-semibold text-slate-200">{keyRec.name}</p>
+                          <span className="text-[8px] bg-slate-800/60 border border-slate-700 px-1 py-0.2 rounded font-mono text-slate-400 uppercase tracking-wide">
+                            {keyRec.role}
+                          </span>
+                        </td>
+                        <td className="py-3 text-[10px] font-mono text-muted-text">
+                          {keyRec.lastUsedAt ? new Date(keyRec.lastUsedAt).toLocaleDateString() : "Never"}
+                        </td>
+                        <td className="py-3 text-[10px] text-muted-text">
+                          {keyRec.expiresAt ? new Date(keyRec.expiresAt).toLocaleDateString() : "Never"}
+                        </td>
+                        <td className="py-3 text-right">
+                          <button
+                            onClick={() => handleRevokeApiKey(keyRec.id)}
+                            className="text-rose-400 hover:text-rose-300 p-1 cursor-pointer hover:bg-rose-500/5 rounded"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Outbound Webhooks Section */}
+        <div className="rounded-2xl border border-card-border bg-card/20 p-6 space-y-4 shadow-sm">
+          <h4 className="font-bold text-sm uppercase tracking-wider text-muted-text flex items-center gap-2">
+            <Activity className="h-4.5 w-4.5 text-accent-primary" />
+            Outbound Webhooks
+          </h4>
+          <p className="text-xs text-muted-text">
+            Register URLs to subscribe to real-time events. Payloads are signed with an HMAC SHA-256 header.
+          </p>
+
+          <form onSubmit={onSubmitWebhook} className="space-y-3">
+            <div className="flex gap-2">
+              <input
+                type="url"
+                placeholder="Webhook URL (e.g. https://api.company.com/webhook)"
+                value={webhookUrl}
+                onChange={(e) => setWebhookUrl(e.target.value)}
+                className="flex-1 rounded-xl bg-card border border-card-border px-3 py-2 text-xs text-white focus:outline-none"
+              />
+              <button
+                type="submit"
+                className="bg-accent-primary hover:bg-accent-primary-hover px-4 py-2 rounded-xl text-xs font-bold text-white transition-all cursor-pointer"
+              >
+                Subscribe
+              </button>
+            </div>
+
+            {/* Event selectors checkboxes */}
+            <div className="flex items-center gap-3 pt-1">
+              <span className="text-[10px] text-muted-text uppercase font-bold">Events:</span>
+              {["lead.created", "lead.qualified", "lead.updated"].map(evt => {
+                const checked = selectedEvents.includes(evt);
+                return (
+                  <label key={evt} className="flex items-center gap-1.5 text-xs text-slate-300 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => handleToggleEvent(evt)}
+                      className="rounded border-slate-700 bg-slate-950 text-accent-primary focus:ring-accent-primary"
+                    />
+                    <span>{evt}</span>
+                  </label>
+                );
+              })}
+            </div>
+          </form>
+
+          {/* Webhooks Subscription Table */}
+          <div className="mt-4 pt-4 border-t border-card-border/50">
+            {webhooksLoading ? (
+              <div className="py-6 flex justify-center"><RefreshCw className="h-5 w-5 animate-spin text-accent-primary" /></div>
+            ) : webhooks.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-card-border p-6 text-center text-xs text-muted-text">
+                No active webhook subscriptions configured.
+              </div>
+            ) : (
+              <div className="overflow-x-auto max-h-[220px] overflow-y-auto pr-1">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="border-b border-card-border text-muted-text uppercase tracking-wider text-[10px] font-bold">
+                      <th className="py-2">Target Endpoint</th>
+                      <th className="py-2">Subscribed Events</th>
+                      <th className="py-2 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {webhooks.map((sub) => (
+                      <tr key={sub.id} className="border-b border-card-border/40 hover:bg-card/10 text-slate-300">
+                        <td className="py-3 max-w-[200px] truncate">
+                          <p className="font-semibold text-slate-200 truncate">{sub.url}</p>
+                          <span className="text-[8px] bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-1 py-0.2 rounded font-mono">
+                            {sub.secret}
+                          </span>
+                        </td>
+                        <td className="py-3">
+                          <div className="flex flex-wrap gap-1">
+                            {sub.events.map((evt: string) => (
+                              <span key={evt} className="text-[8px] bg-slate-800 text-slate-300 border border-slate-700 px-1 py-0.2 rounded font-mono">
+                                {evt}
+                              </span>
+                            ))}
+                          </div>
+                        </td>
+                        <td className="py-3 text-right">
+                          <button
+                            onClick={() => handleDeleteWebhook(sub.id)}
+                            className="text-rose-400 hover:text-rose-300 p-1 cursor-pointer hover:bg-rose-500/5 rounded"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
       {/* Session Audit Trails Panel */}
       <div className="rounded-2xl border border-card-border bg-card/20 p-6 space-y-4 shadow-sm">
         <h4 className="font-bold text-sm uppercase tracking-wider text-muted-text flex items-center gap-2">
@@ -254,7 +545,7 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
           Active Login Sessions Audit
         </h4>
         <p className="text-xs text-muted-text">
-          Review recent browser sessions connected to your operator seat credentials. Revoke old sessions to enforce security.
+          Review recent browser sessions connected to your credentials. Revoke untrusted sessions instantly.
         </p>
 
         {sessionsLoading ? (

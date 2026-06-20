@@ -71,6 +71,8 @@ model Business {
   feedbacks          Feedback[]
   aiCostLogs         AICostLog[]
   workflowRules      WorkflowRule[]
+  apiKeys            ApiKey[]
+  webhookSubscriptions WebhookSubscription[]
 
   @@index([organizationId])
 }
@@ -406,6 +408,34 @@ model Referral {
   refereeEmail String?  @unique
   status       String   @default("PENDING") // PENDING, CONVERTED
   createdAt    DateTime @default(now())
+}
+
+model ApiKey {
+  id         String    @id @default(uuid())
+  name       String
+  hashedKey  String    @unique
+  businessId String
+  business   Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  role       String    @default("EMPLOYEE")
+  createdAt  DateTime  @default(now())
+  expiresAt  DateTime?
+  lastUsedAt DateTime?
+
+  @@index([businessId])
+}
+
+model WebhookSubscription {
+  id         String   @id @default(uuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  url        String
+  secret     String
+  events     String[] // e.g. ["lead.created", "lead.qualified"]
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([businessId])
 }
 
 

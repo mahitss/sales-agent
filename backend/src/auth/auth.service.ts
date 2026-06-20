@@ -720,5 +720,55 @@ export class AuthService {
     });
     return { success: true, referral, msg: 'Referral code generated successfully!' };
   }
+
+  async loginOrCreateSSOUser(email: string, name: string) {
+    let user = await this.prisma.user.findUnique({
+      where: { email },
+    });
+
+    if (!user) {
+      const defaultBusiness = await this.prisma.business.findFirst();
+      const defaultOrg = await this.prisma.organization.findFirst();
+
+      // Secure random UUID password placeholder
+      const randomPassword = crypto.randomUUID();
+      const hashedPassword = await bcrypt.hash(randomPassword, 10);
+
+      user = await this.prisma.user.create({
+        data: {
+          email,
+          name,
+          password: hashedPassword,
+          role: 'EMPLOYEE',
+          businessId: defaultBusiness?.id || null,
+          organizationId: defaultOrg?.id || null,
+          isVerified: true,
+        },
+      });
+    }
+
+    const tokens = await this.generateTokensPair(user.id, user.email, user.role);
+
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 7);
+    await this.prisma.refreshToken.create({
+      data: {
+        token: tokens.refreshToken,
+        userId: user.id,
+        expiresAt,
+      },
+    });
+
+    return {
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+      },
+      accessToken: tokens.token,
+      refreshToken: tokens.refreshToken,
+    };
+  }
 }
 

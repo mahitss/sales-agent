@@ -6,6 +6,7 @@ import { CreateBusinessDto, CreateFAQDto } from './dto/business.dto';
 import axios from 'axios';
 import * as bcrypt from 'bcrypt';
 import sanitizeHtml from 'sanitize-html';
+import { encrypt, decrypt } from '../common/utils/crypto.util';
 
 @Injectable()
 export class BusinessService {
@@ -17,7 +18,7 @@ export class BusinessService {
   ) {}
 
   async create(ownerId: string, dto: CreateBusinessDto) {
-    return this.prisma.business.create({
+    const business = await this.prisma.business.create({
       data: {
         ownerId,
         companyName: dto.companyName,
@@ -27,9 +28,9 @@ export class BusinessService {
         whatsappEnabled: dto.whatsappEnabled ?? false,
         instagramEnabled: dto.instagramEnabled ?? false,
         emailEnabled: dto.emailEnabled ?? false,
-        whatsappApiKey: dto.whatsappApiKey,
+        whatsappApiKey: encrypt(dto.whatsappApiKey),
         instagramAccountId: dto.instagramAccountId,
-        emailSmtp: dto.emailSmtp,
+        emailSmtp: encrypt(dto.emailSmtp),
         themeColor: dto.themeColor ?? '#10B981',
         agentTone: dto.agentTone ?? 'PROFESSIONAL',
         agentPrompt: dto.agentPrompt,
@@ -40,6 +41,7 @@ export class BusinessService {
         googleSheetsEnabled: dto.googleSheetsEnabled ?? false,
       },
     });
+    return this.decryptBusinessSecrets(business);
   }
 
   async getForUser(userId: string, role: string) {
@@ -63,7 +65,7 @@ export class BusinessService {
     if (!business) {
       return null;
     }
-    return business;
+    return this.decryptBusinessSecrets(business);
   }
 
   async getById(businessId: string) {
@@ -74,7 +76,7 @@ export class BusinessService {
     if (!business) {
       throw new NotFoundException('Business profile not found');
     }
-    return business;
+    return this.decryptBusinessSecrets(business);
   }
   async update(businessId: string, ownerId: string, dto: CreateBusinessDto) {
     const business = await this.prisma.business.findFirst({
@@ -94,9 +96,9 @@ export class BusinessService {
         whatsappEnabled: dto.whatsappEnabled ?? false,
         instagramEnabled: dto.instagramEnabled ?? false,
         emailEnabled: dto.emailEnabled ?? false,
-        whatsappApiKey: dto.whatsappApiKey,
+        whatsappApiKey: encrypt(dto.whatsappApiKey),
         instagramAccountId: dto.instagramAccountId,
-        emailSmtp: dto.emailSmtp,
+        emailSmtp: encrypt(dto.emailSmtp),
         themeColor: dto.themeColor ?? '#10B981',
         agentTone: dto.agentTone ?? 'PROFESSIONAL',
         agentPrompt: dto.agentPrompt,
@@ -114,7 +116,15 @@ export class BusinessService {
       // Ignore cache errors
     }
 
-    return updated;
+    return this.decryptBusinessSecrets(updated);
+  }
+
+  private decryptBusinessSecrets(business: any) {
+    if (business) {
+      business.whatsappApiKey = decrypt(business.whatsappApiKey);
+      business.emailSmtp = decrypt(business.emailSmtp);
+    }
+    return business;
   }
 
   private sanitizeHtml(text: string): string {

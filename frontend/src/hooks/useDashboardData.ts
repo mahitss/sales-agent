@@ -271,6 +271,12 @@ export function useDashboardData() {
   const [sessions, setSessions] = useState<any[]>([]);
   const [sessionsLoading, setSessionsLoading] = useState(false);
 
+  // API Keys & Webhooks
+  const [apiKeys, setApiKeys] = useState<any[]>([]);
+  const [apiKeysLoading, setApiKeysLoading] = useState(false);
+  const [webhooks, setWebhooks] = useState<any[]>([]);
+  const [webhooksLoading, setWebhooksLoading] = useState(false);
+
   const uploadIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const authenticatedFetch = (url: string, options: RequestInit = {}) => {
@@ -413,6 +419,8 @@ export function useDashboardData() {
         await fetchWaitlist();
         await fetchReferrals();
         await fetchSessions();
+        await fetchApiKeys();
+        await fetchWebhooks();
       }
     } catch (err) {
       console.error("Data refresh failed", err);
@@ -548,6 +556,127 @@ export function useDashboardData() {
       }
     } catch (err) {
       console.error("Failed to revoke session", err);
+    }
+  };
+
+  const fetchApiKeys = async () => {
+    setApiKeysLoading(true);
+    try {
+      const res = await authenticatedFetch(`${API_URL}/auth/apikeys`);
+      if (res.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+      if (res.ok) {
+        setApiKeys(await res.json());
+      }
+    } catch (err) {
+      console.error("Failed to fetch api keys", err);
+    } finally {
+      setApiKeysLoading(false);
+    }
+  };
+
+  const handleCreateApiKey = async (name: string, expiresDays?: number) => {
+    try {
+      const res = await authenticatedFetch(`${API_URL}/auth/apikeys`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, expiresDays }),
+      });
+      if (res.status === 401) {
+        handleUnauthorized();
+        return null;
+      }
+      const data = await res.json();
+      if (res.ok) {
+        addNotification("API Key Created", "Developer key generated successfully.", "success");
+        fetchApiKeys();
+        return data.rawKey;
+      } else {
+        alert(data.message || "Failed to create API key");
+        return null;
+      }
+    } catch (err) {
+      console.error("Failed to create API key", err);
+      return null;
+    }
+  };
+
+  const handleRevokeApiKey = async (id: string) => {
+    try {
+      const res = await authenticatedFetch(`${API_URL}/auth/apikeys/${id}`, {
+        method: "DELETE",
+      });
+      if (res.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+      if (res.ok) {
+        addNotification("API Key Revoked", "Developer key deleted permanently.", "success");
+        fetchApiKeys();
+      }
+    } catch (err) {
+      console.error("Failed to revoke API key", err);
+    }
+  };
+
+  const fetchWebhooks = async () => {
+    setWebhooksLoading(true);
+    try {
+      const res = await authenticatedFetch(`${API_URL}/business/webhooks`);
+      if (res.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+      if (res.ok) {
+        setWebhooks(await res.json());
+      }
+    } catch (err) {
+      console.error("Failed to fetch webhooks", err);
+    } finally {
+      setWebhooksLoading(false);
+    }
+  };
+
+  const handleCreateWebhook = async (url: string, events: string[]) => {
+    try {
+      const res = await authenticatedFetch(`${API_URL}/business/webhooks`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url, events }),
+      });
+      if (res.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+      const data = await res.json();
+      if (res.ok) {
+        addNotification("Webhook Subscribed", "Outbound events will be published to your URL.", "success");
+        fetchWebhooks();
+      } else {
+        alert(data.message || "Failed to subscribe webhook");
+      }
+    } catch (err) {
+      console.error("Failed to create webhook", err);
+    }
+  };
+
+  const handleDeleteWebhook = async (id: string) => {
+    try {
+      const res = await authenticatedFetch(`${API_URL}/business/webhooks/${id}`, {
+        method: "DELETE",
+      });
+      if (res.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+      if (res.ok) {
+        addNotification("Webhook Deleted", "Webhook subscription removed.", "success");
+        fetchWebhooks();
+      }
+    } catch (err) {
+      console.error("Failed to delete webhook", err);
     }
   };
 
@@ -1452,5 +1581,13 @@ export function useDashboardData() {
     handleApproveWaitlist,
     handleCreateReferral,
     handleRevokeSession,
+    apiKeys,
+    apiKeysLoading,
+    webhooks,
+    webhooksLoading,
+    handleCreateApiKey,
+    handleRevokeApiKey,
+    handleCreateWebhook,
+    handleDeleteWebhook,
   };
 }

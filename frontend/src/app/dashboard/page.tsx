@@ -209,6 +209,14 @@ export default function DashboardPage() {
     handleApproveWaitlist,
     handleCreateReferral,
     handleRevokeSession,
+    apiKeys,
+    apiKeysLoading,
+    webhooks,
+    webhooksLoading,
+    handleCreateApiKey,
+    handleRevokeApiKey,
+    handleCreateWebhook,
+    handleDeleteWebhook,
   } = useDashboardData();
 
   // 1. RENDER: Auth Gate
@@ -750,6 +758,14 @@ export default function DashboardPage() {
                         handleApproveWaitlist={handleApproveWaitlist}
                         handleCreateReferral={handleCreateReferral}
                         handleRevokeSession={handleRevokeSession}
+                        apiKeys={apiKeys}
+                        apiKeysLoading={apiKeysLoading}
+                        webhooks={webhooks}
+                        webhooksLoading={webhooksLoading}
+                        handleCreateApiKey={handleCreateApiKey}
+                        handleRevokeApiKey={handleRevokeApiKey}
+                        handleCreateWebhook={handleCreateWebhook}
+                        handleDeleteWebhook={handleDeleteWebhook}
                       />
                     </ErrorBoundary>
                   )}
