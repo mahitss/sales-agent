@@ -1,13 +1,16 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, Inject, forwardRef } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../common/redis/redis.service';
 import { CreateAppointmentDto } from './dto/appointment.dto';
+import { WorkflowService } from '../workflow/workflow.service';
 
 @Injectable()
 export class AppointmentService {
   constructor(
     private prisma: PrismaService,
     private redisService: RedisService,
+    @Inject(forwardRef(() => WorkflowService))
+    private workflowService: WorkflowService,
   ) {}
 
   async create(dto: CreateAppointmentDto) {
@@ -21,6 +24,10 @@ export class AppointmentService {
       },
     });
     await this.redisService.del(`business:${dto.businessId}:lead-stats`).catch(() => {});
+    
+    // Workflow Trigger
+    this.workflowService.trigger('MEETING_SCHEDULED', appt.businessId, appt).catch(() => {});
+
     return appt;
   }
 

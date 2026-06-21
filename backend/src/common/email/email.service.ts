@@ -139,4 +139,23 @@ export class EmailService {
 
     this.logger.log(`[CONSOLE EMAIL Invite] To: ${to} | URL: ${inviteUrl}`);
   }
+
+  async sendCustomEmail(to: string, subject: string, html: string) {
+    if (this.transporter) {
+      try {
+        await this.transporter.sendMail({
+          from: this.configService.get<string>('SMTP_FROM') || 'no-reply@beacon-sales.com',
+          to,
+          subject,
+          html,
+        });
+        this.logger.log(`Custom email sent successfully to ${to}`);
+        return;
+      } catch (err: any) {
+        this.logger.error(`Failed to send custom email to ${to}: ${err.message}`);
+        throw err;
+      }
+    }
+    this.logger.log(`[CONSOLE EMAIL Custom] To: ${to} | Subject: ${subject} | Content: ${html}`);
+  }
 }

@@ -231,6 +231,15 @@ export default function DashboardPage() {
     handleAnalyzeAccount,
     handleDownloadBriefingPdf,
     fetchAccountResearchHistory,
+    workflows,
+    workflowExecutions,
+    workflowMetrics,
+    workflowLoading,
+    fetchWorkflows,
+    fetchWorkflowExecutions,
+    fetchWorkflowMetrics,
+    handleSaveWorkflow,
+    handleToggleWorkflow,
   } = useDashboardData();
 
   // 1. RENDER: Auth Gate
@@ -793,6 +802,13 @@ export default function DashboardPage() {
                         workflowRules={workflowRules}
                         outreachSequences={outreachSequences}
                         handleToggleWorkflowRule={handleToggleWorkflowRule}
+                        workflows={workflows}
+                        workflowExecutions={workflowExecutions}
+                        workflowMetrics={workflowMetrics}
+                        workflowLoading={workflowLoading}
+                        handleSaveWorkflow={handleSaveWorkflow}
+                        handleToggleWorkflow={handleToggleWorkflow}
+                        fetchWorkflowExecutions={fetchWorkflowExecutions}
                       />
                     </ErrorBoundary>
                   )}

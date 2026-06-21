@@ -75,6 +75,7 @@ model Business {
   webhookSubscriptions WebhookSubscription[]
   jobLogs            JobLog[]
   accountResearches  AccountResearch[]
+  workflows          Workflow[]
 
   @@index([organizationId])
 }
@@ -485,5 +486,50 @@ model AccountResearch {
   @@index([domain])
 }
 
+model Workflow {
+  id         String   @id @default(uuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  name       String
+  trigger    String   // LEAD_CREATED, LEAD_UPDATED, DEAL_WON, DEAL_LOST, MEETING_SCHEDULED
+  isEnabled  Boolean  @default(true)
+  nodes      Json     @default("[]") // [{ id, type, position, data }]
+  edges      Json     @default("[]") // [{ id, source, target }]
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  executions WorkflowExecution[]
 
+  @@index([businessId])
+  @@index([trigger])
+}
 
+model WorkflowExecution {
+  id             String    @id @default(uuid())
+  workflowId     String
+  workflow       Workflow  @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  status         String    // PENDING, RUNNING, COMPLETED, FAILED
+  triggerPayload Json      @default("{}")
+  currentNodeId  String?
+  error          String?   @db.Text
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  logs           WorkflowStepLog[]
+
+  @@index([workflowId])
+  @@index([status])
+}
+
+model WorkflowStepLog {
+  id          String   @id @default(uuid())
+  executionId String
+  execution   WorkflowExecution @relation(fields: [executionId], references: [id], onDelete: Cascade)
+  nodeId      String
+  nodeType    String
+  status      String   // RUNNING, COMPLETED, FAILED
+  output      Json     @default("{}")
+  error       String?  @db.Text
+  duration    Int
+  createdAt   DateTime @default(now())
+
+  @@index([executionId])
+}

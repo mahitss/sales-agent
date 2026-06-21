@@ -1,9 +1,10 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, Inject, forwardRef } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../common/redis/redis.service';
 import { CreateLeadDto, UpdateLeadDto } from './dto/lead.dto';
 import * as ExcelJS from 'exceljs';
 import { WebhookSubscriptionService } from '../common/webhooks/webhook-subscription.service';
+import { WorkflowService } from '../workflow/workflow.service';
 
 @Injectable()
 export class LeadService {
@@ -11,6 +12,8 @@ export class LeadService {
     private prisma: PrismaService,
     private redisService: RedisService,
     private webhookService: WebhookSubscriptionService,
+    @Inject(forwardRef(() => WorkflowService))
+    private workflowService: WorkflowService,
   ) {}
 
   async create(dto: CreateLeadDto) {
@@ -30,6 +33,9 @@ export class LeadService {
     
     // Outbound webhook notification
     this.webhookService.publish(lead.businessId, 'lead.created', lead).catch(() => {});
+
+    // Workflow Trigger
+    this.workflowService.trigger('LEAD_CREATED', lead.businessId, lead).catch(() => {});
 
     return lead;
   }
@@ -51,6 +57,16 @@ export class LeadService {
       this.webhookService.publish(updated.businessId, 'lead.qualified', updated).catch(() => {});
     }
     this.webhookService.publish(updated.businessId, 'lead.updated', updated).catch(() => {});
+
+    // Workflow Triggers
+    if (updated.status !== existing.status) {
+      if (updated.status === 'HOT') {
+        this.workflowService.trigger('DEAL_WON', updated.businessId, updated).catch(() => {});
+      } else if (updated.status === 'COLD') {
+        this.workflowService.trigger('DEAL_LOST', updated.businessId, updated).catch(() => {});
+      }
+    }
+    this.workflowService.trigger('LEAD_UPDATED', updated.businessId, updated).catch(() => {});
 
     return updated;
   }

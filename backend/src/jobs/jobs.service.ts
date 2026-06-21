@@ -14,6 +14,7 @@ export class JobsService {
     @InjectQueue('report-generation') private reportGenerationQueue: Queue,
     @InjectQueue('workflow-automation') private workflowAutomationQueue: Queue,
     @InjectQueue('account-intelligence') private accountIntelligenceQueue: Queue,
+    @InjectQueue('workflow-execution') private workflowExecutionQueue: Queue,
   ) {}
 
   // Expose queues for direct controller operations
@@ -25,6 +26,7 @@ export class JobsService {
       'report-generation': this.reportGenerationQueue,
       'workflow-automation': this.workflowAutomationQueue,
       'account-intelligence': this.accountIntelligenceQueue,
+      'workflow-execution': this.workflowExecutionQueue,
     };
   }
 
@@ -93,5 +95,13 @@ export class JobsService {
     this.logger.log(`Enqueuing Account Intelligence job for domain ${domain} and researchId ${researchId}`);
 
     return this.accountIntelligenceQueue.add('analyze-account', { researchId, domain, businessId }, opts);
+  }
+
+  async addWorkflowExecutionJob(executionId: string, workflowId: string, businessId: string) {
+    const key = `workflow-exec:${executionId}:${Date.now()}`;
+    const opts = this.getStandardJobOptions(key);
+    this.logger.log(`Enqueuing Workflow Execution job for executionId ${executionId}`);
+
+    return this.workflowExecutionQueue.add('execute-workflow', { executionId, workflowId, businessId }, opts);
   }
 }

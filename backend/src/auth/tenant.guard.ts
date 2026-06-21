@@ -53,6 +53,21 @@ export class TenantGuard implements CanActivate {
           select: { businessId: true },
         });
         if (research) targetBusinessId = research.businessId;
+      } else if (path.includes('/workflows')) {
+        if (path.includes('/executions/')) {
+          const execId = params.executionId;
+          const execution = await this.prisma.workflowExecution.findUnique({
+            where: { id: execId },
+            include: { workflow: true },
+          });
+          if (execution) targetBusinessId = execution.workflow.businessId;
+        } else if (params.id) {
+          const workflow = await this.prisma.workflow.findUnique({
+            where: { id: params.id },
+            select: { businessId: true },
+          });
+          if (workflow) targetBusinessId = workflow.businessId;
+        }
       }
     }
 

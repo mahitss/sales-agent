@@ -310,6 +310,13 @@ export function useDashboardData() {
   const [accountResearches, setAccountResearches] = useState<AccountResearch[]>([]);
   const [researchLoading, setResearchLoading] = useState(false);
 
+  // Workflow Automation States
+  const [workflows, setWorkflows] = useState<any[]>([]);
+  const [workflowExecutions, setWorkflowExecutions] = useState<any[]>([]);
+  const [workflowMetrics, setWorkflowMetrics] = useState<any>(null);
+  const [workflowLoading, setWorkflowLoading] = useState(false);
+
+
 
   const fetchQueueMetrics = async () => {
     try {
@@ -401,6 +408,104 @@ export function useDashboardData() {
       alert("Error downloading PDF briefing");
     }
   };
+
+  const fetchWorkflows = async () => {
+    if (!business) return;
+    setWorkflowLoading(true);
+    try {
+      const res = await authenticatedFetch(`${API_URL}/workflows/business/${business.id}`);
+      if (res.ok) {
+        setWorkflows(await res.json());
+      }
+    } catch (err) {
+      console.error("Failed to fetch workflows", err);
+    } finally {
+      setWorkflowLoading(false);
+    }
+  };
+
+  const fetchWorkflowExecutions = async (workflowId: string) => {
+    setWorkflowLoading(true);
+    try {
+      const res = await authenticatedFetch(`${API_URL}/workflows/${workflowId}/executions`);
+      if (res.ok) {
+        setWorkflowExecutions(await res.json());
+      }
+    } catch (err) {
+      console.error("Failed to fetch executions", err);
+    } finally {
+      setWorkflowLoading(false);
+    }
+  };
+
+  const fetchWorkflowMetrics = async () => {
+    if (!business) return;
+    try {
+      const res = await authenticatedFetch(`${API_URL}/workflows/business/${business.id}/metrics`);
+      if (res.ok) {
+        setWorkflowMetrics(await res.json());
+      }
+    } catch (err) {
+      console.error("Failed to fetch workflow metrics", err);
+    }
+  };
+
+  const handleSaveWorkflow = async (
+    id: string | null,
+    name: string,
+    trigger: string,
+    nodes: any[],
+    edges: any[],
+  ) => {
+    setWorkflowLoading(true);
+    try {
+      const url = id ? `${API_URL}/workflows/${id}` : `${API_URL}/workflows`;
+      const method = id ? "PUT" : "POST";
+      const res = await authenticatedFetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, trigger, nodes, edges }),
+      });
+      if (res.ok) {
+        addNotification(
+          "Workflow Saved",
+          `Successfully saved workflow configuration for: ${name}`,
+          "success"
+        );
+        await fetchWorkflows();
+        await fetchWorkflowMetrics();
+      } else {
+        const err = await res.json();
+        alert(err.message || "Failed to save workflow");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Error saving workflow");
+    } finally {
+      setWorkflowLoading(false);
+    }
+  };
+
+  const handleToggleWorkflow = async (id: string, isEnabled: boolean) => {
+    try {
+      const res = await authenticatedFetch(`${API_URL}/workflows/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isEnabled }),
+      });
+      if (res.ok) {
+        addNotification(
+          "Workflow Updated",
+          `Workflow toggled ${isEnabled ? "ON" : "OFF"}.`,
+          "info"
+        );
+        await fetchWorkflows();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
 
 
   const handleRetryJob = async (queueName: string, jobId: string) => {
@@ -588,6 +693,8 @@ export function useDashboardData() {
         }
         if (res.ok) setWorkflowRules(await res.json());
         fetchOutreachSequences();
+        await fetchWorkflows();
+        await fetchWorkflowMetrics();
       } else if (activeTab === "settings") {
         await fetchWaitlist();
         await fetchReferrals();
@@ -1808,5 +1915,14 @@ export function useDashboardData() {
     handleAnalyzeAccount,
     handleDownloadBriefingPdf,
     fetchAccountResearchHistory,
+    workflows,
+    workflowExecutions,
+    workflowMetrics,
+    workflowLoading,
+    fetchWorkflows,
+    fetchWorkflowExecutions,
+    fetchWorkflowMetrics,
+    handleSaveWorkflow,
+    handleToggleWorkflow,
   };
 }
