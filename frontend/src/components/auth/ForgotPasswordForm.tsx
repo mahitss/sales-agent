@@ -53,7 +53,7 @@ export const ForgotPasswordForm: React.FC<ForgotPasswordFormProps> = ({
           </p>
           <button
             onClick={onBackToLogin}
-            className="w-full bg-slate-800 hover:bg-slate-700 text-white rounded-xl py-3 text-sm font-semibold transition-all cursor-pointer"
+            className="w-full bg-slate-800 hover:bg-slate-700 text-white rounded-xl py-3 text-sm font-semibold transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-slate-500/50"
           >
             Back to Sign In
           </button>
@@ -61,24 +61,29 @@ export const ForgotPasswordForm: React.FC<ForgotPasswordFormProps> = ({
       ) : (
         <form className="mt-8 space-y-5" onSubmit={handleSubmit(onSubmit)}>
           {authError && (
-            <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-4 text-sm text-red-400 text-center">
+            <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-4 text-sm text-red-400 text-center" role="alert">
               {authError}
             </div>
           )}
           <div className="space-y-4">
             <div>
-              <label className="text-xs font-semibold uppercase tracking-wider text-muted-text">Email Address</label>
-              <div className="relative mt-1">
+              <label htmlFor="forgot-email" className="text-xs font-semibold uppercase tracking-wider text-muted-text block mb-1">
+                Email Address
+              </label>
+              <div className="relative">
                 <Mail className="absolute left-3.5 top-3.5 h-4.5 w-4.5 text-slate-500" />
                 <input
+                  id="forgot-email"
                   type="email"
                   {...register("email")}
                   placeholder="admin@company.com"
-                  className="w-full rounded-xl bg-slate-900 border border-slate-800/80 pl-11 pr-4 py-3 text-sm text-white placeholder-slate-600 focus:border-emerald-500/50 focus:outline-none transition-all"
+                  aria-invalid={errors.email ? "true" : "false"}
+                  aria-describedby={errors.email ? "forgot-email-error" : undefined}
+                  className="w-full rounded-xl bg-slate-900 border border-slate-800/80 pl-11 pr-4 py-3 text-sm text-white placeholder-slate-600 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 transition-all"
                 />
               </div>
               {errors.email && (
-                <p className="text-xs text-rose-400 mt-1">{errors.email.message}</p>
+                <p id="forgot-email-error" className="text-xs text-rose-400 mt-1">{errors.email.message}</p>
               )}
             </div>
           </div>
@@ -87,7 +92,7 @@ export const ForgotPasswordForm: React.FC<ForgotPasswordFormProps> = ({
             <button
               type="submit"
               disabled={authLoading}
-              className="group relative flex w-full justify-center rounded-xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white hover:bg-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 disabled:opacity-50 transition-all shadow-lg cursor-pointer"
+              className="group relative flex w-full justify-center rounded-xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white hover:bg-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 disabled:opacity-50 transition-all shadow-lg cursor-pointer"
             >
               {authLoading ? (
                 <span className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent"></span>
@@ -103,7 +108,7 @@ export const ForgotPasswordForm: React.FC<ForgotPasswordFormProps> = ({
         <div className="text-center">
           <button
             onClick={onBackToLogin}
-            className="text-xs font-medium text-emerald-400 hover:text-emerald-300 transition-colors cursor-pointer"
+            className="text-xs font-medium text-emerald-400 hover:text-emerald-300 transition-colors cursor-pointer focus:outline-none focus:underline"
           >
             Back to Sign In
           </button>

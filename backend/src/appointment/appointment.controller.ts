@@ -2,6 +2,7 @@ import { Controller, Post, Get, Put, Body, Param, UseGuards } from '@nestjs/comm
 import { AppointmentService } from './appointment.service';
 import { CreateAppointmentDto, UpdateAppointmentStatusDto } from './dto/appointment.dto';
 import { AuthGuard } from '../auth/auth.guard';
+import { TenantGuard } from '../auth/tenant.guard';
 
 @Controller('appointments')
 export class AppointmentController {
@@ -12,13 +13,13 @@ export class AppointmentController {
     return this.appointmentService.create(dto);
   }
 
-  @UseGuards(AuthGuard)
+  @UseGuards(AuthGuard, TenantGuard)
   @Get('business/:businessId')
   async getByBusiness(@Param('businessId') businessId: string) {
     return this.appointmentService.getByBusiness(businessId);
   }
 
-  @UseGuards(AuthGuard)
+  @UseGuards(AuthGuard, TenantGuard)
   @Put(':id/status')
   async updateStatus(@Param('id') id: string, @Body() dto: UpdateAppointmentStatusDto) {
     return this.appointmentService.updateStatus(id, dto.status);

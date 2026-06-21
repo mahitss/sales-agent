@@ -2,6 +2,7 @@ import { Controller, Post, Get, Put, Body, Param, UseGuards, Res, Query } from '
 import { LeadService } from './lead.service';
 import { CreateLeadDto, UpdateLeadDto } from './dto/lead.dto';
 import { AuthGuard } from '../auth/auth.guard';
+import { TenantGuard } from '../auth/tenant.guard';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import * as express from 'express';
@@ -15,7 +16,7 @@ export class LeadController {
     return this.leadService.create(dto);
   }
 
-  @UseGuards(AuthGuard)
+  @UseGuards(AuthGuard, TenantGuard)
   @Get('business/:businessId')
   async getByBusiness(
     @Param('businessId') businessId: string,
@@ -26,13 +27,13 @@ export class LeadController {
     return this.leadService.getByBusiness(businessId, limitNum, cursor);
   }
 
-  @UseGuards(AuthGuard)
+  @UseGuards(AuthGuard, TenantGuard)
   @Get('stats/:businessId')
   async getStats(@Param('businessId') businessId: string) {
     return this.leadService.getStats(businessId);
   }
 
-  @UseGuards(AuthGuard, RolesGuard)
+  @UseGuards(AuthGuard, RolesGuard, TenantGuard)
   @Roles('ADMIN')
   @Get('business/:businessId/export')
   async exportLeads(@Param('businessId') businessId: string, @Res() res: express.Response) {
@@ -42,7 +43,7 @@ export class LeadController {
     return res.status(200).send(csv);
   }
 
-  @UseGuards(AuthGuard, RolesGuard)
+  @UseGuards(AuthGuard, RolesGuard, TenantGuard)
   @Roles('ADMIN')
   @Get('business/:businessId/export/json')
   async exportLeadsJson(@Param('businessId') businessId: string, @Res() res: express.Response) {
@@ -52,7 +53,7 @@ export class LeadController {
     return res.status(200).send(json);
   }
 
-  @UseGuards(AuthGuard, RolesGuard)
+  @UseGuards(AuthGuard, RolesGuard, TenantGuard)
   @Roles('ADMIN')
   @Get('business/:businessId/export/excel')
   async exportLeadsExcel(@Param('businessId') businessId: string, @Res() res: express.Response) {
@@ -62,13 +63,13 @@ export class LeadController {
     return res.status(200).send(buffer);
   }
 
-  @UseGuards(AuthGuard)
+  @UseGuards(AuthGuard, TenantGuard)
   @Get(':id')
   async getById(@Param('id') id: string) {
     return this.leadService.getById(id);
   }
 
-  @UseGuards(AuthGuard)
+  @UseGuards(AuthGuard, TenantGuard)
   @Put(':id')
   async update(@Param('id') id: string, @Body() dto: UpdateLeadDto) {
     return this.leadService.update(id, dto);

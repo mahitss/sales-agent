@@ -39,66 +39,86 @@ export const OnboardingForm: React.FC<OnboardingFormProps> = ({
       <form className="mt-8 space-y-4" onSubmit={handleSubmit(onSubmit)}>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
-            <label className="text-xs font-semibold uppercase tracking-wider text-muted-text">Company Name</label>
-            <div className="relative mt-1">
+            <label htmlFor="onboard-company" className="text-xs font-semibold uppercase tracking-wider text-muted-text block mb-1">
+              Company Name
+            </label>
+            <div className="relative">
               <Building className="absolute left-3.5 top-3.5 h-4.5 w-4.5 text-slate-500" />
               <input
+                id="onboard-company"
                 type="text"
                 {...register("companyName")}
                 placeholder="e.g. Acme Agency"
-                className="w-full rounded-xl bg-slate-900 border border-slate-800/80 pl-11 pr-4 py-3 text-sm text-white focus:border-emerald-500/50 focus:outline-none transition-all"
+                aria-invalid={errors.companyName ? "true" : "false"}
+                aria-describedby={errors.companyName ? "onboard-company-error" : undefined}
+                className="w-full rounded-xl bg-slate-900 border border-slate-800/80 pl-11 pr-4 py-3 text-sm text-white focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 transition-all"
               />
             </div>
             {errors.companyName && (
-              <p className="text-xs text-rose-400 mt-1">{errors.companyName.message}</p>
+              <p id="onboard-company-error" className="text-xs text-rose-400 mt-1">{errors.companyName.message}</p>
             )}
           </div>
           <div>
-            <label className="text-xs font-semibold uppercase tracking-wider text-muted-text">Website URL</label>
-            <div className="relative mt-1">
+            <label htmlFor="onboard-website" className="text-xs font-semibold uppercase tracking-wider text-muted-text block mb-1">
+              Website URL
+            </label>
+            <div className="relative">
               <Globe className="absolute left-3.5 top-3.5 h-4.5 w-4.5 text-slate-500" />
               <input
+                id="onboard-website"
                 type="text"
                 {...register("website")}
                 placeholder="e.g. acme.com"
-                className="w-full rounded-xl bg-slate-900 border border-slate-800/80 pl-11 pr-4 py-3 text-sm text-white focus:border-emerald-500/50 focus:outline-none transition-all"
+                aria-invalid={errors.website ? "true" : "false"}
+                aria-describedby={errors.website ? "onboard-website-error" : undefined}
+                className="w-full rounded-xl bg-slate-900 border border-slate-800/80 pl-11 pr-4 py-3 text-sm text-white focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 transition-all"
               />
             </div>
             {errors.website && (
-              <p className="text-xs text-rose-400 mt-1">{errors.website.message}</p>
+              <p id="onboard-website-error" className="text-xs text-rose-400 mt-1">{errors.website.message}</p>
             )}
           </div>
         </div>
 
         <div>
-          <label className="text-xs font-semibold uppercase tracking-wider text-muted-text">Industry</label>
-          <div className="relative mt-1">
+          <label htmlFor="onboard-industry" className="text-xs font-semibold uppercase tracking-wider text-muted-text block mb-1">
+            Industry
+          </label>
+          <div className="relative">
             <Briefcase className="absolute left-3.5 top-3.5 h-4.5 w-4.5 text-slate-500" />
             <input
+              id="onboard-industry"
               type="text"
               {...register("industry")}
               placeholder="e.g. Marketing, Real Estate, Consulting"
-              className="w-full rounded-xl bg-slate-900 border border-slate-800/80 pl-11 pr-4 py-3 text-sm text-white focus:border-emerald-500/50 focus:outline-none transition-all"
+              aria-invalid={errors.industry ? "true" : "false"}
+              aria-describedby={errors.industry ? "onboard-industry-error" : undefined}
+              className="w-full rounded-xl bg-slate-900 border border-slate-800/80 pl-11 pr-4 py-3 text-sm text-white focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 transition-all"
             />
           </div>
           {errors.industry && (
-            <p className="text-xs text-rose-400 mt-1">{errors.industry.message}</p>
+            <p id="onboard-industry-error" className="text-xs text-rose-400 mt-1">{errors.industry.message}</p>
           )}
         </div>
 
         <div>
-          <label className="text-xs font-semibold uppercase tracking-wider text-muted-text">Company Description & Services</label>
-          <div className="relative mt-1">
-            <FileText className="absolute left-3.5 top-3.5 h-4.5 w-4.5 text-slate-500" />
+          <label htmlFor="onboard-description" className="text-xs font-semibold uppercase tracking-wider text-muted-text block mb-1">
+            Company Description & Services
+          </label>
+          <div className="relative">
+            <FileText className="absolute left-3.5 top-3.5 h-4.5 w-4.5 text-slate-500 animate-pulse" />
             <textarea
+              id="onboard-description"
               {...register("description")}
               rows={4}
               placeholder="Describe what your business does, who you serve, pricing structure, and key services..."
-              className="w-full rounded-xl bg-slate-900 border border-slate-800/80 pl-11 pr-4 py-3 text-sm text-white focus:border-emerald-500/50 focus:outline-none transition-all resize-none"
+              aria-invalid={errors.description ? "true" : "false"}
+              aria-describedby={errors.description ? "onboard-description-error" : undefined}
+              className="w-full rounded-xl bg-slate-900 border border-slate-800/80 pl-11 pr-4 py-3 text-sm text-white focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 transition-all resize-none"
             />
           </div>
           {errors.description && (
-            <p className="text-xs text-rose-400 mt-1">{errors.description.message}</p>
+            <p id="onboard-description-error" className="text-xs text-rose-400 mt-1">{errors.description.message}</p>
           )}
         </div>
 
@@ -106,7 +126,7 @@ export const OnboardingForm: React.FC<OnboardingFormProps> = ({
           <button
             type="submit"
             disabled={onboardLoading}
-            className="group relative flex w-full justify-center rounded-xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white hover:bg-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 disabled:opacity-50 transition-all shadow-lg cursor-pointer"
+            className="group relative flex w-full justify-center rounded-xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white hover:bg-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 disabled:opacity-50 transition-all shadow-lg cursor-pointer"
           >
             {onboardLoading ? (
               <span className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent"></span>
@@ -120,7 +140,7 @@ export const OnboardingForm: React.FC<OnboardingFormProps> = ({
       <div className="text-center mt-4">
         <button
           onClick={onLogout}
-          className="text-xs font-medium text-slate-500 hover:text-slate-400 transition-colors cursor-pointer flex items-center justify-center gap-1 mx-auto"
+          className="text-xs font-medium text-slate-500 hover:text-slate-400 transition-colors cursor-pointer flex items-center justify-center gap-1 mx-auto focus:outline-none focus:underline"
         >
           <LogOut className="h-3.5 w-3.5" />
           Sign Out

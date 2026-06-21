@@ -3,6 +3,7 @@ import { FeedbackService } from './feedback.service';
 import { AuthGuard } from '../auth/auth.guard';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
+import { TenantGuard } from '../auth/tenant.guard';
 
 @Controller('leads')
 export class FeedbackController {
@@ -16,14 +17,14 @@ export class FeedbackController {
     return this.feedbackService.submitFeedback(businessId, body);
   }
 
-  @UseGuards(AuthGuard, RolesGuard)
+  @UseGuards(AuthGuard, RolesGuard, TenantGuard)
   @Roles('ADMIN')
   @Get('business/:businessId/feedback')
   async getFeedback(@Param('businessId') businessId: string) {
     return this.feedbackService.getFeedback(businessId);
   }
 
-  @UseGuards(AuthGuard, RolesGuard)
+  @UseGuards(AuthGuard, RolesGuard, TenantGuard)
   @Roles('ADMIN')
   @Put('feedback/:feedbackId/status')
   async updateStatus(

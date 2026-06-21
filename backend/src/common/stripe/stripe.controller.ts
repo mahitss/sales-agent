@@ -1,13 +1,14 @@
 import { Controller, Post, Body, Req, Headers, BadRequestException, UseGuards, Res } from '@nestjs/common';
 import { StripeService } from './stripe.service';
 import { AuthGuard } from '../../auth/auth.guard';
+import { TenantGuard } from '../../auth/tenant.guard';
 import * as express from 'express';
 
 @Controller('stripe')
 export class StripeController {
   constructor(private stripeService: StripeService) {}
 
-  @UseGuards(AuthGuard)
+  @UseGuards(AuthGuard, TenantGuard)
   @Post('checkout-session')
   async createCheckoutSession(
     @Body() body: { businessId: string; planId: string; returnUrl: string }
@@ -19,7 +20,7 @@ export class StripeController {
     return { url };
   }
 
-  @UseGuards(AuthGuard)
+  @UseGuards(AuthGuard, TenantGuard)
   @Post('billing-portal')
   async createBillingPortal(
     @Body() body: { businessId: string; returnUrl: string }
@@ -59,7 +60,7 @@ export class StripeController {
   /**
    * Endpoint to complete mock checkout immediately for testing.
    */
-  @UseGuards(AuthGuard)
+  @UseGuards(AuthGuard, TenantGuard)
   @Post('mock-checkout-success')
   async mockCheckoutSuccess(
     @Body() body: { businessId: string; planId: string }

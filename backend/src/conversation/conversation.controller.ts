@@ -1,12 +1,13 @@
 import { Controller, Get, Param, UseGuards, Put, Body, Query, Res } from '@nestjs/common';
 import { ConversationService } from './conversation.service';
 import { AuthGuard } from '../auth/auth.guard';
+import { TenantGuard } from '../auth/tenant.guard';
 
 @Controller('conversations')
+@UseGuards(AuthGuard, TenantGuard)
 export class ConversationController {
   constructor(private conversationService: ConversationService) {}
 
-  @UseGuards(AuthGuard)
   @Get('business/:businessId')
   async getByBusiness(
     @Param('businessId') businessId: string,
@@ -22,7 +23,6 @@ export class ConversationController {
     return this.conversationService.getById(id);
   }
 
-  @UseGuards(AuthGuard)
   @Put(':id/takeover')
   async toggleTakeover(
     @Param('id') id: string,
@@ -31,7 +31,6 @@ export class ConversationController {
     return this.conversationService.toggleTakeover(id, isHumanTakeover);
   }
 
-  @UseGuards(AuthGuard)
   @Get('business/:businessId/export')
   async exportConversationsCsv(@Param('businessId') businessId: string, @Res() res: any) {
     const csv = await this.conversationService.exportConversationsToCsv(businessId);
@@ -40,7 +39,6 @@ export class ConversationController {
     return res.status(200).send(csv);
   }
 
-  @UseGuards(AuthGuard)
   @Get('business/:businessId/export/json')
   async exportConversationsJson(@Param('businessId') businessId: string, @Res() res: any) {
     const json = await this.conversationService.exportConversationsToJson(businessId);

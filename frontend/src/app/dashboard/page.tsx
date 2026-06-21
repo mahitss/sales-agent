@@ -169,6 +169,7 @@ export default function DashboardPage() {
     handleLogout,
     handleLogin,
     handleRegister,
+    handleGoogleAuth,
     handleRequestPasswordReset,
     handleOnboard,
     handleAddFAQ,
@@ -248,6 +249,7 @@ export default function DashboardPage() {
                     setAuthView("forgot");
                     setAuthError("");
                   }}
+                  onGoogleSignIn={() => handleGoogleAuth("login")}
                 />
               </motion.div>
             )}
@@ -268,6 +270,7 @@ export default function DashboardPage() {
                     setAuthView("login");
                     setAuthError("");
                   }}
+                  onGoogleSignUp={() => handleGoogleAuth("register")}
                 />
               </motion.div>
             )}

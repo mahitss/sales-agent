@@ -125,21 +125,23 @@ export const LeadsTab: React.FC<LeadsTabProps> = ({
       {/* Filters container */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 p-4 rounded-2xl border border-card-border bg-card/10">
         <div>
-          <label className="text-[10px] font-bold uppercase tracking-wide text-muted-text">Search Visitor</label>
+          <label htmlFor="lead-search" className="text-[10px] font-bold uppercase tracking-wide text-muted-text block">Search Visitor</label>
           <input
+            id="lead-search"
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Name, email or phone..."
-            className="mt-1 w-full rounded-xl bg-card border border-card-border px-3 py-2.5 text-xs text-white focus:outline-none focus:border-accent-primary/50 placeholder-slate-700 transition-all"
+            className="mt-1 w-full rounded-xl bg-card border border-card-border px-3 py-2.5 text-xs text-white focus:outline-none focus:ring-2 focus:ring-accent-primary/40 focus:border-accent-primary placeholder-slate-700 transition-all"
           />
         </div>
         <div>
-          <label className="text-[10px] font-bold uppercase tracking-wide text-muted-text">Status</label>
+          <label htmlFor="lead-status-filter" className="text-[10px] font-bold uppercase tracking-wide text-muted-text block">Status</label>
           <select
+            id="lead-status-filter"
             value={filterStatus}
             onChange={(e) => setFilterStatus(e.target.value)}
-            className="mt-1 w-full rounded-xl bg-card border border-card-border px-3 py-2.5 text-xs text-white focus:outline-none focus:border-accent-primary/50 cursor-pointer"
+            className="mt-1 w-full rounded-xl bg-card border border-card-border px-3 py-2.5 text-xs text-white focus:outline-none focus:ring-2 focus:ring-accent-primary/40 focus:border-accent-primary cursor-pointer"
           >
             <option value="ALL">All Statuses</option>
             <option value="HOT">HOT</option>
@@ -148,11 +150,12 @@ export const LeadsTab: React.FC<LeadsTabProps> = ({
           </select>
         </div>
         <div>
-          <label className="text-[10px] font-bold uppercase tracking-wide text-muted-text">Source Channel</label>
+          <label htmlFor="lead-source-filter" className="text-[10px] font-bold uppercase tracking-wide text-muted-text block">Source Channel</label>
           <select
+            id="lead-source-filter"
             value={filterSource}
             onChange={(e) => setFilterSource(e.target.value)}
-            className="mt-1 w-full rounded-xl bg-card border border-card-border px-3 py-2.5 text-xs text-white focus:outline-none focus:border-accent-primary/50 cursor-pointer"
+            className="mt-1 w-full rounded-xl bg-card border border-card-border px-3 py-2.5 text-xs text-white focus:outline-none focus:ring-2 focus:ring-accent-primary/40 focus:border-accent-primary cursor-pointer"
           >
             <option value="ALL">All Channels</option>
             <option value="WIDGET">WIDGET</option>
@@ -162,11 +165,12 @@ export const LeadsTab: React.FC<LeadsTabProps> = ({
           </select>
         </div>
         <div>
-          <label className="text-[10px] font-bold uppercase tracking-wide text-muted-text">Sentiment</label>
+          <label htmlFor="lead-sentiment-filter" className="text-[10px] font-bold uppercase tracking-wide text-muted-text block">Sentiment</label>
           <select
+            id="lead-sentiment-filter"
             value={filterSentiment}
             onChange={(e) => setFilterSentiment(e.target.value)}
-            className="mt-1 w-full rounded-xl bg-card border border-card-border px-3 py-2.5 text-xs text-white focus:outline-none focus:border-accent-primary/50 cursor-pointer"
+            className="mt-1 w-full rounded-xl bg-card border border-card-border px-3 py-2.5 text-xs text-white focus:outline-none focus:ring-2 focus:ring-accent-primary/40 focus:border-accent-primary cursor-pointer"
           >
             <option value="ALL">All Sentiments</option>
             <option value="Positive">Positive</option>

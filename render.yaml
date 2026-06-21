@@ -1,3 +1,9 @@
+databases:
+  - name: beacon-db
+    databaseName: beacon
+    user: beacon_user
+    plan: free
+
 services:
   # 1. FastAPI AI Service
   - type: web
@@ -23,7 +29,9 @@ services:
     rootDir: backend
     envVars:
       - key: DATABASE_URL
-        value: file:./dev.db # SQLite DB in the runtime directory
+        fromDatabase:
+          name: beacon-db
+          property: connectionString
       - key: JWT_SECRET
         generateValue: true
       - key: JWT_REFRESH_SECRET

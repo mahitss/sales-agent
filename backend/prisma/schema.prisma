@@ -116,6 +116,8 @@ model Lead {
 
   @@index([businessId])
   @@index([businessId, createdAt])
+  @@index([businessId, status])
+  @@index([businessId, sentiment])
 }
 
 model Conversation {

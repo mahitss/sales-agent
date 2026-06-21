@@ -780,6 +780,34 @@ export function useDashboardData() {
     }
   };
 
+  const handleGoogleAuth = async (mode: "login" | "register") => {
+    setAuthError("");
+    setAuthLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/auth/sso/callback`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ samlResponse: "google-oauth-mock-token" }),
+      });
+      const text = await res.text();
+      const resData = text ? JSON.parse(text) : {};
+      if (!res.ok) {
+        throw new Error(resData.message || "Google authentication failed");
+      }
+
+      localStorage.setItem("beacon_token", resData.token);
+      localStorage.setItem("beacon_user", JSON.stringify(resData.user));
+      setBusinessLoading(true);
+      setToken(resData.token);
+      setUser(resData.user);
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      setAuthError(errorMsg || "Google authentication failed");
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
   const handleRequestPasswordReset = async (data: { email: string }) => {
     setAuthError("");
     setAuthLoading(true);
@@ -1540,6 +1568,7 @@ export function useDashboardData() {
     handleLogout,
     handleLogin,
     handleRegister,
+    handleGoogleAuth,
     handleRequestPasswordReset,
     handleOnboard,
     handleAddFAQ,
