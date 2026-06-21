@@ -18,6 +18,7 @@ import { ThrottlerModule } from '@nestjs/throttler';
 import { RedisModule } from './common/redis/redis.module';
 import { EmailModule } from './common/email/email.module';
 import { JobsModule } from './jobs/jobs.module';
+import { AccountResearchModule } from './account-research/account-research.module';
 import { FeatureFlagModule } from './common/feature-flags/feature-flag.module';
 import { validate } from './common/env.validation';
 import { StripeModule } from './common/stripe/stripe.module';
@@ -38,6 +39,7 @@ import { WebhookSubscriptionModule } from './common/webhooks/webhook-subscriptio
     RedisModule,
     EmailModule,
     JobsModule,
+    AccountResearchModule,
     FeatureFlagModule,
     PrismaModule,
     AuthModule,

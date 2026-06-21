@@ -13,7 +13,8 @@ from app.services.agent import (
     AgentResponse,
     ExtractFAQsResponse,
     CompetitorAnalysisResponse,
-    AnalyzeLeadResponse
+    AnalyzeLeadResponse,
+    AccountIntelligenceResponse
 )
 from dotenv import load_dotenv
 
@@ -196,6 +197,23 @@ def analyze_lead_endpoint(payload: AnalyzeLeadPayload):
     except Exception as e:
         logger.exception("Error in analyze-lead endpoint")
         raise HTTPException(status_code=500, detail=str(e))
+
+class AnalyzeAccountPayload(BaseModel):
+    domain: str
+    scraped_text: Optional[str] = ""
+
+@app.post("/analyze-account", response_model=AccountIntelligenceResponse)
+def analyze_account_endpoint(payload: AnalyzeAccountPayload):
+    try:
+        result = agent_service.analyze_account(
+            domain=payload.domain,
+            scraped_text=payload.scraped_text
+        )
+        return result
+    except Exception as e:
+        logger.exception("Error in analyze-account endpoint")
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 if __name__ == "__main__":
     import uvicorn

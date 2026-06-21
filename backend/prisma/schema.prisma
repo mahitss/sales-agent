@@ -74,6 +74,7 @@ model Business {
   apiKeys            ApiKey[]
   webhookSubscriptions WebhookSubscription[]
   jobLogs            JobLog[]
+  accountResearches  AccountResearch[]
 
   @@index([organizationId])
 }
@@ -457,6 +458,31 @@ model JobLog {
   @@index([queueName])
   @@index([status])
   @@index([businessId])
+}
+
+model AccountResearch {
+  id                 String    @id @default(uuid())
+  businessId         String
+  business           Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  domain             String    // e.g. "stripe.com"
+  status             String    // "PENDING", "PROCESSING", "COMPLETED", "FAILED"
+  progress           Int       @default(0) // 0 to 100
+  summary            String?   @db.Text
+  industry           String?
+  employeeEstimate   String?
+  techStack          String[]  @default([])
+  challenges         String[]  @default([])
+  opportunities      String[]  @default([])
+  buyingSignals      String[]  @default([])
+  outreachStrategy   String?   @db.Text
+  emailDraft         String?   @db.Text
+  meetingNotes       String?   @db.Text
+  error              String?   @db.Text
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  @@index([businessId])
+  @@index([domain])
 }
 
 

@@ -19,7 +19,8 @@ import {
   History,
   Sparkles,
   Zap,
-  Settings
+  Settings,
+  Globe
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -47,6 +48,7 @@ const ActivityTab = dynamic(() => import("./components/ActivityTab").then(m => m
 const AutomationsTab = dynamic(() => import("./components/AutomationsTab").then(m => m.AutomationsTab), { ssr: false });
 const SettingsTab = dynamic(() => import("./components/SettingsTab").then(m => m.SettingsTab), { ssr: false });
 const QueuesTab = dynamic(() => import("./components/QueuesTab").then(m => m.QueuesTab), { ssr: false });
+const AccountIntelTab = dynamic(() => import("./components/AccountIntelTab").then(m => m.AccountIntelTab), { ssr: false });
 const CommandPalette = dynamic(() => import("@/components/CommandPalette").then(m => m.CommandPalette), { ssr: false });
 
 import { FeedbackModal } from "@/components/FeedbackModal";
@@ -224,6 +226,11 @@ export default function DashboardPage() {
     queuesLoading,
     handleRetryJob,
     handleRetryAllJobs,
+    accountResearches,
+    researchLoading,
+    handleAnalyzeAccount,
+    handleDownloadBriefingPdf,
+    fetchAccountResearchHistory,
   } = useDashboardData();
 
   // 1. RENDER: Auth Gate
@@ -422,6 +429,17 @@ export default function DashboardPage() {
               <MapPin className="h-4.5 w-4.5" />
               Visitor Activity
             </button>
+            <button
+              onClick={() => setActiveTab("account-research")}
+              className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-xl transition-all cursor-pointer ${
+                activeTab === "account-research"
+                  ? "bg-accent-primary/10 text-accent-primary border border-accent-primary/20 font-semibold"
+                  : "text-muted-text hover:bg-card/40 hover:text-foreground"
+              }`}
+            >
+              <Globe className="h-4.5 w-4.5" />
+              Account Intelligence
+            </button>
 
             {user?.role === "ADMIN" && (
               <>
@@ -568,6 +586,7 @@ export default function DashboardPage() {
             <h2 className="text-lg font-bold capitalize text-white">
               {activeTab === "kb" ? "Knowledge Base" :
                activeTab === "visitor" ? "Visitor Activity Tracking" :
+               activeTab === "account-research" ? "Account Intelligence Console" :
                activeTab === "competitor" ? "Competitor Analysis Audit" :
                activeTab === "integrations" ? "Multi-Channel Settings" :
                activeTab === "team" ? "Team Seats Management" :
@@ -699,6 +718,18 @@ export default function DashboardPage() {
                     <ErrorBoundary>
                       <VisitorTracksTab
                         visitorTracks={visitorTracks}
+                      />
+                    </ErrorBoundary>
+                  )}
+
+                  {activeTab === "account-research" && (
+                    <ErrorBoundary>
+                      <AccountIntelTab
+                        accountResearches={accountResearches}
+                        researchLoading={researchLoading}
+                        handleAnalyzeAccount={handleAnalyzeAccount}
+                        handleDownloadBriefingPdf={handleDownloadBriefingPdf}
+                        fetchAccountResearchHistory={fetchAccountResearchHistory}
                       />
                     </ErrorBoundary>
                   )}

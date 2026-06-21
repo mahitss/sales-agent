@@ -9,6 +9,7 @@ import { LeadEnrichmentWorker } from './workers/lead-enrichment.worker';
 import { EmailSendingWorker } from './workers/email-sending.worker';
 import { ReportGenerationWorker } from './workers/report-generation.worker';
 import { WorkflowAutomationWorker } from './workers/workflow-automation.worker';
+import { AccountIntelligenceWorker } from './workers/account-intelligence.worker';
 import { BusinessModule } from '../business/business.module';
 import { LeadModule } from '../lead/lead.module';
 import { EmailModule } from '../common/email/email.module';
@@ -31,6 +32,7 @@ import { EmailModule } from '../common/email/email.module';
       { name: 'email-sending' },
       { name: 'report-generation' },
       { name: 'workflow-automation' },
+      { name: 'account-intelligence' },
     ),
     PrismaModule,
     EmailModule,
@@ -45,6 +47,7 @@ import { EmailModule } from '../common/email/email.module';
     EmailSendingWorker,
     ReportGenerationWorker,
     WorkflowAutomationWorker,
+    AccountIntelligenceWorker,
   ],
   exports: [JobsService, BullModule],
 })

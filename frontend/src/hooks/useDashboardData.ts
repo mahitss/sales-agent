@@ -112,6 +112,27 @@ export interface DashboardStats {
   leadConversionRate: number;
 }
 
+export interface AccountResearch {
+  id: string;
+  businessId: string;
+  domain: string;
+  status: 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED';
+  progress: number;
+  summary?: string;
+  industry?: string;
+  employeeEstimate?: string;
+  techStack: string[];
+  challenges: string[];
+  opportunities: string[];
+  buyingSignals: string[];
+  outreachStrategy?: string;
+  emailDraft?: string;
+  meetingNotes?: string;
+  error?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export type TabType =
   | "overview"
   | "leads"
@@ -127,7 +148,9 @@ export type TabType =
   | "activity"
   | "automations"
   | "settings"
-  | "queues";
+  | "queues"
+  | "account-research";
+
 
 export function useDashboardData() {
   const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
@@ -283,6 +306,11 @@ export function useDashboardData() {
   const [queueFailures, setQueueFailures] = useState<any[]>([]);
   const [queuesLoading, setQueuesLoading] = useState(false);
 
+  // Account Intelligence States
+  const [accountResearches, setAccountResearches] = useState<AccountResearch[]>([]);
+  const [researchLoading, setResearchLoading] = useState(false);
+
+
   const fetchQueueMetrics = async () => {
     try {
       const res = await authenticatedFetch(`${API_URL}/jobs/metrics`);
@@ -309,6 +337,71 @@ export function useDashboardData() {
       setQueuesLoading(false);
     }
   };
+
+  const fetchAccountResearchHistory = async () => {
+    setResearchLoading(true);
+    try {
+      const res = await authenticatedFetch(`${API_URL}/account-research/history`);
+      if (res.ok) {
+        setAccountResearches(await res.json());
+      }
+    } catch (err) {
+      console.error("Failed to fetch account research history", err);
+    } finally {
+      setResearchLoading(false);
+    }
+  };
+
+  const handleAnalyzeAccount = async (domain: string) => {
+    if (!domain) return;
+    setResearchLoading(true);
+    try {
+      const res = await authenticatedFetch(`${API_URL}/account-research/domain`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ domain }),
+      });
+      if (res.ok) {
+        addNotification(
+          "Research Started",
+          `Background analysis initiated for domain: ${domain}`,
+          "info"
+        );
+        await fetchAccountResearchHistory();
+      } else {
+        const err = await res.json();
+        alert(err.message || "Failed to trigger account analysis");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Error initiating account analysis");
+    } finally {
+      setResearchLoading(false);
+    }
+  };
+
+  const handleDownloadBriefingPdf = async (id: string) => {
+    try {
+      const res = await authenticatedFetch(`${API_URL}/account-research/${id}/pdf`);
+      if (res.ok) {
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `briefing-${id}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+      } else {
+        alert("Failed to download PDF briefing");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Error downloading PDF briefing");
+    }
+  };
+
 
   const handleRetryJob = async (queueName: string, jobId: string) => {
     try {
@@ -504,6 +597,8 @@ export function useDashboardData() {
       } else if (activeTab === "queues") {
         await fetchQueueMetrics();
         await fetchQueueFailures();
+      } else if (activeTab === "account-research") {
+        await fetchAccountResearchHistory();
       }
     } catch (err) {
       console.error("Data refresh failed", err);
@@ -1708,5 +1803,10 @@ export function useDashboardData() {
     fetchQueueFailures,
     handleRetryJob,
     handleRetryAllJobs,
+    accountResearches,
+    researchLoading,
+    handleAnalyzeAccount,
+    handleDownloadBriefingPdf,
+    fetchAccountResearchHistory,
   };
 }

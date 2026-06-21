@@ -13,6 +13,7 @@ export class JobsService {
     @InjectQueue('email-sending') private emailSendingQueue: Queue,
     @InjectQueue('report-generation') private reportGenerationQueue: Queue,
     @InjectQueue('workflow-automation') private workflowAutomationQueue: Queue,
+    @InjectQueue('account-intelligence') private accountIntelligenceQueue: Queue,
   ) {}
 
   // Expose queues for direct controller operations
@@ -23,6 +24,7 @@ export class JobsService {
       'email-sending': this.emailSendingQueue,
       'report-generation': this.reportGenerationQueue,
       'workflow-automation': this.workflowAutomationQueue,
+      'account-intelligence': this.accountIntelligenceQueue,
     };
   }
 
@@ -82,5 +84,14 @@ export class JobsService {
     this.logger.log(`Enqueuing Workflow Automation job for lead ${leadId} (trigger: ${triggerEvent})`);
 
     return this.workflowAutomationQueue.add('execute-workflow', { businessId, leadId, triggerEvent }, opts);
+  }
+
+  async addAccountIntelligenceJob(researchId: string, domain: string, businessId: string) {
+    // Unique key includes timestamp to allow multiple research requests on the same domain
+    const key = `account-intel:${researchId}:${domain}:${Date.now()}`;
+    const opts = this.getStandardJobOptions(key);
+    this.logger.log(`Enqueuing Account Intelligence job for domain ${domain} and researchId ${researchId}`);
+
+    return this.accountIntelligenceQueue.add('analyze-account', { researchId, domain, businessId }, opts);
   }
 }

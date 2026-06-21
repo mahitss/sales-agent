@@ -47,6 +47,12 @@ export class TenantGuard implements CanActivate {
           select: { businessId: true },
         });
         if (fback) targetBusinessId = fback.businessId;
+      } else if (path.includes('/account-research')) {
+        const research = await this.prisma.accountResearch.findUnique({
+          where: { id: resourceId },
+          select: { businessId: true },
+        });
+        if (research) targetBusinessId = research.businessId;
       }
     }
 

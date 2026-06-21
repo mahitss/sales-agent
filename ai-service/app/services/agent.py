@@ -125,6 +125,18 @@ class AnalyzeLeadResponse(BaseModel):
     revenue: RevenuePredictionModel = Field(description="Expected value parameters.")
 
 
+class AccountIntelligenceResponse(BaseModel):
+    summary: str = Field(description="A concise summary of the company, its mission, and its value proposition.")
+    industry: str = Field(description="The primary industry or sector of the company.")
+    employee_estimate: str = Field(description="An estimate of the company size or employee count range (e.g., '100-500 employees').")
+    tech_stack: List[str] = Field(description="Key technologies, software, frameworks, or platforms detected in use.")
+    challenges: List[str] = Field(description="Likely business challenges or pain points faced by the company.")
+    opportunities: List[str] = Field(description="Key sales opportunities, new product matches, or value-add areas for our offerings.")
+    buying_signals: List[str] = Field(description="Growth or buying signals detected (e.g., hiring, fundraising, expansion, new product launches).")
+    outreach_strategy: str = Field(description="A recommended personalized sales outreach strategy.")
+    email_draft: str = Field(description="A draft of a personalized outreach email targeting the company's pain points.")
+    meeting_notes: str = Field(description="Meeting preparation notes to guide a sales representative during a first call.")
+
 class AIAgentService:
     def __init__(self):
         self.api_key = os.getenv("GEMINI_API_KEY")
@@ -663,3 +675,81 @@ class AIAgentService:
                 expected_revenue=estimated_val * prob
             )
         )
+
+    def analyze_account(self, domain: str, scraped_text: str) -> AccountIntelligenceResponse:
+        if not self.client:
+            return self._mock_account_analysis(domain, scraped_text)
+
+        try:
+            prompt = (
+                f"You are an elite AI Account Intelligence Engine and Sales Intelligence Architect.\n"
+                f"Perform deep account research and analysis on the company website domain: {domain}.\n"
+                f"Use the scraped website content below to extract and synthesize the required intelligence details.\n\n"
+                f"Scraped Web Text:\n{scraped_text or 'No website content available. Please simulate based on domain.'}\n\n"
+                f"Analyze the domain name and web text to: \n"
+                f"1. Summarize the company's business.\n"
+                f"2. Identify the industry.\n"
+                f"3. Estimate the company size (employee count).\n"
+                f"4. Detect the technology stack (frameworks, SaaS platforms, libraries, servers).\n"
+                f"5. Identify key business challenges and pain points.\n"
+                f"6. Pinpoint sales opportunities and matches for modern CRM/SaaS automation.\n"
+                f"7. Detect growth/buying signals (hiring, expansion, scaling).\n"
+                f"8. Outline a recommended outreach strategy.\n"
+                f"9. Generate a highly personalized email draft to the decision maker.\n"
+                f"10. Write meeting preparation notes for the sales team.\n\n"
+                f"Return the results strictly adhering to the JSON schema."
+            )
+
+            max_retries = 3
+            backoff_factor = 0.5
+            for attempt in range(max_retries):
+                try:
+                    response = self.client.models.generate_content(
+                        model='gemini-2.5-flash',
+                        contents=prompt,
+                        config=types.GenerateContentConfig(
+                            response_mime_type="application/json",
+                            response_schema=AccountIntelligenceResponse,
+                            temperature=0.2,
+                        )
+                    )
+                    return AccountIntelligenceResponse.model_validate_json(response.text)
+                except Exception as e:
+                    logger.warning(f"Gemini API account analysis attempt {attempt + 1} failed: {e}")
+                    if attempt == max_retries - 1:
+                        raise e
+                    time.sleep(backoff_factor * (2 ** attempt))
+
+        except Exception as e:
+            logger.exception("Error in Gemini account analysis pipeline")
+            return self._mock_account_analysis(domain, scraped_text)
+
+    def _mock_account_analysis(self, domain: str, scraped_text: str) -> AccountIntelligenceResponse:
+        # Extract company name from domain e.g. stripe.com -> Stripe
+        clean_name = domain.split(".")[0].capitalize() if domain else "Target Account"
+        
+        return AccountIntelligenceResponse(
+            summary=f"{clean_name} is a high-growth technology enterprise offering advanced solutions and services. They focus on customer-centric design, robust scaling capabilities, and streamlining operational workflows to accelerate market positioning.",
+            industry="Technology & Software Services",
+            employee_estimate="150-500 employees",
+            tech_stack=["React", "Next.js", "PostgreSQL", "Redis", "Google Cloud Platform", "Node.js", "Docker", "TailwindCSS"],
+            challenges=[
+                f"Scaling customer acquisition channels cost-effectively in a saturated {clean_name} market space.",
+                "Friction in manual sales qualification processes leading to pipeline delays.",
+                "High response times during off-hours causing drop-offs from website visitors."
+            ],
+            opportunities=[
+                "Deploying our Beacon real-time AI Sales Widget on their primary web portal.",
+                "Automating lead qualification sequences directly integrated into their calendar tools.",
+                "Implementing multi-channel customer communication workflows (WhatsApp & Instagram API)."
+            ],
+            buying_signals=[
+                "Active job postings for senior engineers and account executives.",
+                "Recent expansion into secondary international markets.",
+                "Increased focus on web presence and conversion optimization tools."
+            ],
+            outreach_strategy=f"Approach the Head of Sales or Director of Growth with a personalization angle highlighting their active website. Propose how integrating an AI agent widget like Beacon can capture and qualify high-intent website visitors 24/7, reducing sales cycle times by up to 40%.",
+            email_draft=f"Subject: Accelerating {clean_name}'s web conversions by 40% with AI\n\nHi team,\n\nI was looking at {clean_name}'s website and noticed you are scaling your growth and engineering teams. With high traffic, how is your team handling lead qualification during off-hours?\n\nBeacon is an enterprise AI Sales Operating System that integrates a 24/7 qualifying sales agent directly on your website, pre-scoring leads and syncing them to your sales pipeline. \n\nI'd love to show you a quick 10-minute demo tailored for {clean_name}. Do you have time next Tuesday at 2 PM?\n\nBest regards,\n[Your Name]\nBeacon Sales Team",
+            meeting_notes=f"1. Introduction: Acknowledge {clean_name}'s recent growth signals and tech stack.\n2. Goal: Guide the discussion toward their website lead flow and manual overhead.\n3. Case Study: Emphasize how similar tech stacks benefit from NextJS-based AI widgets.\n4. Close: Secure a follow-up session with their VP of Sales or Product Lead."
+        )
+
