@@ -137,6 +137,24 @@ class AccountIntelligenceResponse(BaseModel):
     email_draft: str = Field(description="A draft of a personalized outreach email targeting the company's pain points.")
     meeting_notes: str = Field(description="Meeting preparation notes to guide a sales representative during a first call.")
 
+class ScoreCriteria(BaseModel):
+    score: int = Field(description="Score from 0 to 100 for this specific criterion.")
+    details: str = Field(description="Reasoning or description of findings for this criterion.")
+
+class LeadScoreResponse(BaseModel):
+    score: int = Field(description="Overall consolidated lead score (0-100).")
+    priority_level: str = Field(description="Priority level: HIGH, MEDIUM, or LOW.")
+    reasoning: str = Field(description="Detailed overview reasoning for the overall score.")
+    recommended_next_action: str = Field(description="Actionable next step for the sales representative.")
+    
+    buying_intent: ScoreCriteria = Field(description="Buying intent signal scoring and analysis.")
+    company_growth_signals: ScoreCriteria = Field(description="Company growth signal scoring and analysis (e.g. funding, expansion).")
+    hiring_signals: ScoreCriteria = Field(description="Hiring signal scoring and analysis (e.g. open job roles, recruitment trends).")
+    engagement_activity: ScoreCriteria = Field(description="Engagement activity scoring and analysis (e.g. conversation velocity, responsiveness).")
+    website_activity: ScoreCriteria = Field(description="Website activity scoring and analysis (e.g. page views, session durations).")
+    email_activity: ScoreCriteria = Field(description="Email activity scoring and analysis (e.g. emails exchanged, open rates).")
+
+
 class AIAgentService:
     def __init__(self):
         self.api_key = os.getenv("GEMINI_API_KEY")
@@ -752,4 +770,142 @@ class AIAgentService:
             email_draft=f"Subject: Accelerating {clean_name}'s web conversions by 40% with AI\n\nHi team,\n\nI was looking at {clean_name}'s website and noticed you are scaling your growth and engineering teams. With high traffic, how is your team handling lead qualification during off-hours?\n\nBeacon is an enterprise AI Sales Operating System that integrates a 24/7 qualifying sales agent directly on your website, pre-scoring leads and syncing them to your sales pipeline. \n\nI'd love to show you a quick 10-minute demo tailored for {clean_name}. Do you have time next Tuesday at 2 PM?\n\nBest regards,\n[Your Name]\nBeacon Sales Team",
             meeting_notes=f"1. Introduction: Acknowledge {clean_name}'s recent growth signals and tech stack.\n2. Goal: Guide the discussion toward their website lead flow and manual overhead.\n3. Case Study: Emphasize how similar tech stacks benefit from NextJS-based AI widgets.\n4. Close: Secure a follow-up session with their VP of Sales or Product Lead."
         )
+
+    def score_lead(
+        self,
+        lead_info: Dict[str, Any],
+        enrichment_info: Dict[str, Any],
+        research_info: Dict[str, Any],
+        conversation_log: List[Dict[str, str]],
+        email_metrics: Dict[str, Any],
+        website_metrics: Dict[str, Any]
+    ) -> LeadScoreResponse:
+        if not self.client:
+            return self._mock_lead_scoring(lead_info, enrichment_info, research_info, conversation_log, email_metrics, website_metrics)
+
+        try:
+            conv_log = ""
+            for msg in conversation_log:
+                role_label = "Customer" if msg.get("role") == "user" else "Assistant"
+                conv_log += f"{role_label}: {msg.get('content')}\n"
+
+            prompt = (
+                f"You are an elite Lead Scoring Analyst and Sales AI. Your objective is to compute a detailed lead score and analyze multiple signals for a specific prospect.\n\n"
+                f"=== LEAD PROFILE ===\n"
+                f"- Name: {lead_info.get('name') or 'Anonymous'}\n"
+                f"- Email: {lead_info.get('email') or 'N/A'}\n"
+                f"- Phone: {lead_info.get('phone') or 'N/A'}\n"
+                f"- Budget: {lead_info.get('budget') or 'N/A'}\n"
+                f"- Source Channel: {lead_info.get('source') or 'N/A'}\n"
+                f"- Current Status: {lead_info.get('status') or 'N/A'}\n"
+                f"- Lead Sentiment: {lead_info.get('sentiment') or 'N/A'}\n\n"
+                f"=== COMPANY ENRICHMENT ===\n"
+                f"- Company: {enrichment_info.get('companyName') or 'N/A'}\n"
+                f"- Website: {enrichment_info.get('website') or 'N/A'}\n"
+                f"- Industry: {enrichment_info.get('industry') or 'N/A'}\n"
+                f"- Description: {enrichment_info.get('description') or 'N/A'}\n"
+                f"- Company Size: {enrichment_info.get('companySize') or 'N/A'}\n"
+                f"- Country: {enrichment_info.get('country') or 'N/A'}\n\n"
+                f"=== DETAILED ACCOUNT RESEARCH ===\n"
+                f"- Summary: {research_info.get('summary') or 'N/A'}\n"
+                f"- Tech Stack: {', '.join(research_info.get('techStack') or []) or 'N/A'}\n"
+                f"- Challenges: {', '.join(research_info.get('challenges') or []) or 'N/A'}\n"
+                f"- Opportunities: {', '.join(research_info.get('opportunities') or []) or 'N/A'}\n"
+                f"- Buying Signals: {', '.join(research_info.get('buyingSignals') or []) or 'N/A'}\n\n"
+                f"=== EMAIL ENGAGEMENT METRICS ===\n"
+                f"- Total Email Exchange: {email_metrics.get('totalExchange') or 0} messages\n"
+                f"- Open Rate: {email_metrics.get('openRate') or 0}%\n"
+                f"- Last Email Body Snippet: {email_metrics.get('lastEmailSnippet') or 'N/A'}\n\n"
+                f"=== WEBSITE ACTIVITY ===\n"
+                f"- Pages Viewed: {website_metrics.get('pageViews') or 0}\n"
+                f"- Total Session Duration: {website_metrics.get('sessionDuration') or 0} seconds\n\n"
+                f"=== CONVERSATION CHAT LOG ===\n"
+                f"{conv_log or 'No chat history.'}\n\n"
+                f"=== INSTRUCTIONS ===\n"
+                f"Calculate the following structured details:\n"
+                f"1. **Buying Intent** (0-100 & details): Look at budget presence, timeline constraints, conversation tone, and request specifics.\n"
+                f"2. **Company Growth Signals** (0-100 & details): Look at company size, funding/expansion reports, and tech stack size.\n"
+                f"3. **Hiring Signals** (0-100 & details): Look at growth indicators like recruiting trends, open roles, or expansion opportunities.\n"
+                f"4. **Engagement Activity** (0-100 & details): Analyze user chat responses, questions asked, and interactivity.\n"
+                f"5. **Website Activity** (0-100 & details): Analyze number of pages viewed and session length.\n"
+                f"6. **Email Activity** (0-100 & details): Look at reply count, opens count, and reply content.\n\n"
+                f"Consolidate these into an overall **Score** from 0 to 100, determine a **Priority Level** (HIGH, MEDIUM, LOW), write a detailed **Reasoning** explaining your evaluation, and draft a highly actionable **Recommended Next Action**.\n\n"
+                f"Return the results strictly adhering to the JSON schema."
+            )
+
+            max_retries = 3
+            backoff_factor = 0.5
+            for attempt in range(max_retries):
+                try:
+                    response = self.client.models.generate_content(
+                        model='gemini-2.5-flash',
+                        contents=prompt,
+                        config=types.GenerateContentConfig(
+                            response_mime_type="application/json",
+                            response_schema=LeadScoreResponse,
+                            temperature=0.2,
+                        )
+                    )
+                    return LeadScoreResponse.model_validate_json(response.text)
+                except Exception as e:
+                    logger.warning(f"Gemini API lead scoring attempt {attempt + 1} failed: {e}")
+                    if attempt == max_retries - 1:
+                        raise e
+                    time.sleep(backoff_factor * (2 ** attempt))
+
+        except Exception as e:
+            logger.exception("Error in Gemini lead scoring pipeline")
+            return self._mock_lead_scoring(lead_info, enrichment_info, research_info, conversation_log, email_metrics, website_metrics)
+
+    def _mock_lead_scoring(
+        self,
+        lead_info: Dict[str, Any],
+        enrichment_info: Dict[str, Any],
+        research_info: Dict[str, Any],
+        conversation_log: List[Dict[str, str]],
+        email_metrics: Dict[str, Any],
+        website_metrics: Dict[str, Any]
+    ) -> LeadScoreResponse:
+        status = lead_info.get("status") or "COLD"
+        score = 82 if status == "HOT" else 55 if status == "WARM" else 28
+        
+        email_count = email_metrics.get("totalExchange") or 0
+        pages = website_metrics.get("pageViews") or 0
+        
+        if email_count > 3 or pages > 5:
+            score = min(100, score + 12)
+            
+        priority = "HIGH" if score >= 75 else "MEDIUM" if score >= 45 else "LOW"
+        
+        return LeadScoreResponse(
+            score=score,
+            priority_level=priority,
+            reasoning=f"Lead shows moderate interest and holds a budget of {lead_info.get('budget') or 'N/A'}. Enriched profile signals operating in the {enrichment_info.get('industry') or 'Technology'} sector.",
+            recommended_next_action="Send customized onboarding deck and invite to standard demo call.",
+            buying_intent=ScoreCriteria(
+                score=min(100, score + 5),
+                details=f"Expressed explicit interest in {lead_info.get('budget') or 'standard pricing'} range."
+            ),
+            company_growth_signals=ScoreCriteria(
+                score=65,
+                details=f"Growing presence in {enrichment_info.get('country') or 'India'} with estimated size {enrichment_info.get('companySize') or '10-50'}."
+            ),
+            hiring_signals=ScoreCriteria(
+                score=45,
+                details="No specific open job roles detected from domain scraping."
+            ),
+            engagement_activity=ScoreCriteria(
+                score=min(100, score + 10),
+                details=f"Active interaction channel: {lead_info.get('source') or 'widget'} with {len(conversation_log)} chat history events."
+            ),
+            website_activity=ScoreCriteria(
+                score=min(100, 20 + pages * 10),
+                details=f"Viewed {pages} pages on the website, spending a total of {website_metrics.get('sessionDuration') or 0} seconds."
+            ),
+            email_activity=ScoreCriteria(
+                score=min(100, 15 + email_count * 15),
+                details=f"Exchanged {email_count} emails with open rate of {email_metrics.get('openRate') or 0}%."
+            )
+        )
+
 

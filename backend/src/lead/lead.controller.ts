@@ -1,5 +1,6 @@
 import { Controller, Post, Get, Put, Body, Param, UseGuards, Res, Query } from '@nestjs/common';
 import { LeadService } from './lead.service';
+import { LeadScoringService } from './lead-scoring.service';
 import { CreateLeadDto, UpdateLeadDto } from './dto/lead.dto';
 import { AuthGuard } from '../auth/auth.guard';
 import { TenantGuard } from '../auth/tenant.guard';
@@ -9,7 +10,10 @@ import * as express from 'express';
 
 @Controller('leads')
 export class LeadController {
-  constructor(private leadService: LeadService) {}
+  constructor(
+    private leadService: LeadService,
+    private leadScoringService: LeadScoringService,
+  ) {}
 
   @Post()
   async create(@Body() dto: CreateLeadDto) {
@@ -73,5 +77,23 @@ export class LeadController {
   @Put(':id')
   async update(@Param('id') id: string, @Body() dto: UpdateLeadDto) {
     return this.leadService.update(id, dto);
+  }
+
+  @UseGuards(AuthGuard, TenantGuard)
+  @Post(':id/score')
+  async scoreLead(@Param('id') id: string) {
+    return this.leadScoringService.scoreLead(id);
+  }
+
+  @UseGuards(AuthGuard, TenantGuard)
+  @Get(':id/score-history')
+  async getScoreHistory(@Param('id') id: string) {
+    return this.leadScoringService.getLeadScoreHistory(id);
+  }
+
+  @UseGuards(AuthGuard, TenantGuard)
+  @Get('business/:businessId/score-stats')
+  async getScoreStats(@Param('businessId') businessId: string) {
+    return this.leadScoringService.getBusinessScoringStats(businessId);
   }
 }

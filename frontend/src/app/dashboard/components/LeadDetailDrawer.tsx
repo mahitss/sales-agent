@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   X,
   User,
@@ -20,6 +20,11 @@ import {
   PlayCircle,
   PauseCircle,
   Inbox,
+  RefreshCw,
+  Target,
+  TrendingUp,
+  MessageSquare,
+  MousePointer,
 } from "lucide-react";
 
 interface Lead {
@@ -33,6 +38,26 @@ interface Lead {
   sentiment?: string;
   engagementScore?: number;
   createdAt: string;
+  score?: {
+    id: string;
+    score: number;
+    classification: string;
+    dealProbability: number;
+    urgency: string;
+    decisionMakerStatus: string;
+    businessSize: string;
+    serviceMatch: string;
+    engagement: number;
+    buyingIntent?: string;
+    companyGrowth?: string;
+    hiringSignals?: string;
+    engagementActivity?: string;
+    websiteActivity?: string;
+    emailActivity?: string;
+    reasoning?: string;
+    recommendedAction?: string;
+    priority?: string;
+  };
 }
 
 interface LeadDetailDrawerProps {
@@ -54,6 +79,8 @@ interface LeadDetailDrawerProps {
   handleSendManualEmail?: (accountId: string, to: string, subject: string, body: string, leadId?: string) => Promise<boolean>;
   handleEnrollLeadInSequence?: (sequenceId: string, leadIds: string[]) => Promise<void>;
   handleDisenrollLeadFromSequence?: (sequenceId: string, leadIds: string[]) => Promise<void>;
+  token?: string;
+  API_URL?: string;
 }
 
 export const LeadDetailDrawer: React.FC<LeadDetailDrawerProps> = ({
@@ -75,6 +102,8 @@ export const LeadDetailDrawer: React.FC<LeadDetailDrawerProps> = ({
   handleSendManualEmail,
   handleEnrollLeadInSequence,
   handleDisenrollLeadFromSequence,
+  token = "",
+  API_URL = "",
 }) => {
   const [activeTab, setActiveTab] = useState<"analysis" | "enrichment" | "outreach" | "email">("analysis");
 
@@ -129,6 +158,55 @@ export const LeadDetailDrawer: React.FC<LeadDetailDrawerProps> = ({
       }
     }
   }, [lead]);
+
+  // Scoring History and Rescoring States
+  const [scoringHistory, setScoringHistory] = useState<any[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+  const [rescoring, setRescoring] = useState(false);
+
+  const fetchScoreHistory = useCallback(async () => {
+    if (!lead || !token || !API_URL) return;
+    setLoadingHistory(true);
+    try {
+      const res = await fetch(`${API_URL}/leads/${lead.id}/score-history`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        setScoringHistory(await res.json());
+      }
+    } catch (err) {
+      console.error("Failed to fetch score history", err);
+    } finally {
+      setLoadingHistory(false);
+    }
+  }, [lead, token, API_URL]);
+
+  useEffect(() => {
+    if (lead) {
+      fetchScoreHistory();
+    } else {
+      setScoringHistory([]);
+    }
+  }, [lead, fetchScoreHistory]);
+
+  const handleRescoreLead = async () => {
+    if (!lead || !token || !API_URL || rescoring) return;
+    setRescoring(true);
+    try {
+      const res = await fetch(`${API_URL}/leads/${lead.id}/score`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        console.log("Successfully re-scored lead");
+      }
+      await fetchScoreHistory();
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setRescoring(false);
+    }
+  };
 
   // Update selected account when accounts load
   useEffect(() => {
@@ -333,6 +411,15 @@ export const LeadDetailDrawer: React.FC<LeadDetailDrawerProps> = ({
 
   const dealProbability = lead.status === "HOT" ? 88 : lead.status === "WARM" ? 54 : 12;
 
+  const parseScoreField = (fieldVal: any) => {
+    if (!fieldVal) return { score: 0, details: "No scoring record generated." };
+    try {
+      return typeof fieldVal === "string" ? JSON.parse(fieldVal) : fieldVal;
+    } catch {
+      return { score: 0, details: String(fieldVal) };
+    }
+  };
+
   // Find active enrollments for this lead
   const leadEnrollments = emailSequences
     .filter((seq: any) => seq.enrollments?.some((e: any) => e.status === "ACTIVE"))
@@ -446,46 +533,136 @@ export const LeadDetailDrawer: React.FC<LeadDetailDrawerProps> = ({
         {activeTab === "analysis" && (
           <div className="space-y-6">
             {/* Prospect score panel */}
-            <div className="grid grid-cols-2 gap-4 border border-card-border rounded-2xl bg-card/20 p-5">
+            <div className="grid grid-cols-3 gap-4 border border-card-border rounded-2xl bg-card/20 p-5">
               <div className="space-y-1">
-                <span className="text-[10px] text-muted-text font-bold uppercase tracking-wider">Prospect scoring</span>
+                <span className="text-[10px] text-muted-text font-bold uppercase tracking-wider">Prospect score</span>
                 <div className="flex items-baseline gap-2">
                   <span className="text-3xl font-black text-white">{lead.engagementScore || 15}%</span>
                   <span className="text-xs text-red-400 capitalize font-bold">{lead.status} Lead</span>
                 </div>
-                <p className="text-[10px] text-muted-text">Engagement based on chat interaction</p>
+                <p className="text-[10px] text-muted-text">Aggregate quality metric</p>
+              </div>
+              <div className="space-y-1 border-l border-card-border/60 pl-5">
+                <span className="text-[10px] text-muted-text font-bold uppercase tracking-wider">Priority Level</span>
+                <div className="flex items-baseline gap-2">
+                  <span className={`text-2xl font-black ${
+                    lead.score?.priority === "HIGH" ? "text-red-400" :
+                    lead.score?.priority === "MEDIUM" ? "text-amber-400" :
+                    "text-blue-400"
+                  }`}>
+                    {lead.score?.priority || "MEDIUM"}
+                  </span>
+                </div>
+                <p className="text-[10px] text-muted-text">Recommended response</p>
               </div>
               <div className="space-y-1 border-l border-card-border/60 pl-5">
                 <span className="text-[10px] text-muted-text font-bold uppercase tracking-wider">Deal Probability</span>
                 <div className="flex items-baseline gap-2">
-                  <span className="text-3xl font-black text-white">{dealProbability}%</span>
+                  <span className="text-3xl font-black text-white">
+                    {lead.score?.dealProbability ? Math.round(lead.score.dealProbability * 100) : dealProbability}%
+                  </span>
                 </div>
-                <p className="text-[10px] text-muted-text">Estimated win chance ratio</p>
+                <p className="text-[10px] text-muted-text">Estimated win chance</p>
               </div>
             </div>
 
             {/* AI intelligence items */}
             <div className="space-y-4">
               <div className="space-y-1">
-                <h4 className="text-xs font-bold text-accent-primary uppercase tracking-wider">Customer goals</h4>
-                <p className="text-xs text-slate-300 bg-slate-900/40 border border-card-border p-3 rounded-xl">
-                  {mockAIAnalysis.goals}
-                </p>
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="text-xs font-bold text-accent-primary uppercase tracking-wider">AI Scoring Breakdown</h4>
+                  <button
+                    onClick={handleRescoreLead}
+                    disabled={rescoring}
+                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-900 border border-card-border hover:border-accent-primary text-slate-300 hover:text-white text-[10px] font-bold transition-all cursor-pointer disabled:opacity-50"
+                  >
+                    <RefreshCw className={`h-3 w-3 ${rescoring ? "animate-spin text-accent-primary" : ""}`} />
+                    {rescoring ? "Scoring Lead..." : "Re-score Prospect"}
+                  </button>
+                </div>
+                
+                {/* 6 Sub-scores Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {[
+                    { label: "Buying Intent", key: "buyingIntent", icon: Target, color: "text-red-400 bg-red-500" },
+                    { label: "Company Growth", key: "companyGrowth", icon: TrendingUp, color: "text-emerald-400 bg-emerald-500" },
+                    { label: "Hiring Signals", key: "hiringSignals", icon: Briefcase, color: "text-amber-400 bg-amber-500" },
+                    { label: "Engagement Level", key: "engagementActivity", icon: MessageSquare, color: "text-indigo-400 bg-indigo-500" },
+                    { label: "Website Activity", key: "websiteActivity", icon: MousePointer, color: "text-pink-400 bg-pink-500" },
+                    { label: "Email Activity", key: "emailActivity", icon: Mail, color: "text-cyan-400 bg-cyan-500" }
+                  ].map((item) => {
+                    const parsed = lead.score ? parseScoreField((lead.score as any)[item.key]) : { score: 0, details: "No score generated yet." };
+                    const Icon = item.icon;
+                    return (
+                      <div key={item.key} className="p-3 border border-card-border/60 bg-slate-950/20 rounded-xl space-y-1.5">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="font-semibold text-slate-300 flex items-center gap-1.5">
+                            <Icon className="h-3.5 w-3.5" />
+                            {item.label}
+                          </span>
+                          <span className="font-black text-white">{parsed.score || 0}%</span>
+                        </div>
+                        <div className="h-1 rounded-full bg-slate-900 overflow-hidden">
+                          <div
+                            className={`h-full rounded-full ${item.color.split(" ")[1]}`}
+                            style={{ width: `${parsed.score || 0}%` }}
+                          />
+                        </div>
+                        <p className="text-[10px] text-muted-text italic leading-tight">{parsed.details}</p>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
 
+              {/* Reasoning */}
               <div className="space-y-1">
-                <h4 className="text-xs font-bold text-accent-primary uppercase tracking-wider">Objections</h4>
-                <p className="text-xs text-slate-300 bg-slate-900/40 border border-card-border p-3 rounded-xl">
-                  {mockAIAnalysis.objections}
+                <h4 className="text-xs font-bold text-accent-primary uppercase tracking-wider">AI Evaluation Reasoning</h4>
+                <p className="text-xs text-slate-300 bg-slate-900/40 border border-card-border p-3 rounded-xl leading-relaxed">
+                  {lead.score?.reasoning || "No evaluation reasoning has been compiled for this prospect yet. Click 'Re-score' to run analysis."}
                 </p>
               </div>
 
+              {/* Recommended Next Action */}
               <div className="space-y-1">
                 <h4 className="text-xs font-bold text-accent-primary uppercase tracking-wider">Recommended Next Action</h4>
-                <p className="text-xs text-slate-300 bg-slate-900/40 border border-card-border p-3 rounded-xl flex items-start gap-2">
+                <p className="text-xs text-slate-300 bg-slate-900/40 border border-card-border p-3 rounded-xl flex items-start gap-2 leading-relaxed">
                   <Sparkles className="h-4.5 w-4.5 text-yellow-400 shrink-0 mt-0.5" />
-                  <span>{mockAIAnalysis.nextAction}</span>
+                  <span>{lead.score?.recommendedAction || "Schedule follow-up email outreach template sequence."}</span>
                 </p>
+              </div>
+
+              {/* Scoring History Timeline */}
+              <div className="space-y-2 pt-2 border-t border-card-border/40">
+                <h4 className="text-xs font-bold text-accent-primary uppercase tracking-wider">Scoring History Timeline</h4>
+                {loadingHistory ? (
+                  <p className="text-[10px] text-muted-text animate-pulse">Loading historical evaluations...</p>
+                ) : scoringHistory.length === 0 ? (
+                  <p className="text-[10px] text-muted-text italic">No historical scoring records found.</p>
+                ) : (
+                  <div className="relative border-l border-card-border/60 ml-2 pl-4 py-2 space-y-4">
+                    {scoringHistory.map((h: any, i: number) => (
+                      <div key={h.id} className="relative">
+                        {/* Dot indicator */}
+                        <div className={`absolute -left-[21px] top-1.5 h-2.5 w-2.5 rounded-full border-2 border-card ${
+                          i === 0 ? "bg-accent-primary" : "bg-slate-700"
+                        }`} />
+                        <div className="text-[10px] text-slate-400">
+                          {new Date(h.createdAt).toLocaleString()}
+                        </div>
+                        <div className="flex items-center gap-2 mt-0.5 text-xs">
+                          <span className="font-bold text-white">Score: {h.score}%</span>
+                          <span className="h-1.5 w-1.5 rounded-full bg-slate-700" />
+                          <span className={`font-semibold ${
+                            h.priority === "HIGH" ? "text-red-400" :
+                            h.priority === "MEDIUM" ? "text-amber-400" :
+                            "text-blue-400"
+                          }`}>{h.priority} Priority</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           </div>

@@ -103,7 +103,7 @@ export class LeadService {
   async getById(id: string) {
     const lead = await this.prisma.lead.findUnique({
       where: { id },
-      include: { conversations: true, appointments: true },
+      include: { conversations: true, appointments: true, score: true },
     });
     if (!lead) {
       throw new NotFoundException('Lead not found');
@@ -122,6 +122,7 @@ export class LeadService {
       skip,
       cursor: cursorObj,
       orderBy: { id: 'desc' },
+      include: { score: true },
     });
 
     const nextCursor = leads.length === take ? leads[leads.length - 1].id : null;

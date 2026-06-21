@@ -4,6 +4,7 @@ import { Job } from 'bullmq';
 import { PrismaService } from '../../prisma/prisma.service';
 import { EmailService } from '../../common/email/email.service';
 import { LeadIntelligenceService } from '../../lead/lead-intelligence.service';
+import { LeadScoringService } from '../../lead/lead-scoring.service';
 import { AccountResearchService } from '../../account-research/account-research.service';
 import axios from 'axios';
 
@@ -16,6 +17,8 @@ export class WorkflowExecutionWorker extends WorkerHost {
     private emailService: EmailService,
     @Inject(forwardRef(() => LeadIntelligenceService))
     private leadIntelligenceService: LeadIntelligenceService,
+    @Inject(forwardRef(() => LeadScoringService))
+    private leadScoringService: LeadScoringService,
     @Inject(forwardRef(() => AccountResearchService))
     private accountResearchService: AccountResearchService,
   ) {
@@ -157,13 +160,11 @@ export class WorkflowExecutionWorker extends WorkerHost {
           }
         }
       } else if (actionType === 'LEAD_SCORING') {
-        await this.leadIntelligenceService.processLeadAnalysis(payload.leadId || payload.id);
-        const scoreRecord = await this.prisma.leadScore.findUnique({
-          where: { leadId: payload.leadId || payload.id },
-        });
+        const scoreRecord = await this.leadScoringService.scoreLead(payload.leadId || payload.id);
         output = {
           leadScore: scoreRecord?.score || 85,
           classification: scoreRecord?.classification || 'HOT',
+          priority: scoreRecord?.priority || 'MEDIUM',
         };
       } else if (actionType === 'SEND_EMAIL') {
         const lead = await this.prisma.lead.findUnique({

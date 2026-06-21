@@ -28,6 +28,7 @@ import { ActivityLogModule } from './common/activity-logs/activity-log.module';
 import { AuditLogInterceptor } from './common/activity-logs/audit-log.interceptor';
 import { AICostModule } from './common/ai-cost/ai-cost.module';
 import { WebhookSubscriptionModule } from './common/webhooks/webhook-subscription.module';
+import { SearchModule } from './search/search.module';
 
 @Module({
   imports: [
@@ -56,6 +57,7 @@ import { WebhookSubscriptionModule } from './common/webhooks/webhook-subscriptio
     ActivityLogModule,
     AICostModule,
     WebhookSubscriptionModule,
+    SearchModule,
   ],
   controllers: [AppController, HealthController, MetricsController],
   providers: [

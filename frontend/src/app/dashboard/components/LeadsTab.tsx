@@ -44,6 +44,8 @@ interface LeadsTabProps {
   handleSendManualEmail?: (accountId: string, to: string, subject: string, body: string, leadId?: string) => Promise<boolean>;
   handleEnrollLeadInSequence?: (sequenceId: string, leadIds: string[]) => Promise<void>;
   handleDisenrollLeadFromSequence?: (sequenceId: string, leadIds: string[]) => Promise<void>;
+  token?: string;
+  API_URL?: string;
 }
 
 export const LeadsTab: React.FC<LeadsTabProps> = ({
@@ -73,6 +75,8 @@ export const LeadsTab: React.FC<LeadsTabProps> = ({
   handleSendManualEmail,
   handleEnrollLeadInSequence,
   handleDisenrollLeadFromSequence,
+  token = "",
+  API_URL = "",
 }) => {
   const [viewType, setViewType] = useState<"list" | "pipeline">("list");
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
@@ -352,6 +356,8 @@ export const LeadsTab: React.FC<LeadsTabProps> = ({
         handleSendManualEmail={handleSendManualEmail}
         handleEnrollLeadInSequence={handleEnrollLeadInSequence}
         handleDisenrollLeadFromSequence={handleDisenrollLeadFromSequence}
+        token={token}
+        API_URL={API_URL}
       />
     </div>
   );

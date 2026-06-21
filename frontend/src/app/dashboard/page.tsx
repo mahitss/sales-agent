@@ -49,6 +49,7 @@ const AutomationsTab = dynamic(() => import("./components/AutomationsTab").then(
 const SettingsTab = dynamic(() => import("./components/SettingsTab").then(m => m.SettingsTab), { ssr: false });
 const QueuesTab = dynamic(() => import("./components/QueuesTab").then(m => m.QueuesTab), { ssr: false });
 const AccountIntelTab = dynamic(() => import("./components/AccountIntelTab").then(m => m.AccountIntelTab), { ssr: false });
+const ScoringDashboard = dynamic(() => import("./components/ScoringDashboard").then(m => m.ScoringDashboard), { ssr: false });
 const CommandPalette = dynamic(() => import("@/components/CommandPalette").then(m => m.CommandPalette), { ssr: false });
 
 import { FeedbackModal } from "@/components/FeedbackModal";
@@ -467,6 +468,17 @@ export default function DashboardPage() {
               <Globe className="h-4.5 w-4.5" />
               Account Intelligence
             </button>
+            <button
+              onClick={() => setActiveTab("scoring")}
+              className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-xl transition-all cursor-pointer ${
+                activeTab === "scoring"
+                  ? "bg-accent-primary/10 text-accent-primary border border-accent-primary/20 font-semibold"
+                  : "text-muted-text hover:bg-card/40 hover:text-foreground"
+              }`}
+            >
+              <Sparkles className="h-4.5 w-4.5" />
+              AI Lead Scoring
+            </button>
 
             {user?.role === "ADMIN" && (
               <>
@@ -696,6 +708,8 @@ export default function DashboardPage() {
                         handleSendManualEmail={handleSendManualEmail}
                         handleEnrollLeadInSequence={handleEnrollLeadInSequence}
                         handleDisenrollLeadFromSequence={handleDisenrollLeadFromSequence}
+                        token={token || ""}
+                        API_URL={API_URL}
                       />
                     </ErrorBoundary>
                   )}
@@ -766,6 +780,19 @@ export default function DashboardPage() {
                         handleAnalyzeAccount={handleAnalyzeAccount}
                         handleDownloadBriefingPdf={handleDownloadBriefingPdf}
                         fetchAccountResearchHistory={fetchAccountResearchHistory}
+                      />
+                    </ErrorBoundary>
+                  )}
+
+                  {activeTab === "scoring" && (
+                    <ErrorBoundary>
+                      <ScoringDashboard
+                        businessId={business?.id || ""}
+                        token={token || ""}
+                        API_URL={API_URL}
+                        onViewLead={(leadId) => {
+                          setActiveTab("leads");
+                        }}
                       />
                     </ErrorBoundary>
                   )}
@@ -983,10 +1010,12 @@ export default function DashboardPage() {
         onClose={() => setIsCommandPaletteOpen(false)}
         activeTab={activeTab}
         setActiveTab={setActiveTab}
-        leads={leads}
         setSearchTerm={setSearchTerm}
         handleLogout={handleLogout}
         onOpenFeedback={() => setIsFeedbackOpen(true)}
+        token={token || ""}
+        businessId={business?.id || ""}
+        API_URL={API_URL}
       />
     </div>
   );

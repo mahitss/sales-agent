@@ -14,7 +14,8 @@ from app.services.agent import (
     ExtractFAQsResponse,
     CompetitorAnalysisResponse,
     AnalyzeLeadResponse,
-    AccountIntelligenceResponse
+    AccountIntelligenceResponse,
+    LeadScoreResponse
 )
 from dotenv import load_dotenv
 
@@ -196,6 +197,30 @@ def analyze_lead_endpoint(payload: AnalyzeLeadPayload):
         return result
     except Exception as e:
         logger.exception("Error in analyze-lead endpoint")
+        raise HTTPException(status_code=500, detail=str(e))
+
+class ScoreLeadPayload(BaseModel):
+    lead_info: Dict[str, Any]
+    enrichment_info: Dict[str, Any]
+    research_info: Dict[str, Any]
+    conversation_log: List[Dict[str, Any]]
+    email_metrics: Dict[str, Any]
+    website_metrics: Dict[str, Any]
+
+@app.post("/score-lead", response_model=LeadScoreResponse)
+def score_lead_endpoint(payload: ScoreLeadPayload):
+    try:
+        result = agent_service.score_lead(
+            lead_info=payload.lead_info,
+            enrichment_info=payload.enrichment_info,
+            research_info=payload.research_info,
+            conversation_log=payload.conversation_log,
+            email_metrics=payload.email_metrics,
+            website_metrics=payload.website_metrics
+        )
+        return result
+    except Exception as e:
+        logger.exception("Error in score-lead endpoint")
         raise HTTPException(status_code=500, detail=str(e))
 
 class AnalyzeAccountPayload(BaseModel):

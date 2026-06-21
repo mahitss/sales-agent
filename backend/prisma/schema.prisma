@@ -123,6 +123,7 @@ model Lead {
   outreachSequences OutreachSequence[]
   emailActivities   EmailActivity[]
   sequenceEnrollments EmailSequenceEnrollment[]
+  scoreHistory      LeadScoreHistory[]
 
   @@index([businessId])
   @@index([businessId, createdAt])
@@ -239,7 +240,7 @@ model LeadIntelligence {
 model LeadScore {
   id                  String    @id @default(uuid())
   leadId              String    @unique
-  lead              Lead      @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  lead                Lead      @relation(fields: [leadId], references: [id], onDelete: Cascade)
   score               Int
   classification      String    // HOT, WARM, COLD
   dealProbability     Float     // Decimal value e.g. 0.84 for 84%
@@ -248,10 +249,42 @@ model LeadScore {
   businessSize        String
   serviceMatch        String
   engagement          Int
+
+  // New AI Scoring Fields
+  buyingIntent        String?   @db.Text
+  companyGrowth       String?   @db.Text
+  hiringSignals       String?   @db.Text
+  engagementActivity  String?   @db.Text
+  websiteActivity     String?   @db.Text
+  emailActivity       String?   @db.Text
+  reasoning           String?   @db.Text
+  recommendedAction   String?   @db.Text
+  priority            String?   @default("MEDIUM") // HIGH, MEDIUM, LOW
+
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
 
   @@index([leadId])
+}
+
+model LeadScoreHistory {
+  id                  String    @id @default(uuid())
+  leadId              String
+  lead                Lead      @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  score               Int
+  priority            String    // HIGH, MEDIUM, LOW
+  buyingIntent        String?   @db.Text
+  companyGrowth       String?   @db.Text
+  hiringSignals       String?   @db.Text
+  engagementActivity  String?   @db.Text
+  websiteActivity     String?   @db.Text
+  emailActivity       String?   @db.Text
+  reasoning           String    @db.Text
+  recommendedAction   String    @db.Text
+  createdAt           DateTime  @default(now())
+
+  @@index([leadId])
+  @@index([createdAt])
 }
 
 model CompanyEnrichment {

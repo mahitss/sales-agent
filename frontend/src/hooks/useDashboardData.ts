@@ -149,7 +149,8 @@ export type TabType =
   | "automations"
   | "settings"
   | "queues"
-  | "account-research";
+  | "account-research"
+  | "scoring";
 
 
 export function useDashboardData() {
