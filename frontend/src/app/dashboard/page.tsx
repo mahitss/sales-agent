@@ -261,8 +261,26 @@ export default function DashboardPage() {
     handleSendManualEmail,
   } = useDashboardData();
 
+  // Hydration guard to ensure client initial render matches server HTML
+  const [mounted, setMounted] = React.useState(false);
+  React.useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background text-foreground transition-all duration-300">
+        <div className="flex flex-col items-center gap-3">
+          <RefreshCw className="h-8 w-8 animate-spin text-accent-primary" />
+          <p className="text-sm text-muted-text">Loading Beacon Portal...</p>
+        </div>
+      </div>
+    );
+  }
+
   // 1. RENDER: Auth Gate
   if (!token) {
+
     return (
       <div className="relative flex min-h-screen items-center justify-center bg-background px-4 text-foreground transition-all duration-300">
         <div className="absolute top-6 right-6 z-50">
