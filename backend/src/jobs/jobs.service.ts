@@ -15,6 +15,9 @@ export class JobsService {
     @InjectQueue('workflow-automation') private workflowAutomationQueue: Queue,
     @InjectQueue('account-intelligence') private accountIntelligenceQueue: Queue,
     @InjectQueue('workflow-execution') private workflowExecutionQueue: Queue,
+    @InjectQueue('email-sync') private emailSyncQueue: Queue,
+    @InjectQueue('email-sequence') private emailSequenceQueue: Queue,
+    @InjectQueue('email-reminder') private emailReminderQueue: Queue,
   ) {}
 
   // Expose queues for direct controller operations
@@ -27,6 +30,9 @@ export class JobsService {
       'workflow-automation': this.workflowAutomationQueue,
       'account-intelligence': this.accountIntelligenceQueue,
       'workflow-execution': this.workflowExecutionQueue,
+      'email-sync': this.emailSyncQueue,
+      'email-sequence': this.emailSequenceQueue,
+      'email-reminder': this.emailReminderQueue,
     };
   }
 
@@ -103,5 +109,43 @@ export class JobsService {
     this.logger.log(`Enqueuing Workflow Execution job for executionId ${executionId}`);
 
     return this.workflowExecutionQueue.add('execute-workflow', { executionId, workflowId, businessId }, opts);
+  }
+
+  async addEmailSyncJob(accountId: string, businessId: string) {
+    const key = `email-sync:${accountId}:${Date.now()}`;
+    const opts = this.getStandardJobOptions(key);
+    this.logger.log(`Enqueuing email sync job for account: ${accountId}`);
+
+    return this.emailSyncQueue.add('sync-inbox', { accountId, businessId }, opts);
+  }
+
+  async addSimulatedReplyJob(accountId: string, sentActivityId: string, businessId: string) {
+    const key = `sim-reply:${sentActivityId}:${Date.now()}`;
+    const opts = this.getStandardJobOptions(key);
+    this.logger.log(`Enqueuing simulated reply job for sent activity: ${sentActivityId}`);
+
+    return this.emailSyncQueue.add('simulated-reply', { accountId, sentActivityId, businessId }, opts);
+  }
+
+  async addEmailSequenceExecutionJob(enrollmentId: string, businessId: string, delayMs: number) {
+    const key = `seq-exec:${enrollmentId}:${Date.now()}`;
+    const opts = {
+      ...this.getStandardJobOptions(key),
+      delay: delayMs
+    };
+    this.logger.log(`Enqueuing Sequence Step execution job for enrollment ${enrollmentId} with delay ${delayMs}ms`);
+
+    return this.emailSequenceQueue.add('execute-step', { enrollmentId, businessId }, opts);
+  }
+
+  async addEmailReminderJob(activityId: string, delayMs: number) {
+    const key = `email-remind:${activityId}:${Date.now()}`;
+    const opts = {
+      ...this.getStandardJobOptions(key),
+      delay: delayMs
+    };
+    this.logger.log(`Enqueuing Follow-up reminder checking job for activity ${activityId} with delay ${delayMs}ms`);
+
+    return this.emailReminderQueue.add('check-reminder', { activityId }, opts);
   }
 }

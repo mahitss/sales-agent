@@ -240,6 +240,24 @@ export default function DashboardPage() {
     fetchWorkflowMetrics,
     handleSaveWorkflow,
     handleToggleWorkflow,
+    emailAccounts,
+    emailTemplates,
+    emailSequences,
+    emailActivities,
+    emailLoading,
+    fetchEmailAccounts,
+    handleConnectEmailAccount,
+    handleDisconnectEmailAccount,
+    fetchEmailTemplates,
+    handleSaveEmailTemplate,
+    handleDeleteEmailTemplate,
+    fetchEmailSequences,
+    handleSaveEmailSequence,
+    handleDeleteEmailSequence,
+    handleEnrollLeadInSequence,
+    handleDisenrollLeadFromSequence,
+    fetchEmailActivities,
+    handleSendManualEmail,
   } = useDashboardData();
 
   // 1. RENDER: Auth Gate
@@ -669,6 +687,15 @@ export default function DashboardPage() {
                         handleScheduleOutreach={handleScheduleOutreach}
                         handleEnrichCompany={handleEnrichCompany}
                         handleFindEmails={handleFindEmails}
+                        emailAccounts={emailAccounts}
+                        emailActivities={emailActivities}
+                        emailTemplates={emailTemplates}
+                        emailSequences={emailSequences}
+                        emailLoading={emailLoading}
+                        fetchEmailActivities={fetchEmailActivities}
+                        handleSendManualEmail={handleSendManualEmail}
+                        handleEnrollLeadInSequence={handleEnrollLeadInSequence}
+                        handleDisenrollLeadFromSequence={handleDisenrollLeadFromSequence}
                       />
                     </ErrorBoundary>
                   )}
@@ -809,6 +836,15 @@ export default function DashboardPage() {
                         handleSaveWorkflow={handleSaveWorkflow}
                         handleToggleWorkflow={handleToggleWorkflow}
                         fetchWorkflowExecutions={fetchWorkflowExecutions}
+                        emailTemplates={emailTemplates}
+                        emailSequences={emailSequences}
+                        emailLoading={emailLoading}
+                        handleSaveEmailTemplate={handleSaveEmailTemplate}
+                        handleDeleteEmailTemplate={handleDeleteEmailTemplate}
+                        handleSaveEmailSequence={handleSaveEmailSequence}
+                        handleDeleteEmailSequence={handleDeleteEmailSequence}
+                        handleEnrollLeadInSequence={handleEnrollLeadInSequence}
+                        handleDisenrollLeadFromSequence={handleDisenrollLeadFromSequence}
                       />
                     </ErrorBoundary>
                   )}
@@ -892,6 +928,10 @@ export default function DashboardPage() {
                         simLoading={simLoading}
                         simStatus={simStatus}
                         handleSimulateMessage={handleSimulateMessage}
+                        emailAccounts={emailAccounts}
+                        emailLoading={emailLoading}
+                        handleConnectEmailAccount={handleConnectEmailAccount}
+                        handleDisconnectEmailAccount={handleDisconnectEmailAccount}
                       />
                     </ErrorBoundary>
                   )}

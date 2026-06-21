@@ -12,7 +12,14 @@ import {
   CheckCircle,
   HelpCircle,
   Clock,
-  Briefcase
+  Briefcase,
+  Eye,
+  Reply,
+  ArrowUpRight,
+  ArrowDownLeft,
+  PlayCircle,
+  PauseCircle,
+  Inbox,
 } from "lucide-react";
 
 interface Lead {
@@ -37,6 +44,16 @@ interface LeadDetailDrawerProps {
   handleEnrichCompany: (leadId: string, domain: string) => Promise<any>;
   handleFindEmails: (domain: string) => Promise<any>;
   outreachSequences: any[];
+  // Email integration props
+  emailAccounts?: any[];
+  emailActivities?: any[];
+  emailTemplates?: any[];
+  emailSequences?: any[];
+  emailLoading?: boolean;
+  fetchEmailActivities?: (leadId: string) => void;
+  handleSendManualEmail?: (accountId: string, to: string, subject: string, body: string, leadId?: string) => Promise<boolean>;
+  handleEnrollLeadInSequence?: (sequenceId: string, leadIds: string[]) => Promise<void>;
+  handleDisenrollLeadFromSequence?: (sequenceId: string, leadIds: string[]) => Promise<void>;
 }
 
 export const LeadDetailDrawer: React.FC<LeadDetailDrawerProps> = ({
@@ -48,8 +65,18 @@ export const LeadDetailDrawer: React.FC<LeadDetailDrawerProps> = ({
   handleEnrichCompany,
   handleFindEmails,
   outreachSequences,
+  // Email integration props
+  emailAccounts = [],
+  emailActivities = [],
+  emailTemplates = [],
+  emailSequences = [],
+  emailLoading = false,
+  fetchEmailActivities,
+  handleSendManualEmail,
+  handleEnrollLeadInSequence,
+  handleDisenrollLeadFromSequence,
 }) => {
-  const [activeTab, setActiveTab] = useState<"analysis" | "enrichment" | "outreach">("analysis");
+  const [activeTab, setActiveTab] = useState<"analysis" | "enrichment" | "outreach" | "email">("analysis");
 
   // Mock enrichment states
   const [domainInput, setDomainInput] = useState("");
@@ -68,6 +95,16 @@ export const LeadDetailDrawer: React.FC<LeadDetailDrawerProps> = ({
   const [emailBody, setEmailBody] = useState("");
   const [scheduling, setScheduling] = useState(false);
 
+  // Manual email compose states
+  const [composeSubject, setComposeSubject] = useState("");
+  const [composeBody, setComposeBody] = useState("");
+  const [selectedAccountId, setSelectedAccountId] = useState("");
+  const [selectedTemplateId, setSelectedTemplateId] = useState("");
+  const [sending, setSending] = useState(false);
+
+  // Sequence enrollment
+  const [selectedSequenceId, setSelectedSequenceId] = useState("");
+
   useEffect(() => {
     if (lead) {
       // Auto-extract domain from email if available
@@ -80,8 +117,25 @@ export const LeadDetailDrawer: React.FC<LeadDetailDrawerProps> = ({
       }
       setCompanyDetails(null);
       setFoundEmails([]);
+
+      // Fetch email activities for this lead
+      if (fetchEmailActivities) {
+        fetchEmailActivities(lead.id);
+      }
+
+      // Pre-select first connected email account
+      if (emailAccounts.length > 0 && !selectedAccountId) {
+        setSelectedAccountId(emailAccounts[0].id);
+      }
     }
   }, [lead]);
+
+  // Update selected account when accounts load
+  useEffect(() => {
+    if (emailAccounts.length > 0 && !selectedAccountId) {
+      setSelectedAccountId(emailAccounts[0].id);
+    }
+  }, [emailAccounts]);
 
   if (!isOpen || !lead) return null;
 
@@ -229,7 +283,65 @@ export const LeadDetailDrawer: React.FC<LeadDetailDrawerProps> = ({
     }
   };
 
+  const handleComposeFromTemplate = (templateId: string) => {
+    setSelectedTemplateId(templateId);
+    const tmpl = emailTemplates.find((t: any) => t.id === templateId);
+    if (tmpl) {
+      // Replace template variables
+      let subject = tmpl.subject
+        .replace(/\{\{name\}\}/g, lead.name || "")
+        .replace(/\{\{email\}\}/g, lead.email || "")
+        .replace(/\{\{company\}\}/g, "");
+      let body = tmpl.body
+        .replace(/\{\{name\}\}/g, lead.name || "")
+        .replace(/\{\{email\}\}/g, lead.email || "")
+        .replace(/\{\{company\}\}/g, "");
+      setComposeSubject(subject);
+      setComposeBody(body);
+    }
+  };
+
+  const handleManualSend = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!composeSubject || !composeBody || !selectedAccountId || !lead.email) return;
+    if (!handleSendManualEmail) return;
+    setSending(true);
+    try {
+      const success = await handleSendManualEmail(selectedAccountId, lead.email, composeSubject, composeBody, lead.id);
+      if (success) {
+        setComposeSubject("");
+        setComposeBody("");
+        setSelectedTemplateId("");
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const handleEnroll = async () => {
+    if (!selectedSequenceId || !handleEnrollLeadInSequence) return;
+    await handleEnrollLeadInSequence(selectedSequenceId, [lead.id]);
+    setSelectedSequenceId("");
+  };
+
+  const handleDisenroll = async (seqId: string) => {
+    if (!handleDisenrollLeadFromSequence) return;
+    await handleDisenrollLeadFromSequence(seqId, [lead.id]);
+  };
+
   const dealProbability = lead.status === "HOT" ? 88 : lead.status === "WARM" ? 54 : 12;
+
+  // Find active enrollments for this lead
+  const leadEnrollments = emailSequences
+    .filter((seq: any) => seq.enrollments?.some((e: any) => e.status === "ACTIVE"))
+    .map((seq: any) => ({
+      sequenceId: seq.id,
+      sequenceName: seq.name,
+      enrollment: seq.enrollments?.find((e: any) => e.status === "ACTIVE"),
+    }))
+    .filter(Boolean);
 
   return (
     <div className="fixed inset-y-0 right-0 z-50 w-full max-w-2xl bg-card border-l border-card-border shadow-2xl flex flex-col h-full overflow-hidden">
@@ -280,10 +392,10 @@ export const LeadDetailDrawer: React.FC<LeadDetailDrawerProps> = ({
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b border-card-border bg-slate-950/10 px-6 gap-6 shrink-0 text-sm">
+      <div className="flex border-b border-card-border bg-slate-950/10 px-6 gap-6 shrink-0 text-sm overflow-x-auto">
         <button
           onClick={() => setActiveTab("analysis")}
-          className={`py-3.5 font-bold transition-all border-b-2 cursor-pointer ${
+          className={`py-3.5 font-bold transition-all border-b-2 cursor-pointer whitespace-nowrap ${
             activeTab === "analysis"
               ? "border-accent-primary text-accent-primary"
               : "border-transparent text-muted-text hover:text-white"
@@ -293,7 +405,7 @@ export const LeadDetailDrawer: React.FC<LeadDetailDrawerProps> = ({
         </button>
         <button
           onClick={() => setActiveTab("enrichment")}
-          className={`py-3.5 font-bold transition-all border-b-2 cursor-pointer ${
+          className={`py-3.5 font-bold transition-all border-b-2 cursor-pointer whitespace-nowrap ${
             activeTab === "enrichment"
               ? "border-accent-primary text-accent-primary"
               : "border-transparent text-muted-text hover:text-white"
@@ -303,13 +415,29 @@ export const LeadDetailDrawer: React.FC<LeadDetailDrawerProps> = ({
         </button>
         <button
           onClick={() => setActiveTab("outreach")}
-          className={`py-3.5 font-bold transition-all border-b-2 cursor-pointer ${
+          className={`py-3.5 font-bold transition-all border-b-2 cursor-pointer whitespace-nowrap ${
             activeTab === "outreach"
               ? "border-accent-primary text-accent-primary"
               : "border-transparent text-muted-text hover:text-white"
           }`}
         >
           Automated Outreach
+        </button>
+        <button
+          onClick={() => setActiveTab("email")}
+          className={`py-3.5 font-bold transition-all border-b-2 cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+            activeTab === "email"
+              ? "border-accent-primary text-accent-primary"
+              : "border-transparent text-muted-text hover:text-white"
+          }`}
+        >
+          <Inbox className="h-3.5 w-3.5" />
+          Email Activity
+          {emailActivities.length > 0 && (
+            <span className="px-1.5 py-0.5 rounded-full bg-accent-primary/15 text-accent-primary text-[9px] font-extrabold">
+              {emailActivities.length}
+            </span>
+          )}
         </button>
       </div>
 
@@ -552,6 +680,262 @@ export const LeadDetailDrawer: React.FC<LeadDetailDrawerProps> = ({
                 </div>
               </div>
             )}
+          </div>
+        )}
+
+        {/* ============ EMAIL ACTIVITY TAB ============ */}
+        {activeTab === "email" && (
+          <div className="space-y-6">
+            {/* Sequence Enrollment Controls */}
+            {emailSequences.length > 0 && (
+              <div className="border border-card-border rounded-2xl bg-card/10 p-5 space-y-4">
+                <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                  <PlayCircle className="h-4 w-4 text-accent-primary" />
+                  Sequence Enrollment
+                </h4>
+
+                {/* Active enrollments */}
+                {leadEnrollments.length > 0 && (
+                  <div className="space-y-2">
+                    {leadEnrollments.map((le: any) => (
+                      <div key={le.sequenceId} className="flex items-center justify-between bg-emerald-500/5 border border-emerald-500/15 rounded-xl p-3">
+                        <div className="flex items-center gap-2">
+                          <div className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+                          <span className="text-xs text-emerald-300 font-bold">{le.sequenceName}</span>
+                          <span className="text-[9px] text-muted-text">Active</span>
+                        </div>
+                        <button
+                          onClick={() => handleDisenroll(le.sequenceId)}
+                          className="flex items-center gap-1 px-2 py-1 text-[10px] font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-lg hover:bg-amber-500/20 transition-all cursor-pointer"
+                        >
+                          <PauseCircle className="h-3 w-3" />
+                          Pause
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Enroll in new sequence */}
+                <div className="flex gap-2">
+                  <select
+                    value={selectedSequenceId}
+                    onChange={(e) => setSelectedSequenceId(e.target.value)}
+                    className="flex-1 bg-slate-900 border border-card-border text-white text-xs px-3 py-2.5 rounded-xl focus:outline-none focus:border-accent-primary cursor-pointer"
+                  >
+                    <option value="">Select a sequence to enroll...</option>
+                    {emailSequences.map((seq: any) => (
+                      <option key={seq.id} value={seq.id}>{seq.name}</option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={handleEnroll}
+                    disabled={!selectedSequenceId}
+                    className="px-4 py-2.5 bg-accent-primary text-slate-950 font-bold rounded-xl text-xs hover:bg-emerald-400 disabled:opacity-50 transition-all cursor-pointer flex items-center gap-1.5"
+                  >
+                    <PlayCircle className="h-3.5 w-3.5" />
+                    Enroll
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Manual Email Compose */}
+            {emailAccounts.length > 0 && lead.email && (
+              <form onSubmit={handleManualSend} className="border border-card-border rounded-2xl bg-card/10 p-5 space-y-4">
+                <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                  <Send className="h-4 w-4 text-accent-primary" />
+                  Compose Email
+                </h4>
+
+                <div className="space-y-3">
+                  {/* From account selector */}
+                  <div className="space-y-1">
+                    <label className="text-[10px] text-slate-300 font-bold uppercase">From Account</label>
+                    <select
+                      value={selectedAccountId}
+                      onChange={(e) => setSelectedAccountId(e.target.value)}
+                      className="w-full bg-slate-900 border border-card-border text-white text-xs px-3 py-2.5 rounded-xl focus:outline-none focus:border-accent-primary cursor-pointer"
+                    >
+                      {emailAccounts.map((acc: any) => (
+                        <option key={acc.id} value={acc.id}>
+                          {acc.email} ({acc.provider})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Template quick-fill */}
+                  {emailTemplates.length > 0 && (
+                    <div className="space-y-1">
+                      <label className="text-[10px] text-slate-300 font-bold uppercase">Quick Template Fill</label>
+                      <select
+                        value={selectedTemplateId}
+                        onChange={(e) => handleComposeFromTemplate(e.target.value)}
+                        className="w-full bg-slate-900 border border-card-border text-white text-xs px-3 py-2.5 rounded-xl focus:outline-none focus:border-accent-primary cursor-pointer"
+                      >
+                        <option value="">Compose from scratch...</option>
+                        {emailTemplates.map((tmpl: any) => (
+                          <option key={tmpl.id} value={tmpl.id}>{tmpl.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] text-slate-300 font-bold uppercase">To</label>
+                    <input
+                      type="text"
+                      readOnly
+                      value={lead.email}
+                      className="w-full bg-slate-900/60 border border-card-border text-slate-400 text-xs px-3 py-2.5 rounded-xl"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] text-slate-300 font-bold uppercase">Subject</label>
+                    <input
+                      type="text"
+                      required
+                      value={composeSubject}
+                      onChange={(e) => setComposeSubject(e.target.value)}
+                      placeholder="Email subject..."
+                      className="w-full bg-slate-900 border border-card-border text-white text-xs px-3 py-2.5 rounded-xl focus:outline-none focus:border-accent-primary"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] text-slate-300 font-bold uppercase">Message</label>
+                    <textarea
+                      required
+                      rows={5}
+                      value={composeBody}
+                      onChange={(e) => setComposeBody(e.target.value)}
+                      placeholder="Type your message..."
+                      className="w-full bg-slate-900 border border-card-border text-white text-xs p-3 rounded-xl focus:outline-none focus:border-accent-primary resize-none"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex justify-end">
+                  <button
+                    type="submit"
+                    disabled={sending || emailLoading}
+                    className="px-5 py-2.5 bg-accent-primary text-slate-950 font-bold rounded-xl text-xs hover:bg-emerald-400 disabled:opacity-50 transition-all flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Send className="h-3.5 w-3.5" />
+                    {sending ? "Sending..." : "Send Email"}
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {/* No connected accounts CTA */}
+            {emailAccounts.length === 0 && (
+              <div className="border border-dashed border-card-border rounded-2xl bg-card/5 p-8 text-center space-y-2">
+                <Mail className="h-8 w-8 mx-auto text-slate-600" />
+                <p className="text-xs text-muted-text font-semibold">No email accounts connected</p>
+                <p className="text-[10px] text-slate-600">
+                  Connect Gmail or Outlook from the Integrations tab to send emails directly from Beacon.
+                </p>
+              </div>
+            )}
+
+            {/* No lead email */}
+            {emailAccounts.length > 0 && !lead.email && (
+              <div className="border border-dashed border-amber-500/20 rounded-2xl bg-amber-500/5 p-6 text-center space-y-2">
+                <HelpCircle className="h-6 w-6 mx-auto text-amber-500" />
+                <p className="text-xs text-amber-400 font-semibold">No email address on file</p>
+                <p className="text-[10px] text-slate-500">
+                  This lead doesn&apos;t have an email address. Use the Company Intelligence tab to find contacts.
+                </p>
+              </div>
+            )}
+
+            {/* Email Activity Timeline */}
+            <div className="space-y-3">
+              <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                <Mail className="h-4 w-4 text-accent-primary" />
+                Conversation Timeline
+                {emailLoading && <span className="text-[9px] text-muted-text animate-pulse">Loading...</span>}
+              </h4>
+
+              {emailActivities.length === 0 && !emailLoading && (
+                <div className="text-center py-8 text-muted-text">
+                  <Mail className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                  <p className="text-xs">No email activity recorded for this lead yet.</p>
+                </div>
+              )}
+
+              <div className="space-y-3">
+                {emailActivities.map((activity: any) => {
+                  const isSent = activity.direction === "SENT";
+                  const hasOpens = activity.opensCount > 0;
+                  const hasReply = !!activity.repliedAt;
+                  
+                  return (
+                    <div
+                      key={activity.id}
+                      className={`border rounded-2xl p-4 space-y-2 transition-all ${
+                        isSent
+                          ? "border-indigo-500/20 bg-indigo-500/5"
+                          : "border-emerald-500/20 bg-emerald-500/5"
+                      }`}
+                    >
+                      {/* Direction indicator + subject */}
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div className={`h-7 w-7 rounded-lg flex items-center justify-center shrink-0 ${
+                            isSent ? "bg-indigo-500/15 text-indigo-400" : "bg-emerald-500/15 text-emerald-400"
+                          }`}>
+                            {isSent ? <ArrowUpRight className="h-3.5 w-3.5" /> : <ArrowDownLeft className="h-3.5 w-3.5" />}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-xs font-bold text-white truncate">{activity.subject}</p>
+                            <p className="text-[10px] text-muted-text">
+                              {isSent ? `To: ${activity.toAddress}` : `From: ${activity.fromAddress}`}
+                            </p>
+                          </div>
+                        </div>
+                        <span className={`px-2 py-0.5 rounded text-[9px] font-extrabold shrink-0 ${
+                          isSent
+                            ? "bg-indigo-500/10 text-indigo-400 border border-indigo-500/20"
+                            : "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                        }`}>
+                          {isSent ? "SENT" : "RECEIVED"}
+                        </span>
+                      </div>
+
+                      {/* Body preview */}
+                      <p className="text-[11px] text-slate-400 line-clamp-3 leading-relaxed pl-9">
+                        {activity.body?.replace(/<[^>]*>/g, "").substring(0, 200)}
+                        {(activity.body?.length || 0) > 200 ? "..." : ""}
+                      </p>
+
+                      {/* Meta badges row */}
+                      <div className="flex items-center gap-3 pl-9 text-[10px]">
+                        <span className="text-muted-text flex items-center gap-1">
+                          <Clock className="h-3 w-3" />
+                          {new Date(activity.sentAt).toLocaleString()}
+                        </span>
+                        {hasOpens && (
+                          <span className="flex items-center gap-1 text-cyan-400">
+                            <Eye className="h-3 w-3" />
+                            {activity.opensCount} open{activity.opensCount > 1 ? "s" : ""}
+                          </span>
+                        )}
+                        {hasReply && (
+                          <span className="flex items-center gap-1 text-emerald-400">
+                            <Reply className="h-3 w-3" />
+                            Replied {new Date(activity.repliedAt).toLocaleDateString()}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           </div>
         )}
       </div>

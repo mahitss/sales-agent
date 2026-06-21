@@ -34,6 +34,16 @@ interface LeadsTabProps {
   handleScheduleOutreach: (leadId: string, template: string, subject: string, bodyText: string) => Promise<boolean>;
   handleEnrichCompany: (leadId: string, domain: string) => Promise<any>;
   handleFindEmails: (domain: string) => Promise<any>;
+  // Email integration props
+  emailAccounts?: any[];
+  emailActivities?: any[];
+  emailTemplates?: any[];
+  emailSequences?: any[];
+  emailLoading?: boolean;
+  fetchEmailActivities?: (leadId: string) => void;
+  handleSendManualEmail?: (accountId: string, to: string, subject: string, body: string, leadId?: string) => Promise<boolean>;
+  handleEnrollLeadInSequence?: (sequenceId: string, leadIds: string[]) => Promise<void>;
+  handleDisenrollLeadFromSequence?: (sequenceId: string, leadIds: string[]) => Promise<void>;
 }
 
 export const LeadsTab: React.FC<LeadsTabProps> = ({
@@ -53,6 +63,16 @@ export const LeadsTab: React.FC<LeadsTabProps> = ({
   handleScheduleOutreach,
   handleEnrichCompany,
   handleFindEmails,
+  // Email integration props
+  emailAccounts,
+  emailActivities,
+  emailTemplates,
+  emailSequences,
+  emailLoading,
+  fetchEmailActivities,
+  handleSendManualEmail,
+  handleEnrollLeadInSequence,
+  handleDisenrollLeadFromSequence,
 }) => {
   const [viewType, setViewType] = useState<"list" | "pipeline">("list");
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
@@ -323,6 +343,15 @@ export const LeadsTab: React.FC<LeadsTabProps> = ({
         handleEnrichCompany={handleEnrichCompany}
         handleFindEmails={handleFindEmails}
         outreachSequences={outreachSequences}
+        emailAccounts={emailAccounts}
+        emailActivities={emailActivities}
+        emailTemplates={emailTemplates}
+        emailSequences={emailSequences}
+        emailLoading={emailLoading}
+        fetchEmailActivities={fetchEmailActivities}
+        handleSendManualEmail={handleSendManualEmail}
+        handleEnrollLeadInSequence={handleEnrollLeadInSequence}
+        handleDisenrollLeadFromSequence={handleDisenrollLeadFromSequence}
       />
     </div>
   );

@@ -1,6 +1,7 @@
 import React from "react";
 import { Check, Radio, Send } from "lucide-react";
 import { BusinessInfo } from "@/hooks/useDashboardData";
+import { ConnectedEmails } from "./ConnectedEmails";
 
 interface IntegrationsTabProps {
   business: BusinessInfo | null;
@@ -41,6 +42,10 @@ interface IntegrationsTabProps {
   simLoading: boolean;
   simStatus: string;
   handleSimulateMessage: (e: React.FormEvent) => void;
+  emailAccounts: any[];
+  emailLoading: boolean;
+  handleConnectEmailAccount: (provider: "GMAIL" | "OUTLOOK") => Promise<void>;
+  handleDisconnectEmailAccount: (id: string) => Promise<void>;
 }
 
 export const IntegrationsTab: React.FC<IntegrationsTabProps> = ({
@@ -81,6 +86,10 @@ export const IntegrationsTab: React.FC<IntegrationsTabProps> = ({
   simLoading,
   simStatus,
   handleSimulateMessage,
+  emailAccounts,
+  emailLoading,
+  handleConnectEmailAccount,
+  handleDisconnectEmailAccount,
 }) => {
 
 
@@ -265,8 +274,17 @@ export const IntegrationsTab: React.FC<IntegrationsTabProps> = ({
         </form>
       </div>
 
-      {/* Interactive incoming simulator panel */}
-      <div className="flex flex-col border border-card-border rounded-2xl overflow-hidden bg-card/10 shadow-sm">
+      {/* Right Column: Connected Emails + Simulator */}
+      <div className="space-y-6">
+        <ConnectedEmails
+          emailAccounts={emailAccounts}
+          emailLoading={emailLoading}
+          onConnect={handleConnectEmailAccount}
+          onDisconnect={handleDisconnectEmailAccount}
+        />
+
+        {/* Interactive incoming simulator panel */}
+        <div className="flex flex-col border border-card-border rounded-2xl overflow-hidden bg-card/10 shadow-sm">
         <div className="p-4 border-b border-card-border bg-card/25 flex items-center gap-2">
           <Radio className="h-4.5 w-4.5 text-accent-primary animate-pulse" />
           <span className="font-semibold text-xs uppercase tracking-wider text-muted-text">Interactive Incoming Channel Simulator</span>
@@ -357,6 +375,7 @@ export const IntegrationsTab: React.FC<IntegrationsTabProps> = ({
             )}
           </div>
         </form>
+      </div>
       </div>
     </div>
   );

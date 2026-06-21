@@ -316,6 +316,13 @@ export function useDashboardData() {
   const [workflowMetrics, setWorkflowMetrics] = useState<any>(null);
   const [workflowLoading, setWorkflowLoading] = useState(false);
 
+  // Connected Emails & Campaigns Sequences States
+  const [emailAccounts, setEmailAccounts] = useState<any[]>([]);
+  const [emailTemplates, setEmailTemplates] = useState<any[]>([]);
+  const [emailSequences, setEmailSequences] = useState<any[]>([]);
+  const [emailActivities, setEmailActivities] = useState<any[]>([]);
+  const [emailLoading, setEmailLoading] = useState(false);
+
 
 
   const fetchQueueMetrics = async () => {
@@ -638,6 +645,10 @@ export function useDashboardData() {
           return;
         }
         if (res.ok) setLeads(await res.json());
+        // Pre-fetch email data for lead detail drawer
+        await fetchEmailAccounts();
+        await fetchEmailTemplates();
+        await fetchEmailSequences();
       } else if (activeTab === "conversations") {
         const res = await authenticatedFetch(`${API_URL}/conversations/business/${business.id}`);
         if (res.status === 401) {
@@ -685,6 +696,8 @@ export function useDashboardData() {
           return;
         }
         if (res.ok) setActivityLogs(await res.json());
+      } else if (activeTab === "integrations") {
+        await fetchEmailAccounts();
       } else if (activeTab === "automations") {
         const res = await authenticatedFetch(`${API_URL}/crm/business/${business.id}/workflow-rules`);
         if (res.status === 401) {
@@ -695,6 +708,9 @@ export function useDashboardData() {
         fetchOutreachSequences();
         await fetchWorkflows();
         await fetchWorkflowMetrics();
+        await fetchEmailAccounts();
+        await fetchEmailTemplates();
+        await fetchEmailSequences();
       } else if (activeTab === "settings") {
         await fetchWaitlist();
         await fetchReferrals();
@@ -1756,14 +1772,275 @@ export function useDashboardData() {
     };
   }, []);
 
+  const fetchEmailAccounts = async () => {
+    setEmailLoading(true);
+    try {
+      const res = await authenticatedFetch(`${API_URL}/integrations/email/accounts`);
+      if (res.ok) {
+        setEmailAccounts(await res.json());
+      }
+    } catch (err) {
+      console.error("Failed to fetch email accounts", err);
+    } finally {
+      setEmailLoading(false);
+    }
+  };
+
+  const handleConnectEmailAccount = async (provider: 'GMAIL' | 'OUTLOOK') => {
+    setEmailLoading(true);
+    try {
+      const redirectUri = `${window.location.origin}/dashboard`;
+      const res = await authenticatedFetch(
+        `${API_URL}/integrations/email/connect?provider=${provider}&redirectUri=${encodeURIComponent(redirectUri)}`
+      );
+      if (res.ok) {
+        const data = await res.json();
+        if (data.url) {
+          if (data.url.includes("mock_")) {
+            const urlObj = new URL(data.url);
+            const mockCode = urlObj.searchParams.get("code") || "";
+            const mockState = urlObj.searchParams.get("state") || "";
+            
+            const callbackRes = await authenticatedFetch(`${API_URL}/integrations/email/callback`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                provider,
+                code: mockCode,
+                redirectUri
+              })
+            });
+            if (callbackRes.ok) {
+              addNotification(
+                "Account Connected",
+                `Connected mock sandbox ${provider} email account.`,
+                "success"
+              );
+              await fetchEmailAccounts();
+            }
+          } else {
+            window.location.href = data.url;
+          }
+        }
+      }
+    } catch (err) {
+      console.error("OAuth connect error", err);
+    } finally {
+      setEmailLoading(false);
+    }
+  };
+
+  const handleDisconnectEmailAccount = async (id: string) => {
+    try {
+      const res = await authenticatedFetch(`${API_URL}/integrations/email/accounts/${id}`, {
+        method: "DELETE"
+      });
+      if (res.ok) {
+        addNotification("Account Disconnected", "Email mailbox integration disconnected successfully.", "info");
+        await fetchEmailAccounts();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const fetchEmailTemplates = async () => {
+    try {
+      const res = await authenticatedFetch(`${API_URL}/email-templates`);
+      if (res.ok) {
+        setEmailTemplates(await res.json());
+      }
+    } catch (err) {
+      console.error("Failed to fetch templates", err);
+    }
+  };
+
+  const handleSaveEmailTemplate = async (id: string | null, name: string, subject: string, body: string) => {
+    setEmailLoading(true);
+    try {
+      const url = id ? `${API_URL}/email-templates/${id}` : `${API_URL}/email-templates`;
+      const method = id ? "PUT" : "POST";
+      const res = await authenticatedFetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, subject, body })
+      });
+      if (res.ok) {
+        addNotification("Template Saved", `Successfully saved template: ${name}`, "success");
+        await fetchEmailTemplates();
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setEmailLoading(false);
+    }
+  };
+
+  const handleDeleteEmailTemplate = async (id: string) => {
+    try {
+      const res = await authenticatedFetch(`${API_URL}/email-templates/${id}`, { method: "DELETE" });
+      if (res.ok) {
+        addNotification("Template Deleted", "Email template removed.", "info");
+        await fetchEmailTemplates();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const fetchEmailSequences = async () => {
+    try {
+      const res = await authenticatedFetch(`${API_URL}/email-sequences`);
+      if (res.ok) {
+        setEmailSequences(await res.json());
+      }
+    } catch (err) {
+      console.error("Failed to fetch sequences", err);
+    }
+  };
+
+  const handleSaveEmailSequence = async (id: string | null, name: string, steps: any[]) => {
+    setEmailLoading(true);
+    try {
+      const url = id ? `${API_URL}/email-sequences/${id}` : `${API_URL}/email-sequences`;
+      const method = id ? "PUT" : "POST";
+      const res = await authenticatedFetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, steps })
+      });
+      if (res.ok) {
+        addNotification("Sequence Saved", `Successfully saved sequence: ${name}`, "success");
+        await fetchEmailSequences();
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setEmailLoading(false);
+    }
+  };
+
+  const handleDeleteEmailSequence = async (id: string) => {
+    try {
+      const res = await authenticatedFetch(`${API_URL}/email-sequences/${id}`, { method: "DELETE" });
+      if (res.ok) {
+        addNotification("Sequence Deleted", "Email sequence removed.", "info");
+        await fetchEmailSequences();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleEnrollLeadInSequence = async (sequenceId: string, leadIds: string[]) => {
+    try {
+      const res = await authenticatedFetch(`${API_URL}/email-sequences/${sequenceId}/enroll`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ leadIds })
+      });
+      if (res.ok) {
+        addNotification("Lead Enrolled", "Successfully enrolled lead in sequence.", "success");
+        await fetchEmailSequences();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleDisenrollLeadFromSequence = async (sequenceId: string, leadIds: string[]) => {
+    try {
+      const res = await authenticatedFetch(`${API_URL}/email-sequences/${sequenceId}/disenroll`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ leadIds })
+      });
+      if (res.ok) {
+        addNotification("Lead Disenrolled", "Lead sequence outreach paused.", "info");
+        await fetchEmailSequences();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const fetchEmailActivities = async (leadId: string) => {
+    try {
+      const res = await authenticatedFetch(`${API_URL}/integrations/email/activities/${leadId}`);
+      if (res.ok) {
+        setEmailActivities(await res.json());
+      }
+    } catch (err) {
+      console.error("Failed to fetch lead activities", err);
+    }
+  };
+
+  const handleSendManualEmail = async (accountId: string, to: string, subject: string, body: string, leadId?: string) => {
+    setEmailLoading(true);
+    try {
+      const res = await authenticatedFetch(`${API_URL}/integrations/email/send`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ accountId, to, subject, body, leadId }),
+      });
+      if (res.ok) {
+        addNotification("Email Sent", `Email sent to ${to} successfully.`, "success");
+        if (leadId) await fetchEmailActivities(leadId);
+        return true;
+      } else {
+        const err = await res.json();
+        alert(err.message || "Failed to send email");
+      }
+    } catch (err) {
+      console.error("Send email failed", err);
+      alert("Error sending email");
+    } finally {
+      setEmailLoading(false);
+    }
+    return false;
+  };
+
+  // Intercept real OAuth callback landings in dashboard
+  useEffect(() => {
+    if (typeof window !== "undefined" && business) {
+      const searchParams = new URLSearchParams(window.location.search);
+      const code = searchParams.get("code");
+      const stateStr = searchParams.get("state");
+      
+      if (code && stateStr) {
+        // Clear params to prevent double callback trigger
+        window.history.replaceState({}, document.title, window.location.pathname);
+        
+        try {
+          const stateObj = JSON.parse(decodeURIComponent(stateStr));
+          const provider = stateObj.provider;
+          const redirectUri = `${window.location.origin}/dashboard`;
+          
+          authenticatedFetch(`${API_URL}/integrations/email/callback`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ provider, code, redirectUri })
+          }).then(async (res) => {
+            if (res.ok) {
+              addNotification("Account Connected", `Successfully connected ${provider} email account!`, "success");
+              await fetchEmailAccounts();
+            } else {
+              const err = await res.json();
+              alert(err.message || "Failed to complete email callback");
+            }
+          });
+        } catch (e) {
+          console.error("Failed to parse callback state parameters", e);
+        }
+      }
+    }
+  }, [business]);
+
   return {
     API_URL,
     token,
-    setToken,
     user,
-    setUser,
     business,
-    setBusiness,
     businessLoading,
     activeTab,
     setActiveTab,
@@ -1858,7 +2135,6 @@ export function useDashboardData() {
     handleOnboard,
     handleAddFAQ,
     handleExportLeads,
-    handleExportLeadsExcel,
     handleDeleteFAQ,
     handleUpdateApptStatus,
     handleUpdateLeadStatus,
@@ -1873,6 +2149,7 @@ export function useDashboardData() {
     setGoogleSheetsSpreadsheetId,
     googleSheetsEnabled,
     setGoogleSheetsEnabled,
+    handleExportLeadsExcel,
     activityLogs,
     handleStripeCheckout,
     handleStripePortal,
@@ -1924,5 +2201,23 @@ export function useDashboardData() {
     fetchWorkflowMetrics,
     handleSaveWorkflow,
     handleToggleWorkflow,
+    emailAccounts,
+    emailTemplates,
+    emailSequences,
+    emailActivities,
+    emailLoading,
+    fetchEmailAccounts,
+    handleConnectEmailAccount,
+    handleDisconnectEmailAccount,
+    fetchEmailTemplates,
+    handleSaveEmailTemplate,
+    handleDeleteEmailTemplate,
+    fetchEmailSequences,
+    handleSaveEmailSequence,
+    handleDeleteEmailSequence,
+    handleEnrollLeadInSequence,
+    handleDisenrollLeadFromSequence,
+    fetchEmailActivities,
+    handleSendManualEmail,
   };
 }

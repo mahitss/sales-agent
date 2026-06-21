@@ -76,6 +76,10 @@ model Business {
   jobLogs            JobLog[]
   accountResearches  AccountResearch[]
   workflows          Workflow[]
+  emailAccounts      EmailAccount[]
+  emailActivities    EmailActivity[]
+  emailTemplates     EmailTemplate[]
+  emailSequences     EmailSequence[]
 
   @@index([organizationId])
 }
@@ -116,6 +120,8 @@ model Lead {
   revenuePrediction RevenuePrediction?
   googleSheetsSync  GoogleSheetsSyncLog?
   outreachSequences OutreachSequence[]
+  emailActivities   EmailActivity[]
+  sequenceEnrollments EmailSequenceEnrollment[]
 
   @@index([businessId])
   @@index([businessId, createdAt])
@@ -532,4 +538,105 @@ model WorkflowStepLog {
   createdAt   DateTime @default(now())
 
   @@index([executionId])
+}
+
+model EmailAccount {
+  id           String          @id @default(uuid())
+  businessId   String
+  business     Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  provider     String          // GMAIL, OUTLOOK
+  email        String
+  accessToken  String          @db.Text
+  refreshToken String?         @db.Text
+  expiresAt    DateTime
+  syncState    String?         // Cursor or token for delta-syncing messages
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  activities   EmailActivity[]
+
+  @@unique([businessId, email])
+  @@index([businessId])
+}
+
+model EmailActivity {
+  id             String             @id @default(uuid())
+  businessId     String
+  business       Business           @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  emailAccountId String
+  emailAccount   EmailAccount       @relation(fields: [emailAccountId], references: [id], onDelete: Cascade)
+  leadId         String?
+  lead           Lead?              @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  messageId      String             @unique // Google/Microsoft unique message ID
+  threadId       String
+  subject        String
+  body           String             @db.Text
+  fromAddress    String
+  toAddress      String
+  direction      String             // SENT, RECEIVED
+  status         String             @default("SENT") // SENT, RECEIVED, FAILED
+  opensCount     Int                @default(0)
+  repliedAt      DateTime?
+  sentAt         DateTime
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  opens          EmailOpenTracking[]
+
+  @@index([businessId])
+  @@index([leadId])
+  @@index([threadId])
+}
+
+model EmailOpenTracking {
+  id              String        @id @default(uuid())
+  emailActivityId String
+  emailActivity   EmailActivity @relation(fields: [emailActivityId], references: [id], onDelete: Cascade)
+  ipAddress       String?
+  userAgent       String?
+  openedAt        DateTime      @default(now())
+
+  @@index([emailActivityId])
+}
+
+model EmailTemplate {
+  id         String   @id @default(uuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  name       String
+  subject    String
+  body       String   @db.Text
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([businessId])
+}
+
+model EmailSequence {
+  id          String                    @id @default(uuid())
+  businessId  String
+  business    Business                  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  name        String
+  isEnabled   Boolean                   @default(true)
+  steps       Json                      // [{ delayDays: Int, templateId: String }]
+  createdAt   DateTime                  @default(now())
+  updatedAt   DateTime                  @updatedAt
+  enrollments EmailSequenceEnrollment[]
+
+  @@index([businessId])
+}
+
+model EmailSequenceEnrollment {
+  id          String        @id @default(uuid())
+  sequenceId  String
+  sequence    EmailSequence @relation(fields: [sequenceId], references: [id], onDelete: Cascade)
+  leadId      String
+  lead        Lead          @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  currentStep Int           @default(0)
+  status      String        @default("ACTIVE") // ACTIVE, PAUSED, COMPLETED, UNSUBSCRIBED
+  nextRunAt   DateTime
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([sequenceId])
+  @@index([leadId])
+  @@index([status])
 }

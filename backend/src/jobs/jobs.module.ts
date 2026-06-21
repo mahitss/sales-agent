@@ -11,6 +11,9 @@ import { ReportGenerationWorker } from './workers/report-generation.worker';
 import { WorkflowAutomationWorker } from './workers/workflow-automation.worker';
 import { AccountIntelligenceWorker } from './workers/account-intelligence.worker';
 import { WorkflowExecutionWorker } from './workers/workflow-execution.worker';
+import { EmailSyncWorker } from './workers/email-sync.worker';
+import { EmailSequenceWorker } from './workers/email-sequence.worker';
+import { EmailReminderWorker } from './workers/email-reminder.worker';
 import { BusinessModule } from '../business/business.module';
 import { LeadModule } from '../lead/lead.module';
 import { EmailModule } from '../common/email/email.module';
@@ -35,9 +38,12 @@ import { EmailModule } from '../common/email/email.module';
       { name: 'workflow-automation' },
       { name: 'account-intelligence' },
       { name: 'workflow-execution' },
+      { name: 'email-sync' },
+      { name: 'email-sequence' },
+      { name: 'email-reminder' },
     ),
     PrismaModule,
-    EmailModule,
+    forwardRef(() => EmailModule),
     forwardRef(() => BusinessModule),
     forwardRef(() => LeadModule),
   ],
@@ -51,6 +57,9 @@ import { EmailModule } from '../common/email/email.module';
     WorkflowAutomationWorker,
     AccountIntelligenceWorker,
     WorkflowExecutionWorker,
+    EmailSyncWorker,
+    EmailSequenceWorker,
+    EmailReminderWorker,
   ],
   exports: [JobsService, BullModule],
 })
