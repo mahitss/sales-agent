@@ -4,6 +4,7 @@ import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { ApiKeyService } from './api-key.service';
 import { ApiKeyController } from './api-key.controller';
+import { ActivityLogModule } from '../common/activity-logs/activity-log.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { ApiKeyController } from './api-key.controller';
       })(),
       signOptions: { expiresIn: '1d' },
     }),
+    ActivityLogModule,
   ],
   providers: [AuthService, ApiKeyService],
   controllers: [AuthController, ApiKeyController],

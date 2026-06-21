@@ -818,6 +818,9 @@ export default function DashboardPage() {
                   {activeTab === "activity" && (
                     <ErrorBoundary>
                       <ActivityTab
+                        businessId={business?.id || ""}
+                        token={token || ""}
+                        API_URL={API_URL}
                         activityLogs={activityLogs}
                       />
                     </ErrorBoundary>

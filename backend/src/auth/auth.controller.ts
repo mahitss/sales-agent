@@ -4,13 +4,17 @@ import { AuthService } from './auth.service';
 import { RegisterDto, LoginDto, VerifyEmailDto, RequestPasswordResetDto, ResetPasswordDto } from './dto/auth.dto';
 import { ThrottlerGuard } from '@nestjs/throttler';
 import { AuthGuard } from './auth.guard';
+import { ActivityLogService, extractAuditContext } from '../common/activity-logs/activity-log.service';
 import * as express from 'express';
 
 @ApiTags('auth')
 @UseGuards(ThrottlerGuard)
 @Controller('auth')
 export class AuthController {
-  constructor(private authService: AuthService) {}
+  constructor(
+    private authService: AuthService,
+    private auditLog: ActivityLogService,
+  ) {}
 
   private setRefreshTokenCookie(response: express.Response, token: string) {
     response.cookie('beacon_refresh_token', token, {
@@ -32,10 +36,24 @@ export class AuthController {
   }
 
   @Post('register')
-  async register(@Body() dto: RegisterDto, @Res({ passthrough: true }) response: express.Response) {
+  async register(@Body() dto: RegisterDto, @Res({ passthrough: true }) response: express.Response, @Req() req: express.Request) {
     const result = await this.authService.register(dto);
     this.setAccessTokenCookie(response, result.token);
     this.setRefreshTokenCookie(response, result.refreshToken);
+    // Audit: new account registration
+    const regUser = result.user as any;
+    this.auditLog.log({
+      userId: regUser?.id,
+      businessId: regUser?.businessId || null,
+      action: 'AUTH_REGISTER',
+      entity: 'User',
+      entityId: regUser?.id,
+      description: `New account registered: ${dto.email}`,
+      ipAddress: (req as any).headers?.['x-forwarded-for']?.split(',')[0]?.trim() || (req as any).ip,
+      userAgent: req.headers?.['user-agent'],
+      severity: 'INFO',
+      metadata: { email: dto.email, role: regUser?.role },
+    }).catch(() => {});
     return {
       user: result.user,
       token: result.token,
@@ -44,7 +62,7 @@ export class AuthController {
 
   @Post('login')
   @HttpCode(HttpStatus.OK)
-  async login(@Body() dto: LoginDto, @Res({ passthrough: true }) response: express.Response) {
+  async login(@Body() dto: LoginDto, @Res({ passthrough: true }) response: express.Response, @Req() req: express.Request) {
     const result = await this.authService.login(dto);
     if ('require2fa' in result && result.require2fa) {
       return {
@@ -61,6 +79,21 @@ export class AuthController {
 
     this.setAccessTokenCookie(response, successResult.token);
     this.setRefreshTokenCookie(response, successResult.refreshToken);
+
+    // Audit: successful login
+    this.auditLog.log({
+      userId: successResult.user?.id,
+      businessId: successResult.user?.businessId,
+      action: 'AUTH_LOGIN',
+      entity: 'User',
+      entityId: successResult.user?.id,
+      description: `User signed in: ${dto.email}`,
+      ipAddress: (req as any).headers?.['x-forwarded-for']?.split(',')[0]?.trim() || (req as any).ip,
+      userAgent: req.headers?.['user-agent'],
+      severity: 'INFO',
+      metadata: { email: dto.email, provider: 'password' },
+    }).catch(() => {});
+
     return {
       user: successResult.user,
       token: successResult.token,
@@ -117,6 +150,24 @@ export class AuthController {
       sameSite: 'lax',
       path: '/',
     });
+
+    // Audit: logout event (best-effort — user context may no longer be in request)
+    const logoutUser = (request as any).user;
+    if (logoutUser) {
+      this.auditLog.log({
+        userId: logoutUser.id || logoutUser.userId,
+        businessId: logoutUser.businessId,
+        action: 'AUTH_LOGOUT',
+        entity: 'User',
+        entityId: logoutUser.id || logoutUser.userId,
+        description: `User signed out: ${logoutUser.email || 'unknown'}`,
+        ipAddress: (request as any).headers?.['x-forwarded-for']?.split(',')[0]?.trim() || (request as any).ip,
+        userAgent: request.headers?.['user-agent'],
+        severity: 'INFO',
+        metadata: {},
+      }).catch(() => {});
+    }
+
     return { success: true, message: 'Logged out successfully' };
   }
 

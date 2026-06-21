@@ -1,4 +1,5 @@
 import { Module, NestModule, MiddlewareConsumer, RequestMethod } from '@nestjs/common';
+import { APP_INTERCEPTOR } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -24,6 +25,7 @@ import { FeatureFlagModule } from './common/feature-flags/feature-flag.module';
 import { validate } from './common/env.validation';
 import { StripeModule } from './common/stripe/stripe.module';
 import { ActivityLogModule } from './common/activity-logs/activity-log.module';
+import { AuditLogInterceptor } from './common/activity-logs/audit-log.interceptor';
 import { AICostModule } from './common/ai-cost/ai-cost.module';
 import { WebhookSubscriptionModule } from './common/webhooks/webhook-subscription.module';
 
@@ -56,7 +58,13 @@ import { WebhookSubscriptionModule } from './common/webhooks/webhook-subscriptio
     WebhookSubscriptionModule,
   ],
   controllers: [AppController, HealthController, MetricsController],
-  providers: [AppService],
+  providers: [
+    AppService,
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: AuditLogInterceptor,
+    },
+  ],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {

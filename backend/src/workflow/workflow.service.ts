@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, ForbiddenException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { JobsService } from '../jobs/jobs.service';
+import { ActivityLogService } from '../common/activity-logs/activity-log.service';
 
 @Injectable()
 export class WorkflowService {
@@ -9,6 +10,7 @@ export class WorkflowService {
   constructor(
     private prisma: PrismaService,
     private jobsService: JobsService,
+    private auditLog: ActivityLogService,
   ) {}
 
   async createWorkflow(
@@ -203,6 +205,17 @@ export class WorkflowService {
         });
 
         await this.jobsService.addWorkflowExecutionJob(execution.id, workflow.id, businessId);
+
+        // Audit: workflow triggered
+        this.auditLog.log({
+          businessId,
+          action: 'WORKFLOW_TRIGGERED',
+          entity: 'Workflow',
+          entityId: workflow.id,
+          description: `Workflow "${workflow.name}" triggered by ${triggerType} event`,
+          severity: 'INFO',
+          metadata: { triggerType, executionId: execution.id, workflowName: workflow.name },
+        }).catch(() => {});
       }
     } catch (err: any) {
       this.logger.error(`Failed to dispatch trigger ${triggerType}: ${err.message}`, err.stack);

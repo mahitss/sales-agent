@@ -5,6 +5,7 @@ import { CreateLeadDto, UpdateLeadDto } from './dto/lead.dto';
 import * as ExcelJS from 'exceljs';
 import { WebhookSubscriptionService } from '../common/webhooks/webhook-subscription.service';
 import { WorkflowService } from '../workflow/workflow.service';
+import { ActivityLogService } from '../common/activity-logs/activity-log.service';
 
 @Injectable()
 export class LeadService {
@@ -14,6 +15,7 @@ export class LeadService {
     private webhookService: WebhookSubscriptionService,
     @Inject(forwardRef(() => WorkflowService))
     private workflowService: WorkflowService,
+    private auditLog: ActivityLogService,
   ) {}
 
   async create(dto: CreateLeadDto) {
@@ -30,12 +32,23 @@ export class LeadService {
     });
 
     await this.redisService.del(`business:${dto.businessId}:lead-stats`).catch(() => {});
-    
+
     // Outbound webhook notification
     this.webhookService.publish(lead.businessId, 'lead.created', lead).catch(() => {});
 
     // Workflow Trigger
     this.workflowService.trigger('LEAD_CREATED', lead.businessId, lead).catch(() => {});
+
+    // Audit log
+    this.auditLog.log({
+      businessId: lead.businessId,
+      action: 'LEAD_CREATED',
+      entity: 'Lead',
+      entityId: lead.id,
+      description: `New lead captured via ${lead.source}: ${lead.name || lead.email || 'Anonymous'}`,
+      severity: 'INFO',
+      metadata: { source: lead.source, status: lead.status, email: lead.email },
+    }).catch(() => {});
 
     return lead;
   }
@@ -67,6 +80,22 @@ export class LeadService {
       }
     }
     this.workflowService.trigger('LEAD_UPDATED', updated.businessId, updated).catch(() => {});
+
+    // Audit log: pipeline/status change gets WARN severity for visibility
+    const statusChanged = updated.status !== existing.status;
+    this.auditLog.log({
+      businessId: updated.businessId,
+      action: statusChanged ? 'PIPELINE_CHANGED' : 'LEAD_UPDATED',
+      entity: 'Lead',
+      entityId: updated.id,
+      description: statusChanged
+        ? `Lead [${updated.id.substring(0, 8)}] pipeline stage changed: ${existing.status} → ${updated.status}`
+        : `Lead [${updated.id.substring(0, 8)}] details updated`,
+      severity: statusChanged && updated.status === 'HOT' ? 'WARN' : 'INFO',
+      metadata: statusChanged
+        ? { from: existing.status, to: updated.status, leadName: updated.name, leadEmail: updated.email }
+        : { fields: Object.keys(dto) },
+    }).catch(() => {});
 
     return updated;
   }

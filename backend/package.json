@@ -39,6 +39,7 @@
     "class-validator": "^0.15.1",
     "compression": "^1.8.1",
     "cookie-parser": "^1.4.7",
+    "csv-writer": "^1.6.0",
     "exceljs": "^4.4.0",
     "googleapis": "^173.0.0",
     "helmet": "^8.2.0",

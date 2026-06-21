@@ -80,6 +80,7 @@ model Business {
   emailActivities    EmailActivity[]
   emailTemplates     EmailTemplate[]
   emailSequences     EmailSequence[]
+  auditLogs          ActivityLog[]
 
   @@index([organizationId])
 }
@@ -322,17 +323,32 @@ model UserInvitation {
 }
 
 model ActivityLog {
-  id          String   @id @default(uuid())
+  id          String    @id @default(uuid())
   userId      String?
-  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
-  action      String   // e.g. "AUTH_LOGIN", "LEAD_QUALIFY", "SHEET_SYNC", "BILLING_UPDATE"
+  user        User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  businessId  String?   // Tenant scoping for enterprise query isolation
+  business    Business? @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  action      String    // AUTH_LOGIN, LEAD_CREATED, LEAD_UPDATED, LEAD_DELETED,
+                        // WORKFLOW_TRIGGERED, WORKFLOW_COMPLETED, WORKFLOW_FAILED,
+                        // BILLING_CHANGED, ROLE_CHANGED, AI_RESEARCH_STARTED,
+                        // EMAIL_SENT, PIPELINE_CHANGED, AUTH_LOGOUT, AUTH_REGISTER
+  entity      String?   // "Lead", "Workflow", "User", "Billing", "EmailSequence"
+  entityId    String?   // UUID of the affected record
   description String
   ipAddress   String?
-  metadata    Json     @default("{}")
-  createdAt   DateTime @default(now())
-  
+  userAgent   String?   // Browser / client identification string
+  severity    String    @default("INFO") // INFO, WARN, CRITICAL
+  metadata    Json      @default("{}")
+  createdAt   DateTime  @default(now())
+
   @@index([userId])
+  @@index([businessId])
   @@index([action])
+  @@index([entity])
+  @@index([severity])
+  @@index([createdAt])
+  @@index([businessId, createdAt])
+  @@index([businessId, action])
 }
 
 model Subscription {
