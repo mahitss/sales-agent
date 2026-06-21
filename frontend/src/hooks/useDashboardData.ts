@@ -126,7 +126,8 @@ export type TabType =
   | "billing"
   | "activity"
   | "automations"
-  | "settings";
+  | "settings"
+  | "queues";
 
 export function useDashboardData() {
   const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
@@ -277,6 +278,85 @@ export function useDashboardData() {
   const [webhooks, setWebhooks] = useState<any[]>([]);
   const [webhooksLoading, setWebhooksLoading] = useState(false);
 
+  // Queues Monitoring States
+  const [queueMetrics, setQueueMetrics] = useState<any>(null);
+  const [queueFailures, setQueueFailures] = useState<any[]>([]);
+  const [queuesLoading, setQueuesLoading] = useState(false);
+
+  const fetchQueueMetrics = async () => {
+    try {
+      const res = await authenticatedFetch(`${API_URL}/jobs/metrics`);
+      if (res.ok) {
+        const data = await res.json();
+        setQueueMetrics(data.metrics);
+      }
+    } catch (err) {
+      console.error("Failed to fetch queue metrics", err);
+    }
+  };
+
+  const fetchQueueFailures = async () => {
+    setQueuesLoading(true);
+    try {
+      const res = await authenticatedFetch(`${API_URL}/jobs/failures`);
+      if (res.ok) {
+        const data = await res.json();
+        setQueueFailures(data.failures || []);
+      }
+    } catch (err) {
+      console.error("Failed to fetch queue failures", err);
+    } finally {
+      setQueuesLoading(false);
+    }
+  };
+
+  const handleRetryJob = async (queueName: string, jobId: string) => {
+    try {
+      const res = await authenticatedFetch(`${API_URL}/jobs/retry/${queueName}/${jobId}`, {
+        method: "POST",
+      });
+      if (res.ok) {
+        addNotification(
+          "Job Promoted",
+          `Job ${jobId.substring(0, 8)} in queue ${queueName} promoted for retry.`,
+          "success"
+        );
+        await fetchQueueMetrics();
+        await fetchQueueFailures();
+      } else {
+        const err = await res.json();
+        alert(err.message || "Failed to retry job");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Error retrying job");
+    }
+  };
+
+  const handleRetryAllJobs = async (queueName: string) => {
+    try {
+      const res = await authenticatedFetch(`${API_URL}/jobs/retry-all/${queueName}`, {
+        method: "POST",
+      });
+      if (res.ok) {
+        const data = await res.json();
+        addNotification(
+          "Queue Retried",
+          data.message,
+          "success"
+        );
+        await fetchQueueMetrics();
+        await fetchQueueFailures();
+      } else {
+        const err = await res.json();
+        alert(err.message || "Failed to retry all jobs");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Error retrying all jobs");
+    }
+  };
+
   const uploadIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const authenticatedFetch = (url: string, options: RequestInit = {}) => {
@@ -421,6 +501,9 @@ export function useDashboardData() {
         await fetchSessions();
         await fetchApiKeys();
         await fetchWebhooks();
+      } else if (activeTab === "queues") {
+        await fetchQueueMetrics();
+        await fetchQueueFailures();
       }
     } catch (err) {
       console.error("Data refresh failed", err);
@@ -1618,5 +1701,12 @@ export function useDashboardData() {
     handleRevokeApiKey,
     handleCreateWebhook,
     handleDeleteWebhook,
+    queueMetrics,
+    queueFailures,
+    queuesLoading,
+    fetchQueueMetrics,
+    fetchQueueFailures,
+    handleRetryJob,
+    handleRetryAllJobs,
   };
 }

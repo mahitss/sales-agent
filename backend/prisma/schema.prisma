@@ -73,6 +73,7 @@ model Business {
   workflowRules      WorkflowRule[]
   apiKeys            ApiKey[]
   webhookSubscriptions WebhookSubscription[]
+  jobLogs            JobLog[]
 
   @@index([organizationId])
 }
@@ -437,6 +438,24 @@ model WebhookSubscription {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
+  @@index([businessId])
+}
+
+model JobLog {
+  id          String   @id @default(uuid())
+  queueName   String
+  jobId       String
+  jobName     String
+  status      String   // COMPLETED, FAILED
+  data        Json     @default("{}")
+  error       String?
+  duration    Int      // duration in milliseconds
+  createdAt   DateTime @default(now())
+  businessId  String?
+  business    Business? @relation(fields: [businessId], references: [id], onDelete: SetNull)
+
+  @@index([queueName])
+  @@index([status])
   @@index([businessId])
 }
 

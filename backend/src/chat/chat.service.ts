@@ -5,7 +5,7 @@ import { SendMessageDto } from './dto/chat.dto';
 import { aiRequestDuration } from '../metrics/metrics.controller';
 import axios from 'axios';
 import * as crypto from 'crypto';
-import { LeadQueueService } from '../lead/lead-queue.service';
+import { JobsService } from '../jobs/jobs.service';
 
 @Injectable()
 export class ChatService {
@@ -20,7 +20,7 @@ export class ChatService {
   constructor(
     private prisma: PrismaService,
     private redisService: RedisService,
-    private leadQueueService: LeadQueueService,
+    private jobsService: JobsService,
   ) {}
 
   async sendMessage(dto: SendMessageDto) {
@@ -525,7 +525,7 @@ export class ChatService {
     });
 
     // Enqueue the lead for background analysis
-    this.leadQueueService.enqueue(lead.id);
+    await this.jobsService.addLeadEnrichmentJob(lead.id, businessId).catch(() => {});
   }
 
   private checkCircuitBreaker(): boolean {

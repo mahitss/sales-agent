@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException, ConflictException, BadRequestException, Inject, forwardRef } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../common/redis/redis.service';
-import { QueueService } from '../common/queues/queue.service';
+import { JobsService } from '../jobs/jobs.service';
 import { CreateBusinessDto, CreateFAQDto } from './dto/business.dto';
 import axios from 'axios';
 import * as bcrypt from 'bcrypt';
@@ -13,8 +13,8 @@ export class BusinessService {
   constructor(
     private prisma: PrismaService,
     private redisService: RedisService,
-    @Inject(forwardRef(() => QueueService))
-    private queueService: QueueService,
+    @Inject(forwardRef(() => JobsService))
+    private jobsService: JobsService,
   ) {}
 
   async create(ownerId: string, dto: CreateBusinessDto) {
@@ -546,12 +546,13 @@ export class BusinessService {
     });
 
     // Queue invite email delivery
-    await this.queueService.addJob('emails', {
-      email: employee.email,
-      name: employee.name,
-      businessName: business.companyName,
-      inviteUrl: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/dashboard`,
-    }).catch(() => {});
+    await this.jobsService.addEmailSendingJob(
+      employee.email,
+      employee.name,
+      business.companyName,
+      `${process.env.FRONTEND_URL || 'http://localhost:3000'}/dashboard`,
+      businessId,
+    ).catch(() => {});
 
     return {
       id: employee.id,

@@ -17,7 +17,7 @@ import { MetricsController } from './metrics/metrics.controller';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { RedisModule } from './common/redis/redis.module';
 import { EmailModule } from './common/email/email.module';
-import { QueueModule } from './common/queues/queue.module';
+import { JobsModule } from './jobs/jobs.module';
 import { FeatureFlagModule } from './common/feature-flags/feature-flag.module';
 import { validate } from './common/env.validation';
 import { StripeModule } from './common/stripe/stripe.module';
@@ -37,7 +37,7 @@ import { WebhookSubscriptionModule } from './common/webhooks/webhook-subscriptio
     }]),
     RedisModule,
     EmailModule,
-    QueueModule,
+    JobsModule,
     FeatureFlagModule,
     PrismaModule,
     AuthModule,

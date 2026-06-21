@@ -46,6 +46,7 @@ const BillingTab = dynamic(() => import("./components/BillingTab").then(m => m.B
 const ActivityTab = dynamic(() => import("./components/ActivityTab").then(m => m.ActivityTab), { ssr: false });
 const AutomationsTab = dynamic(() => import("./components/AutomationsTab").then(m => m.AutomationsTab), { ssr: false });
 const SettingsTab = dynamic(() => import("./components/SettingsTab").then(m => m.SettingsTab), { ssr: false });
+const QueuesTab = dynamic(() => import("./components/QueuesTab").then(m => m.QueuesTab), { ssr: false });
 const CommandPalette = dynamic(() => import("@/components/CommandPalette").then(m => m.CommandPalette), { ssr: false });
 
 import { FeedbackModal } from "@/components/FeedbackModal";
@@ -218,6 +219,11 @@ export default function DashboardPage() {
     handleRevokeApiKey,
     handleCreateWebhook,
     handleDeleteWebhook,
+    queueMetrics,
+    queueFailures,
+    queuesLoading,
+    handleRetryJob,
+    handleRetryAllJobs,
   } = useDashboardData();
 
   // 1. RENDER: Auth Gate
@@ -507,6 +513,17 @@ export default function DashboardPage() {
                   <Settings className="h-4.5 w-4.5" />
                   Workspace Settings
                 </button>
+                <button
+                  onClick={() => setActiveTab("queues")}
+                  className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-xl transition-all cursor-pointer ${
+                    activeTab === "queues"
+                      ? "bg-accent-primary/10 text-accent-primary border border-accent-primary/20 font-semibold"
+                      : "text-muted-text hover:bg-card/40 hover:text-foreground"
+                  }`}
+                >
+                  <Zap className="h-4.5 w-4.5" />
+                  Queue Monitor
+                </button>
               </>
             )}
           </nav>
@@ -555,6 +572,7 @@ export default function DashboardPage() {
                activeTab === "integrations" ? "Multi-Channel Settings" :
                activeTab === "team" ? "Team Seats Management" :
                activeTab === "settings" ? "Workspace Growth Settings" :
+               activeTab === "queues" ? "Background Queue Monitor" :
                activeTab}
             </h2>
             {dataLoading && <RefreshCw className="h-4 w-4 animate-spin text-accent-primary" />}
@@ -769,6 +787,19 @@ export default function DashboardPage() {
                         handleRevokeApiKey={handleRevokeApiKey}
                         handleCreateWebhook={handleCreateWebhook}
                         handleDeleteWebhook={handleDeleteWebhook}
+                      />
+                    </ErrorBoundary>
+                  )}
+
+                  {activeTab === "queues" && (
+                    <ErrorBoundary>
+                      <QueuesTab
+                        queueMetrics={queueMetrics}
+                        queueFailures={queueFailures}
+                        queuesLoading={queuesLoading}
+                        handleRetryJob={handleRetryJob}
+                        handleRetryAllJobs={handleRetryAllJobs}
+                        refreshData={refreshData}
                       />
                     </ErrorBoundary>
                   )}
