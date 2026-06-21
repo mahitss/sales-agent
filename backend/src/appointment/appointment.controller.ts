@@ -1,6 +1,17 @@
-import { Controller, Post, Get, Put, Body, Param, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Get,
+  Put,
+  Body,
+  Param,
+  UseGuards,
+} from '@nestjs/common';
 import { AppointmentService } from './appointment.service';
-import { CreateAppointmentDto, UpdateAppointmentStatusDto } from './dto/appointment.dto';
+import {
+  CreateAppointmentDto,
+  UpdateAppointmentStatusDto,
+} from './dto/appointment.dto';
 import { AuthGuard } from '../auth/auth.guard';
 import { TenantGuard } from '../auth/tenant.guard';
 
@@ -21,7 +32,10 @@ export class AppointmentController {
 
   @UseGuards(AuthGuard, TenantGuard)
   @Put(':id/status')
-  async updateStatus(@Param('id') id: string, @Body() dto: UpdateAppointmentStatusDto) {
+  async updateStatus(
+    @Param('id') id: string,
+    @Body() dto: UpdateAppointmentStatusDto,
+  ) {
     return this.appointmentService.updateStatus(id, dto.status);
   }
 }

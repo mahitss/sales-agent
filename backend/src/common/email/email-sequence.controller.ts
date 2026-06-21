@@ -1,4 +1,16 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, UseGuards, Req, NotFoundException, ForbiddenException } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Put,
+  Delete,
+  Body,
+  Param,
+  UseGuards,
+  Req,
+  NotFoundException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { AuthGuard } from '../../auth/auth.guard';
 import { TenantGuard } from '../../auth/tenant.guard';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -19,10 +31,10 @@ export class EmailSequenceController {
       where: { businessId },
       include: {
         enrollments: {
-          select: { id: true, status: true }
-        }
+          select: { id: true, status: true },
+        },
       },
-      orderBy: { createdAt: 'desc' }
+      orderBy: { createdAt: 'desc' },
     });
   }
 
@@ -36,8 +48,8 @@ export class EmailSequenceController {
       data: {
         businessId,
         name: body.name,
-        steps: body.steps || []
-      }
+        steps: body.steps || [],
+      },
     });
   }
 
@@ -50,7 +62,7 @@ export class EmailSequenceController {
     const businessId = req.user.businessId;
 
     const sequence = await this.prisma.emailSequence.findUnique({
-      where: { id }
+      where: { id },
     });
 
     if (!sequence) {
@@ -66,8 +78,8 @@ export class EmailSequenceController {
       data: {
         name: body.name,
         steps: body.steps,
-        isEnabled: body.isEnabled
-      }
+        isEnabled: body.isEnabled,
+      },
     });
   }
 
@@ -76,7 +88,7 @@ export class EmailSequenceController {
     const businessId = req.user.businessId;
 
     const sequence = await this.prisma.emailSequence.findUnique({
-      where: { id }
+      where: { id },
     });
 
     if (!sequence) {
@@ -88,7 +100,7 @@ export class EmailSequenceController {
     }
 
     await this.prisma.emailSequence.delete({
-      where: { id }
+      where: { id },
     });
 
     return { success: true, message: 'Sequence deleted successfully' };
@@ -103,7 +115,7 @@ export class EmailSequenceController {
     const businessId = req.user.businessId;
 
     const sequence = await this.prisma.emailSequence.findUnique({
-      where: { id }
+      where: { id },
     });
 
     if (!sequence) {
@@ -119,14 +131,14 @@ export class EmailSequenceController {
     for (const leadId of body.leadIds) {
       // Validate lead ownership
       const lead = await this.prisma.lead.findFirst({
-        where: { id: leadId, businessId }
+        where: { id: leadId, businessId },
       });
 
       if (!lead) continue;
 
       // Check if lead is already enrolled with active status
       const existing = await this.prisma.emailSequenceEnrollment.findFirst({
-        where: { sequenceId: id, leadId, status: 'ACTIVE' }
+        where: { sequenceId: id, leadId, status: 'ACTIVE' },
       });
 
       if (existing) {
@@ -141,12 +153,16 @@ export class EmailSequenceController {
           leadId,
           currentStep: 0,
           status: 'ACTIVE',
-          nextRunAt: new Date()
-        }
+          nextRunAt: new Date(),
+        },
       });
 
       // Dispatch step execution job with BullMQ immediately (delay: 0)
-      await this.jobsService.addEmailSequenceExecutionJob(enrollment.id, businessId, 0);
+      await this.jobsService.addEmailSequenceExecutionJob(
+        enrollment.id,
+        businessId,
+        0,
+      );
       enrollments.push(enrollment);
     }
 
@@ -162,7 +178,7 @@ export class EmailSequenceController {
     const businessId = req.user.businessId;
 
     const sequence = await this.prisma.emailSequence.findUnique({
-      where: { id }
+      where: { id },
     });
 
     if (!sequence) {
@@ -176,12 +192,12 @@ export class EmailSequenceController {
     const result = await this.prisma.emailSequenceEnrollment.updateMany({
       where: {
         sequenceId: id,
-        leadId: { in: body.leadIds }
+        leadId: { in: body.leadIds },
       },
       data: {
         status: 'PAUSED',
-        updatedAt: new Date()
-      }
+        updatedAt: new Date(),
+      },
     });
 
     return { success: true, count: result.count };

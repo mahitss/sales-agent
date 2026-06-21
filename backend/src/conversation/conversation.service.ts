@@ -95,7 +95,15 @@ export class ConversationService {
       orderBy: { createdAt: 'desc' },
     });
 
-    const headers = ['ID', 'Lead ID', 'Lead Name', 'Channel', 'Is Human Takeover', 'Created At', 'Messages'];
+    const headers = [
+      'ID',
+      'Lead ID',
+      'Lead Name',
+      'Channel',
+      'Is Human Takeover',
+      'Created At',
+      'Messages',
+    ];
     const rows = list.map((c) => [
       c.id,
       c.leadId || '',
@@ -108,7 +116,9 @@ export class ConversationService {
 
     const csvContent = [
       headers.join(','),
-      ...rows.map((row) => row.map((val) => `"${val.replace(/"/g, '""')}"`).join(',')),
+      ...rows.map((row) =>
+        row.map((val) => `"${val.replace(/"/g, '""')}"`).join(','),
+      ),
     ].join('\n');
 
     return csvContent;

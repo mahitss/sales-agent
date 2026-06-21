@@ -1,4 +1,15 @@
-import { Controller, Get, Post, Param, UseGuards, Req, Query, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Param,
+  UseGuards,
+  Req,
+  Query,
+  NotFoundException,
+  BadRequestException,
+  Logger,
+} from '@nestjs/common';
 import { AuthGuard } from '../auth/auth.guard';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
@@ -27,8 +38,14 @@ export class JobsController {
     const metrics: Record<string, any> = {};
 
     for (const [name, queue] of Object.entries(queues)) {
-      const counts = await queue.getJobCounts('waiting', 'active', 'completed', 'failed', 'delayed');
-      
+      const counts = await queue.getJobCounts(
+        'waiting',
+        'active',
+        'completed',
+        'failed',
+        'delayed',
+      );
+
       // Filter database logs specific to this business to count successful/failed runs
       const dbSuccessCount = await this.prisma.jobLog.count({
         where: { queueName: name, status: 'COMPLETED', businessId },
@@ -117,10 +134,7 @@ export class JobsController {
    * Retry all failed jobs in a queue
    */
   @Post('retry-all/:queueName')
-  async retryAllFailed(
-    @Param('queueName') queueName: string,
-    @Req() req,
-  ) {
+  async retryAllFailed(@Param('queueName') queueName: string, @Req() req) {
     const businessId = req.user.businessId;
     const queues = this.jobsService.getQueues();
     const queue = queues[queueName];

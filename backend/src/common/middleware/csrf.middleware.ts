@@ -1,4 +1,9 @@
-import { Injectable, NestMiddleware, HttpException, HttpStatus } from '@nestjs/common';
+import {
+  Injectable,
+  NestMiddleware,
+  HttpException,
+  HttpStatus,
+} from '@nestjs/common';
 import { Request, Response, NextFunction } from 'express';
 import * as crypto from 'crypto';
 
@@ -39,10 +44,14 @@ export class CsrfMiddleware implements NestMiddleware {
     }
 
     // Double-submit validation
-    const headerToken = req.headers['x-xsrf-token'] || req.headers['x-csrf-token'];
+    const headerToken =
+      req.headers['x-xsrf-token'] || req.headers['x-csrf-token'];
 
     if (!xsrfToken || !headerToken || xsrfToken !== headerToken) {
-      throw new HttpException('Invalid or missing CSRF token', HttpStatus.FORBIDDEN);
+      throw new HttpException(
+        'Invalid or missing CSRF token',
+        HttpStatus.FORBIDDEN,
+      );
     }
 
     next();

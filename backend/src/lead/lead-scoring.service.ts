@@ -74,12 +74,19 @@ export class LeadScoringService {
 
       // 4. Extract conversation messages log
       const conversation = lead.conversations[0];
-      const messages = conversation ? (conversation.messages as any[]) || [] : [];
+      const messages = conversation
+        ? (conversation.messages as any[]) || []
+        : [];
 
       // 5. Compute email activity metrics
       const emailExchangeCount = lead.emailActivities.length;
-      const openedEmails = lead.emailActivities.filter((e) => e.opensCount > 0).length;
-      const emailOpenRate = emailExchangeCount > 0 ? Math.round((openedEmails / emailExchangeCount) * 100) : 0;
+      const openedEmails = lead.emailActivities.filter(
+        (e) => e.opensCount > 0,
+      ).length;
+      const emailOpenRate =
+        emailExchangeCount > 0
+          ? Math.round((openedEmails / emailExchangeCount) * 100)
+          : 0;
       const lastEmailBody = lead.emailActivities[0]?.body || '';
 
       // 6. Build Payload for AI Service
@@ -125,16 +132,26 @@ export class LeadScoringService {
 
       // 7. Post payload to FastAPI AI Service
       let aiServiceUrl = process.env.AI_SERVICE_URL || 'http://localhost:8000';
-      if (aiServiceUrl && !aiServiceUrl.startsWith('http://') && !aiServiceUrl.startsWith('https://')) {
+      if (
+        aiServiceUrl &&
+        !aiServiceUrl.startsWith('http://') &&
+        !aiServiceUrl.startsWith('https://')
+      ) {
         aiServiceUrl = `http://${aiServiceUrl}`;
       }
 
       let scoringResult: any;
       try {
-        const res = await axios.post(`${aiServiceUrl}/score-lead`, leadPayload, { timeout: 15000 });
+        const res = await axios.post(
+          `${aiServiceUrl}/score-lead`,
+          leadPayload,
+          { timeout: 15000 },
+        );
         scoringResult = res.data;
       } catch (err: any) {
-        this.logger.error(`FastAPI /score-lead failed, using local mock scoring logic: ${err.message}`);
+        this.logger.error(
+          `FastAPI /score-lead failed, using local mock scoring logic: ${err.message}`,
+        );
         scoringResult = this.generateLocalMockScoring(leadPayload);
       }
 
@@ -142,20 +159,26 @@ export class LeadScoringService {
       const promptStr = JSON.stringify(leadPayload);
       const completionStr = JSON.stringify(scoringResult);
       const promptTokens = Math.max(10, Math.round(promptStr.length / 4));
-      const completionTokens = Math.max(10, Math.round(completionStr.length / 4));
+      const completionTokens = Math.max(
+        10,
+        Math.round(completionStr.length / 4),
+      );
 
-      await this.aiCostService.logUsage(
-        lead.businessId,
-        'gemini-2.5-flash',
-        promptTokens,
-        completionTokens,
-        'lead_scoring'
-      ).catch((e) => this.logger.warn(`AICost log failed: ${e.message}`));
+      await this.aiCostService
+        .logUsage(
+          lead.businessId,
+          'gemini-2.5-flash',
+          promptTokens,
+          completionTokens,
+          'lead_scoring',
+        )
+        .catch((e) => this.logger.warn(`AICost log failed: ${e.message}`));
 
       // 8. Save results in DB atomically
       const priority = scoringResult.priority_level || 'MEDIUM';
       const overallScore = scoringResult.score || 0;
-      const classification = overallScore >= 75 ? 'HOT' : overallScore >= 45 ? 'WARM' : 'COLD';
+      const classification =
+        overallScore >= 75 ? 'HOT' : overallScore >= 45 ? 'WARM' : 'COLD';
 
       const upsertedScore = await this.prisma.leadScore.upsert({
         where: { leadId },
@@ -164,8 +187,12 @@ export class LeadScoringService {
           score: overallScore,
           classification,
           dealProbability: overallScore / 100,
-          urgency: scoringResult.buying_intent?.details?.includes('urg') ? 'High' : 'Medium',
-          decisionMakerStatus: leadPayload.enrichment_info.companyName ? 'Decision Maker' : 'Undetermined',
+          urgency: scoringResult.buying_intent?.details?.includes('urg')
+            ? 'High'
+            : 'Medium',
+          decisionMakerStatus: leadPayload.enrichment_info.companyName
+            ? 'Decision Maker'
+            : 'Undetermined',
           businessSize: leadPayload.enrichment_info.companySize || 'SMB',
           serviceMatch: 'High Match',
           engagement: overallScore,
@@ -223,13 +250,19 @@ export class LeadScoringService {
       });
 
       // Invalidate dashboard stats cache
-      await this.redisService.del(`business:${lead.businessId}:lead-stats`).catch(() => {});
-      await this.redisService.del(`business:${lead.businessId}:score-stats`).catch(() => {});
+      await this.redisService
+        .del(`business:${lead.businessId}:lead-stats`)
+        .catch(() => {});
+      await this.redisService
+        .del(`business:${lead.businessId}:score-stats`)
+        .catch(() => {});
 
       return upsertedScore;
-
     } catch (err: any) {
-      this.logger.error(`Failed to score lead ${leadId}: ${err.message}`, err.stack);
+      this.logger.error(
+        `Failed to score lead ${leadId}: ${err.message}`,
+        err.stack,
+      );
       throw err;
     }
   }
@@ -265,7 +298,12 @@ export class LeadScoringService {
     });
 
     const totalScored = scores.length;
-    const avgScore = totalScored > 0 ? Math.round(scores.reduce((acc, curr) => acc + curr.score, 0) / totalScored) : 0;
+    const avgScore =
+      totalScored > 0
+        ? Math.round(
+            scores.reduce((acc, curr) => acc + curr.score, 0) / totalScored,
+          )
+        : 0;
 
     const priorityHigh = scores.filter((s) => s.priority === 'HIGH').length;
     const priorityMed = scores.filter((s) => s.priority === 'MEDIUM').length;
@@ -330,8 +368,16 @@ export class LeadScoringService {
     const result = {
       totalScored,
       averageScore: avgScore,
-      priorityDistribution: { HIGH: priorityHigh, MEDIUM: priorityMed, LOW: priorityLow },
-      classificationDistribution: { HOT: classHot, WARM: classWarm, COLD: classCold },
+      priorityDistribution: {
+        HIGH: priorityHigh,
+        MEDIUM: priorityMed,
+        LOW: priorityLow,
+      },
+      classificationDistribution: {
+        HOT: classHot,
+        WARM: classWarm,
+        COLD: classCold,
+      },
       averagesBreakdown: {
         buyingIntent: avgBuyingIntent,
         companyGrowth: avgCompanyGrowth,
@@ -353,7 +399,9 @@ export class LeadScoringService {
     };
 
     // Cache results for 5 minutes
-    await this.redisService.set(cacheKey, JSON.stringify(result), 300).catch(() => {});
+    await this.redisService
+      .set(cacheKey, JSON.stringify(result), 300)
+      .catch(() => {});
 
     return result;
   }
@@ -364,7 +412,7 @@ export class LeadScoringService {
   private generateLocalMockScoring(payload: any): any {
     const budget = payload.lead_info.budget || '';
     const budgetValue = parseFloat(budget.replace(/[^0-9]/g, '')) || 0;
-    
+
     let baseScore = 40;
     if (payload.lead_info.status === 'HOT') baseScore = 80;
     else if (payload.lead_info.status === 'WARM') baseScore = 60;
@@ -374,13 +422,15 @@ export class LeadScoringService {
     if (payload.website_metrics.pageViews > 4) baseScore += 5;
 
     const overallScore = Math.min(100, baseScore);
-    const priority = overallScore >= 75 ? 'HIGH' : overallScore >= 45 ? 'MEDIUM' : 'LOW';
+    const priority =
+      overallScore >= 75 ? 'HIGH' : overallScore >= 45 ? 'MEDIUM' : 'LOW';
 
     return {
       score: overallScore,
       priority_level: priority,
       reasoning: `Fallback evaluation: Prospect demonstrates standard engagement with ${payload.email_metrics.totalExchange} emails and ${payload.website_metrics.pageViews} website views. Budget is estimated at ${budget}.`,
-      recommended_next_action: 'Coordinate standard outreach scheduling and proposal delivery.',
+      recommended_next_action:
+        'Coordinate standard outreach scheduling and proposal delivery.',
       buying_intent: {
         score: budgetValue > 0 ? 80 : 50,
         details: `Budget stated: ${budget}.`,

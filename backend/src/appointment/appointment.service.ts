@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException, Inject, forwardRef } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  Inject,
+  forwardRef,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../common/redis/redis.service';
 import { CreateAppointmentDto } from './dto/appointment.dto';
@@ -23,16 +28,22 @@ export class AppointmentService {
         status: 'PENDING',
       },
     });
-    await this.redisService.del(`business:${dto.businessId}:lead-stats`).catch(() => {});
-    
+    await this.redisService
+      .del(`business:${dto.businessId}:lead-stats`)
+      .catch(() => {});
+
     // Workflow Trigger
-    this.workflowService.trigger('MEETING_SCHEDULED', appt.businessId, appt).catch(() => {});
+    this.workflowService
+      .trigger('MEETING_SCHEDULED', appt.businessId, appt)
+      .catch(() => {});
 
     return appt;
   }
 
   async updateStatus(id: string, status: string) {
-    const existing = await this.prisma.appointment.findUnique({ where: { id } });
+    const existing = await this.prisma.appointment.findUnique({
+      where: { id },
+    });
     if (!existing) {
       throw new NotFoundException('Appointment not found');
     }
@@ -40,7 +51,9 @@ export class AppointmentService {
       where: { id },
       data: { status },
     });
-    await this.redisService.del(`business:${existing.businessId}:lead-stats`).catch(() => {});
+    await this.redisService
+      .del(`business:${existing.businessId}:lead-stats`)
+      .catch(() => {});
     return updated;
   }
 

@@ -22,7 +22,9 @@ export class EmailSequenceWorker extends WorkerHost {
     const { enrollmentId, businessId } = job.data;
     const startTime = Date.now();
 
-    this.logger.log(`Running sequence execution step for enrollment: ${enrollmentId}`);
+    this.logger.log(
+      `Running sequence execution step for enrollment: ${enrollmentId}`,
+    );
 
     try {
       // 1. Fetch enrollment context
@@ -30,17 +32,21 @@ export class EmailSequenceWorker extends WorkerHost {
         where: { id: enrollmentId },
         include: {
           sequence: true,
-          lead: true
-        }
+          lead: true,
+        },
       });
 
       if (!enrollment || enrollment.status !== 'ACTIVE') {
-        this.logger.warn(`Enrollment ${enrollmentId} not found or inactive. Skipping step.`);
+        this.logger.warn(
+          `Enrollment ${enrollmentId} not found or inactive. Skipping step.`,
+        );
         return { status: 'SKIPPED' };
       }
 
       if (!enrollment.sequence.isEnabled) {
-        this.logger.warn(`Sequence ${enrollment.sequence.name} is disabled. Skipping step.`);
+        this.logger.warn(
+          `Sequence ${enrollment.sequence.name} is disabled. Skipping step.`,
+        );
         return { status: 'SKIPPED' };
       }
 
@@ -51,7 +57,7 @@ export class EmailSequenceWorker extends WorkerHost {
       if (currentStepIdx >= steps.length) {
         await this.prisma.emailSequenceEnrollment.update({
           where: { id: enrollmentId },
-          data: { status: 'COMPLETED' }
+          data: { status: 'COMPLETED' },
         });
         return { status: 'COMPLETED' };
       }
@@ -61,20 +67,24 @@ export class EmailSequenceWorker extends WorkerHost {
       const templateId = step.templateId;
 
       const template = await this.prisma.emailTemplate.findUnique({
-        where: { id: templateId }
+        where: { id: templateId },
       });
 
       if (!template) {
-        throw new Error(`Email Template ID ${templateId} not found for sequence step`);
+        throw new Error(
+          `Email Template ID ${templateId} not found for sequence step`,
+        );
       }
 
       // 3. Find connected account to send from
       const account = await this.prisma.emailAccount.findFirst({
-        where: { businessId }
+        where: { businessId },
       });
 
       if (!account) {
-        throw new Error(`No connected email accounts connected in business ${businessId} to send outreach from`);
+        throw new Error(
+          `No connected email accounts connected in business ${businessId} to send outreach from`,
+        );
       }
 
       // 4. Format template with Lead tokens replacement
@@ -83,53 +93,83 @@ export class EmailSequenceWorker extends WorkerHost {
       const htmlBody = this.replacePlaceholders(template.body, lead);
 
       // 5. Dispatch email sending through OAuth account
-      this.logger.log(`Sending sequence email to lead: ${lead.email} via account: ${account.email}`);
+      this.logger.log(
+        `Sending sequence email to lead: ${lead.email} via account: ${account.email}`,
+      );
       const messageId = await this.emailIntegrationService.sendEmail(
         account.id,
         lead.email || '',
         subject,
-        htmlBody
+        htmlBody,
       );
 
       // 6. Schedule next step check if available
       const nextStepIdx = currentStepIdx + 1;
       if (nextStepIdx < steps.length) {
         const nextStep = steps[nextStepIdx];
-        
+
         // Fast sandbox testing mode if name contains "Test" or "Demo"
-        const isFastTest = enrollment.sequence.name.toLowerCase().includes('test') || 
-                           enrollment.sequence.name.toLowerCase().includes('demo');
-        
+        const isFastTest =
+          enrollment.sequence.name.toLowerCase().includes('test') ||
+          enrollment.sequence.name.toLowerCase().includes('demo');
+
         const delayDays = nextStep.delayDays || 1;
-        const delayMs = isFastTest ? delayDays * 10000 : delayDays * 24 * 3600 * 1000; // 10 seconds per day in test mode
+        const delayMs = isFastTest
+          ? delayDays * 10000
+          : delayDays * 24 * 3600 * 1000; // 10 seconds per day in test mode
 
         await this.prisma.emailSequenceEnrollment.update({
           where: { id: enrollmentId },
           data: {
             currentStep: nextStepIdx,
-            nextRunAt: new Date(Date.now() + delayMs)
-          }
+            nextRunAt: new Date(Date.now() + delayMs),
+          },
         });
 
         // Enqueue next run
-        await this.jobsService.addEmailSequenceExecutionJob(enrollmentId, businessId, delayMs);
-        this.logger.log(`Scheduled next step index ${nextStepIdx} to execute in ${delayMs}ms`);
+        await this.jobsService.addEmailSequenceExecutionJob(
+          enrollmentId,
+          businessId,
+          delayMs,
+        );
+        this.logger.log(
+          `Scheduled next step index ${nextStepIdx} to execute in ${delayMs}ms`,
+        );
       } else {
         // Mark enrollment fully complete
         await this.prisma.emailSequenceEnrollment.update({
           where: { id: enrollmentId },
-          data: { status: 'COMPLETED' }
+          data: { status: 'COMPLETED' },
         });
         this.logger.log(`Sequence completed for enrollment: ${enrollmentId}`);
       }
 
       // Log success job
-      await this.logJob(job.id || 'seq', 'email-sequence', 'execute-step', 'COMPLETED', job.data, Date.now() - startTime, businessId);
+      await this.logJob(
+        job.id || 'seq',
+        'email-sequence',
+        'execute-step',
+        'COMPLETED',
+        job.data,
+        Date.now() - startTime,
+        businessId,
+      );
       return { status: 'SUCCESS', messageId };
-
     } catch (err: any) {
-      this.logger.error(`Email Sequence Step execution failed: ${err.message}`, err.stack);
-      await this.logJob(job.id || 'seq-err', 'email-sequence', 'execute-step', 'FAILED', job.data, Date.now() - startTime, businessId, err.message);
+      this.logger.error(
+        `Email Sequence Step execution failed: ${err.message}`,
+        err.stack,
+      );
+      await this.logJob(
+        job.id || 'seq-err',
+        'email-sequence',
+        'execute-step',
+        'FAILED',
+        job.data,
+        Date.now() - startTime,
+        businessId,
+        err.message,
+      );
       throw err;
     }
   }
@@ -145,26 +185,28 @@ export class EmailSequenceWorker extends WorkerHost {
   }
 
   private async logJob(
-    jobId: string, 
-    queueName: string, 
-    jobName: string, 
-    status: 'COMPLETED' | 'FAILED', 
-    data: any, 
-    duration: number, 
-    businessId: string, 
-    error?: string
+    jobId: string,
+    queueName: string,
+    jobName: string,
+    status: 'COMPLETED' | 'FAILED',
+    data: any,
+    duration: number,
+    businessId: string,
+    error?: string,
   ) {
-    await this.prisma.jobLog.create({
-      data: {
-        queueName,
-        jobId,
-        jobName,
-        status,
-        data: data || {},
-        duration,
-        businessId,
-        error
-      }
-    }).catch(() => {});
+    await this.prisma.jobLog
+      .create({
+        data: {
+          queueName,
+          jobId,
+          jobName,
+          status,
+          data: data || {},
+          duration,
+          businessId,
+          error,
+        },
+      })
+      .catch(() => {});
   }
 }

@@ -1,4 +1,13 @@
-import { Controller, Post, Body, Req, Headers, BadRequestException, UseGuards, Res } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Body,
+  Req,
+  Headers,
+  BadRequestException,
+  UseGuards,
+  Res,
+} from '@nestjs/common';
 import { StripeService } from './stripe.service';
 import { AuthGuard } from '../../auth/auth.guard';
 import { TenantGuard } from '../../auth/tenant.guard';
@@ -11,24 +20,35 @@ export class StripeController {
   @UseGuards(AuthGuard, TenantGuard)
   @Post('checkout-session')
   async createCheckoutSession(
-    @Body() body: { businessId: string; planId: string; returnUrl: string }
+    @Body() body: { businessId: string; planId: string; returnUrl: string },
   ) {
     if (!body.businessId || !body.planId || !body.returnUrl) {
-      throw new BadRequestException('Missing required fields: businessId, planId, returnUrl');
+      throw new BadRequestException(
+        'Missing required fields: businessId, planId, returnUrl',
+      );
     }
-    const url = await this.stripeService.createCheckoutSession(body.businessId, body.planId, body.returnUrl);
+    const url = await this.stripeService.createCheckoutSession(
+      body.businessId,
+      body.planId,
+      body.returnUrl,
+    );
     return { url };
   }
 
   @UseGuards(AuthGuard, TenantGuard)
   @Post('billing-portal')
   async createBillingPortal(
-    @Body() body: { businessId: string; returnUrl: string }
+    @Body() body: { businessId: string; returnUrl: string },
   ) {
     if (!body.businessId || !body.returnUrl) {
-      throw new BadRequestException('Missing required fields: businessId, returnUrl');
+      throw new BadRequestException(
+        'Missing required fields: businessId, returnUrl',
+      );
     }
-    const url = await this.stripeService.createBillingPortal(body.businessId, body.returnUrl);
+    const url = await this.stripeService.createBillingPortal(
+      body.businessId,
+      body.returnUrl,
+    );
     return { url };
   }
 
@@ -36,10 +56,12 @@ export class StripeController {
   async handleWebhook(
     @Req() req: any,
     @Headers('stripe-signature') signature: string,
-    @Res() res: express.Response
+    @Res() res: express.Response,
   ) {
     if (this.stripeService.isMockMode()) {
-      return res.status(200).send({ received: true, msg: 'Mock webhook bypassed' });
+      return res
+        .status(200)
+        .send({ received: true, msg: 'Mock webhook bypassed' });
     }
 
     const secret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -49,7 +71,11 @@ export class StripeController {
 
     try {
       const rawBody = req.body.toString();
-      const event = this.stripeService.constructWebhookEvent(rawBody, signature, secret);
+      const event = this.stripeService.constructWebhookEvent(
+        rawBody,
+        signature,
+        secret,
+      );
       await this.stripeService.handleWebhookEvent(event);
       return res.status(200).send({ received: true });
     } catch (err: any) {
@@ -63,17 +89,19 @@ export class StripeController {
   @UseGuards(AuthGuard, TenantGuard)
   @Post('mock-checkout-success')
   async mockCheckoutSuccess(
-    @Body() body: { businessId: string; planId: string }
+    @Body() body: { businessId: string; planId: string },
   ) {
     if (!body.businessId || !body.planId) {
-      throw new BadRequestException('Missing required fields: businessId, planId');
+      throw new BadRequestException(
+        'Missing required fields: businessId, planId',
+      );
     }
 
     const sub = await this.stripeService.provisionSubscription(
       body.businessId,
       body.planId,
       'mock_customer_id',
-      `mock_sub_id_${Date.now()}`
+      `mock_sub_id_${Date.now()}`,
     );
 
     return { success: true, subscription: sub };

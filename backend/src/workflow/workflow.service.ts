@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException, ForbiddenException, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+  Logger,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { JobsService } from '../jobs/jobs.service';
 import { ActivityLogService } from '../common/activity-logs/activity-log.service';
@@ -106,7 +111,7 @@ export class WorkflowService {
   async getExecutionDetails(executionId: string, businessId: string) {
     const execution = await this.prisma.workflowExecution.findUnique({
       where: { id: executionId },
-      include: { 
+      include: {
         workflow: true,
         logs: {
           orderBy: { createdAt: 'asc' },
@@ -166,7 +171,10 @@ export class WorkflowService {
       },
     });
 
-    const failureRate = totalExecutions > 0 ? parseFloat(((failedExecutions / totalExecutions) * 100).toFixed(1)) : 0;
+    const failureRate =
+      totalExecutions > 0
+        ? parseFloat(((failedExecutions / totalExecutions) * 100).toFixed(1))
+        : 0;
     const averageStepDurationMs = Math.round(stepLogsGroup._avg.duration || 0);
 
     return {
@@ -182,8 +190,10 @@ export class WorkflowService {
    * Dispatch trigger event: scans and enqueues matching active workflows.
    */
   async trigger(triggerType: string, businessId: string, payload: any) {
-    this.logger.log(`Received trigger event: ${triggerType} for business ${businessId}`);
-    
+    this.logger.log(
+      `Received trigger event: ${triggerType} for business ${businessId}`,
+    );
+
     try {
       const activeWorkflows = await this.prisma.workflow.findMany({
         where: {
@@ -193,7 +203,9 @@ export class WorkflowService {
         },
       });
 
-      this.logger.log(`Found ${activeWorkflows.length} active workflows matching trigger ${triggerType}`);
+      this.logger.log(
+        `Found ${activeWorkflows.length} active workflows matching trigger ${triggerType}`,
+      );
 
       for (const workflow of activeWorkflows) {
         const execution = await this.prisma.workflowExecution.create({
@@ -204,21 +216,34 @@ export class WorkflowService {
           },
         });
 
-        await this.jobsService.addWorkflowExecutionJob(execution.id, workflow.id, businessId);
+        await this.jobsService.addWorkflowExecutionJob(
+          execution.id,
+          workflow.id,
+          businessId,
+        );
 
         // Audit: workflow triggered
-        this.auditLog.log({
-          businessId,
-          action: 'WORKFLOW_TRIGGERED',
-          entity: 'Workflow',
-          entityId: workflow.id,
-          description: `Workflow "${workflow.name}" triggered by ${triggerType} event`,
-          severity: 'INFO',
-          metadata: { triggerType, executionId: execution.id, workflowName: workflow.name },
-        }).catch(() => {});
+        this.auditLog
+          .log({
+            businessId,
+            action: 'WORKFLOW_TRIGGERED',
+            entity: 'Workflow',
+            entityId: workflow.id,
+            description: `Workflow "${workflow.name}" triggered by ${triggerType} event`,
+            severity: 'INFO',
+            metadata: {
+              triggerType,
+              executionId: execution.id,
+              workflowName: workflow.name,
+            },
+          })
+          .catch(() => {});
       }
     } catch (err: any) {
-      this.logger.error(`Failed to dispatch trigger ${triggerType}: ${err.message}`, err.stack);
+      this.logger.error(
+        `Failed to dispatch trigger ${triggerType}: ${err.message}`,
+        err.stack,
+      );
     }
   }
 }

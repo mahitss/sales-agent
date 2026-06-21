@@ -1,4 +1,14 @@
-import { Controller, Get, Post, Delete, Query, Body, Param, UseGuards, Req } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Delete,
+  Query,
+  Body,
+  Param,
+  UseGuards,
+  Req,
+} from '@nestjs/common';
 import { EmailIntegrationService } from './email-integration.service';
 import { AuthGuard } from '../../auth/auth.guard';
 import { TenantGuard } from '../../auth/tenant.guard';
@@ -19,13 +29,18 @@ export class IntegrationsEmailController {
     @Req() req: any,
   ) {
     const businessId = req.user.businessId;
-    const url = this.emailIntegrationService.getConnectUrl(provider, redirectUri, businessId);
+    const url = this.emailIntegrationService.getConnectUrl(
+      provider,
+      redirectUri,
+      businessId,
+    );
     return { url };
   }
 
   @Post('callback')
   async handleCallback(
-    @Body() body: { provider: 'GMAIL' | 'OUTLOOK'; code: string; redirectUri: string },
+    @Body()
+    body: { provider: 'GMAIL' | 'OUTLOOK'; code: string; redirectUri: string },
     @Req() req: any,
   ) {
     const businessId = req.user.businessId;
@@ -62,8 +77,8 @@ export class IntegrationsEmailController {
       where: { leadId, businessId },
       include: {
         opens: {
-          orderBy: { openedAt: 'desc' }
-        }
+          orderBy: { openedAt: 'desc' },
+        },
       },
       orderBy: { sentAt: 'desc' },
     });
@@ -72,37 +87,53 @@ export class IntegrationsEmailController {
   @Delete('accounts/:id')
   async disconnectAccount(@Param('id') id: string, @Req() req: any) {
     const businessId = req.user.businessId;
-    
+
     // Tenancy isolation lookup check
     const account = await this.prisma.emailAccount.findFirst({
-      where: { id, businessId }
+      where: { id, businessId },
     });
 
     if (!account) {
-      return { success: false, message: 'Email account not found or access denied' };
+      return {
+        success: false,
+        message: 'Email account not found or access denied',
+      };
     }
 
     await this.prisma.emailAccount.delete({
-      where: { id }
+      where: { id },
     });
 
-    return { success: true, message: 'Email account disconnected successfully' };
+    return {
+      success: true,
+      message: 'Email account disconnected successfully',
+    };
   }
 
   @Post('send')
   async sendEmail(
-    @Body() body: { accountId: string; to: string; subject: string; body: string; leadId?: string },
+    @Body()
+    body: {
+      accountId: string;
+      to: string;
+      subject: string;
+      body: string;
+      leadId?: string;
+    },
     @Req() req: any,
   ) {
     const businessId = req.user.businessId;
 
     // Validate account ownership
     const account = await this.prisma.emailAccount.findFirst({
-      where: { id: body.accountId, businessId }
+      where: { id: body.accountId, businessId },
     });
 
     if (!account) {
-      return { success: false, message: 'Email account not found or access denied' };
+      return {
+        success: false,
+        message: 'Email account not found or access denied',
+      };
     }
 
     // Send the email via the integration service

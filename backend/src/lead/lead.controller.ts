@@ -1,4 +1,14 @@
-import { Controller, Post, Get, Put, Body, Param, UseGuards, Res, Query } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Get,
+  Put,
+  Body,
+  Param,
+  UseGuards,
+  Res,
+  Query,
+} from '@nestjs/common';
 import { LeadService } from './lead.service';
 import { LeadScoringService } from './lead-scoring.service';
 import { CreateLeadDto, UpdateLeadDto } from './dto/lead.dto';
@@ -40,30 +50,51 @@ export class LeadController {
   @UseGuards(AuthGuard, RolesGuard, TenantGuard)
   @Roles('ADMIN')
   @Get('business/:businessId/export')
-  async exportLeads(@Param('businessId') businessId: string, @Res() res: express.Response) {
+  async exportLeads(
+    @Param('businessId') businessId: string,
+    @Res() res: express.Response,
+  ) {
     const csv = await this.leadService.exportLeadsToCsv(businessId);
     res.setHeader('Content-Type', 'text/csv');
-    res.setHeader('Content-Disposition', `attachment; filename=leads-${businessId}.csv`);
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename=leads-${businessId}.csv`,
+    );
     return res.status(200).send(csv);
   }
 
   @UseGuards(AuthGuard, RolesGuard, TenantGuard)
   @Roles('ADMIN')
   @Get('business/:businessId/export/json')
-  async exportLeadsJson(@Param('businessId') businessId: string, @Res() res: express.Response) {
+  async exportLeadsJson(
+    @Param('businessId') businessId: string,
+    @Res() res: express.Response,
+  ) {
     const json = await this.leadService.exportLeadsToJson(businessId);
     res.setHeader('Content-Type', 'application/json');
-    res.setHeader('Content-Disposition', `attachment; filename=leads-${businessId}.json`);
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename=leads-${businessId}.json`,
+    );
     return res.status(200).send(json);
   }
 
   @UseGuards(AuthGuard, RolesGuard, TenantGuard)
   @Roles('ADMIN')
   @Get('business/:businessId/export/excel')
-  async exportLeadsExcel(@Param('businessId') businessId: string, @Res() res: express.Response) {
+  async exportLeadsExcel(
+    @Param('businessId') businessId: string,
+    @Res() res: express.Response,
+  ) {
     const buffer = await this.leadService.exportLeadsToExcel(businessId);
-    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('Content-Disposition', `attachment; filename=leads-${businessId}.xlsx`);
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename=leads-${businessId}.xlsx`,
+    );
     return res.status(200).send(buffer);
   }
 

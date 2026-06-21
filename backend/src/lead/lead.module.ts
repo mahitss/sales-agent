@@ -13,8 +13,20 @@ import { ActivityLogModule } from '../common/activity-logs/activity-log.module';
 
 @Module({
   imports: [AICostModule, forwardRef(() => WorkflowModule), ActivityLogModule],
-  providers: [LeadService, LeadIntelligenceService, LeadScoringService, GoogleSheetsService, FeedbackService],
+  providers: [
+    LeadService,
+    LeadIntelligenceService,
+    LeadScoringService,
+    GoogleSheetsService,
+    FeedbackService,
+  ],
   controllers: [LeadController, FeedbackController, CRMController],
-  exports: [LeadService, LeadIntelligenceService, LeadScoringService, GoogleSheetsService, FeedbackService],
+  exports: [
+    LeadService,
+    LeadIntelligenceService,
+    LeadScoringService,
+    GoogleSheetsService,
+    FeedbackService,
+  ],
 })
 export class LeadModule {}

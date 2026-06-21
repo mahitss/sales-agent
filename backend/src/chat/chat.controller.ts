@@ -19,7 +19,10 @@ export class ChatController {
 
   @UseGuards(AuthGuard)
   @Post('stream')
-  async streamMessage(@Body() dto: SendMessageDto, @Res() res: express.Response) {
+  async streamMessage(
+    @Body() dto: SendMessageDto,
+    @Res() res: express.Response,
+  ) {
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
@@ -28,21 +31,27 @@ export class ChatController {
 
   @UseGuards(AuthGuard)
   @Post('operator-reply')
-  async sendOperatorReply(@Body() body: { conversationId: string; message: string }) {
-    return this.chatService.sendOperatorReply(body.conversationId, body.message);
+  async sendOperatorReply(
+    @Body() body: { conversationId: string; message: string },
+  ) {
+    return this.chatService.sendOperatorReply(
+      body.conversationId,
+      body.message,
+    );
   }
 
   @UseGuards(AuthGuard)
   @Post('simulate-incoming')
   async simulateIncoming(
-    @Body() body: {
+    @Body()
+    body: {
       businessId: string;
       channel: string;
       message: string;
       leadName?: string;
       leadPhone?: string;
       leadEmail?: string;
-    }
+    },
   ) {
     return this.chatService.simulateIncomingMessage(body);
   }

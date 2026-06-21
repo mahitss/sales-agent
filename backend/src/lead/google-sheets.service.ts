@@ -15,7 +15,9 @@ export class GoogleSheetsService {
   private getGoogleClients() {
     const credsEnv = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
     if (!credsEnv) {
-      this.logger.warn('GOOGLE_SERVICE_ACCOUNT_KEY env variable not set. Google Sheets Sync will run in Mock Mode.');
+      this.logger.warn(
+        'GOOGLE_SERVICE_ACCOUNT_KEY env variable not set. Google Sheets Sync will run in Mock Mode.',
+      );
       return null;
     }
 
@@ -33,7 +35,10 @@ export class GoogleSheetsService {
         drive: google.drive({ version: 'v3', auth }),
       };
     } catch (err) {
-      this.logger.error('Failed to parse GOOGLE_SERVICE_ACCOUNT_KEY JSON. Check environment variables.', err);
+      this.logger.error(
+        'Failed to parse GOOGLE_SERVICE_ACCOUNT_KEY JSON. Check environment variables.',
+        err,
+      );
       return null;
     }
   }
@@ -41,7 +46,9 @@ export class GoogleSheetsService {
   /**
    * Syncs a lead's profile, scoring, enrichment, and conversation history to Google Sheets.
    */
-  async syncLead(leadId: string): Promise<{ success: boolean; spreadsheetId?: string; error?: string }> {
+  async syncLead(
+    leadId: string,
+  ): Promise<{ success: boolean; spreadsheetId?: string; error?: string }> {
     // 1. Fetch full lead data with intelligence
     const lead = await this.prisma.lead.findUnique({
       where: { id: leadId },
@@ -64,7 +71,10 @@ export class GoogleSheetsService {
 
     const { business } = lead;
     if (!business.googleSheetsEnabled) {
-      return { success: false, error: 'Google Sheets sync is disabled for this business' };
+      return {
+        success: false,
+        error: 'Google Sheets sync is disabled for this business',
+      };
     }
 
     // Initialize or read Spreadsheet ID
@@ -80,17 +90,22 @@ export class GoogleSheetsService {
           spreadsheetId: spreadsheetId || 'MOCK_SPREADSHEET_ID',
           status: 'SUCCESS',
           syncedAt: new Date(),
-          errorMessage: 'Sync succeeded in Mock Mode (No Google Credentials configured).',
+          errorMessage:
+            'Sync succeeded in Mock Mode (No Google Credentials configured).',
         },
         update: {
           spreadsheetId: spreadsheetId || 'MOCK_SPREADSHEET_ID',
           status: 'SUCCESS',
           syncedAt: new Date(),
           attempts: { increment: 1 },
-          errorMessage: 'Sync succeeded in Mock Mode (No Google Credentials configured).',
+          errorMessage:
+            'Sync succeeded in Mock Mode (No Google Credentials configured).',
         },
       });
-      return { success: true, spreadsheetId: spreadsheetId || 'MOCK_SPREADSHEET_ID' };
+      return {
+        success: true,
+        spreadsheetId: spreadsheetId || 'MOCK_SPREADSHEET_ID',
+      };
     }
 
     const { sheets, drive } = clients;
@@ -98,7 +113,9 @@ export class GoogleSheetsService {
     try {
       // 2. Automatically create spreadsheet if it doesn't exist
       if (!spreadsheetId) {
-        this.logger.log(`No spreadsheet ID configured for business ${business.companyName}. Creating one...`);
+        this.logger.log(
+          `No spreadsheet ID configured for business ${business.companyName}. Creating one...`,
+        );
         const spreadsheetResponse = await sheets.spreadsheets.create({
           requestBody: {
             properties: {
@@ -106,10 +123,12 @@ export class GoogleSheetsService {
             },
           },
         });
-        
+
         spreadsheetId = spreadsheetResponse.data.spreadsheetId || null;
         if (!spreadsheetId) {
-          throw new Error('Google Sheets creation returned empty spreadsheet ID');
+          throw new Error(
+            'Google Sheets creation returned empty spreadsheet ID',
+          );
         }
 
         // Make the spreadsheet readable/writable by anyone with link so the owner can access it
@@ -122,7 +141,9 @@ export class GoogleSheetsService {
             },
           });
         } catch (shareErr) {
-          this.logger.warn(`Could not set public permissions on sheet ${spreadsheetId}: ${shareErr.message}`);
+          this.logger.warn(
+            `Could not set public permissions on sheet ${spreadsheetId}: ${shareErr.message}`,
+          );
         }
 
         // Save new Spreadsheet ID back to Business
@@ -131,26 +152,47 @@ export class GoogleSheetsService {
           data: { googleSheetsSpreadsheetId: spreadsheetId },
         });
 
-        this.logger.log(`Created spreadsheet ${spreadsheetId} for business ${business.id}`);
+        this.logger.log(
+          `Created spreadsheet ${spreadsheetId} for business ${business.id}`,
+        );
       }
 
       // Ensure sheet structures exist
       await this.ensureSheetExists(sheets, spreadsheetId, 'Leads', [
-        'Lead ID', 'Name', 'Email', 'Phone', 'Company', 'Website', 'Industry', 
-        'Budget', 'Timeline', 'Requested Service', 'Lead Score', 'Deal Probability', 
-        'Priority', 'Created Date'
+        'Lead ID',
+        'Name',
+        'Email',
+        'Phone',
+        'Company',
+        'Website',
+        'Industry',
+        'Budget',
+        'Timeline',
+        'Requested Service',
+        'Lead Score',
+        'Deal Probability',
+        'Priority',
+        'Created Date',
       ]);
 
       await this.ensureSheetExists(sheets, spreadsheetId, 'AI Summaries', [
-        'Lead ID', 'Summary', 'Pain Points', 'Goals', 'Recommended Action'
+        'Lead ID',
+        'Summary',
+        'Pain Points',
+        'Goals',
+        'Recommended Action',
       ]);
 
-      await this.ensureSheetExists(sheets, spreadsheetId, 'Conversation History', [
-        'Lead ID', 'Timestamp', 'Sender', 'Message'
-      ]);
+      await this.ensureSheetExists(
+        sheets,
+        spreadsheetId,
+        'Conversation History',
+        ['Lead ID', 'Timestamp', 'Sender', 'Message'],
+      );
 
       // 3. Sync Sheet 1: Leads
-      const requestedServices = lead.intelligence?.requestedServices?.join(', ') || '';
+      const requestedServices =
+        lead.intelligence?.requestedServices?.join(', ') || '';
       const leadsRowValues = [
         lead.id,
         lead.name || 'Anonymous Visitor',
@@ -162,13 +204,23 @@ export class GoogleSheetsService {
         lead.budget || lead.revenuePrediction?.estimatedValue?.toString() || '',
         lead.intelligence?.timeline || '',
         requestedServices,
-        lead.score?.score?.toString() || lead.engagementScore?.toString() || '0',
-        lead.score?.dealProbability !== undefined ? `${Math.round(lead.score.dealProbability * 100)}%` : '0%',
+        lead.score?.score?.toString() ||
+          lead.engagementScore?.toString() ||
+          '0',
+        lead.score?.dealProbability !== undefined
+          ? `${Math.round(lead.score.dealProbability * 100)}%`
+          : '0%',
         lead.score?.classification || lead.status || 'COLD',
-        lead.createdAt.toISOString()
+        lead.createdAt.toISOString(),
       ];
 
-      await this.upsertRow(sheets, spreadsheetId, 'Leads', lead.id, leadsRowValues);
+      await this.upsertRow(
+        sheets,
+        spreadsheetId,
+        'Leads',
+        lead.id,
+        leadsRowValues,
+      );
 
       // 4. Sync Sheet 2: AI Summaries
       const summariesRowValues = [
@@ -176,10 +228,16 @@ export class GoogleSheetsService {
         lead.intelligence?.summary || '',
         lead.intelligence?.painPoints || '',
         lead.intelligence?.goals || '',
-        lead.intelligence?.recommendedAction || ''
+        lead.intelligence?.recommendedAction || '',
       ];
 
-      await this.upsertRow(sheets, spreadsheetId, 'AI Summaries', lead.id, summariesRowValues);
+      await this.upsertRow(
+        sheets,
+        spreadsheetId,
+        'AI Summaries',
+        lead.id,
+        summariesRowValues,
+      );
 
       // 5. Sync Sheet 3: Conversation History (Rewrite this lead's messages to avoid duplicates)
       const messages = (lead.conversations[0]?.messages as any[]) || [];
@@ -187,10 +245,16 @@ export class GoogleSheetsService {
         lead.id,
         new Date().toISOString(), // Mock timestamp fallback or message timestamp if available
         m.role === 'user' ? 'Customer' : 'Assistant',
-        m.content || ''
+        m.content || '',
       ]);
 
-      await this.rewriteConversationRows(sheets, spreadsheetId, 'Conversation History', lead.id, chatRows);
+      await this.rewriteConversationRows(
+        sheets,
+        spreadsheetId,
+        'Conversation History',
+        lead.id,
+        chatRows,
+      );
 
       // Record success in log table
       await this.prisma.googleSheetsSyncLog.upsert({
@@ -211,9 +275,11 @@ export class GoogleSheetsService {
       });
 
       return { success: true, spreadsheetId };
-
     } catch (error: any) {
-      this.logger.error(`Error syncing lead ${leadId} to Google Sheets: ${error.message}`, error);
+      this.logger.error(
+        `Error syncing lead ${leadId} to Google Sheets: ${error.message}`,
+        error,
+      );
 
       // Record failure in log table
       await this.prisma.googleSheetsSyncLog.upsert({
@@ -238,7 +304,12 @@ export class GoogleSheetsService {
   /**
    * Helper to ensure a specific sheet tab exists and has headers.
    */
-  private async ensureSheetExists(sheets: any, spreadsheetId: string, title: string, headers: string[]) {
+  private async ensureSheetExists(
+    sheets: any,
+    spreadsheetId: string,
+    title: string,
+    headers: string[],
+  ) {
     try {
       // Test if sheet exists by getting its values
       await sheets.spreadsheets.values.get({
@@ -247,7 +318,11 @@ export class GoogleSheetsService {
       });
     } catch (err: any) {
       // If error, sheet likely does not exist. Create it
-      if (err.message.includes('Unable to parse range') || err.message.includes('NOT_FOUND') || err.status === 400) {
+      if (
+        err.message.includes('Unable to parse range') ||
+        err.message.includes('NOT_FOUND') ||
+        err.status === 400
+      ) {
         try {
           await sheets.spreadsheets.batchUpdate({
             spreadsheetId,
@@ -282,14 +357,20 @@ export class GoogleSheetsService {
   /**
    * Update or Insert row based on Lead ID matching key in Column A.
    */
-  private async upsertRow(sheets: any, spreadsheetId: string, sheetName: string, leadId: string, values: string[]) {
+  private async upsertRow(
+    sheets: any,
+    spreadsheetId: string,
+    sheetName: string,
+    leadId: string,
+    values: string[],
+  ) {
     // 1. Fetch Column A to search for Lead ID
     const getRes = await sheets.spreadsheets.values.get({
       spreadsheetId,
       range: `${sheetName}!A:A`,
     });
     const colA = getRes.data.values || [];
-    
+
     // Find index (0-based) where value matches leadId
     let rowIndex = -1;
     for (let i = 0; i < colA.length; i++) {
@@ -327,7 +408,13 @@ export class GoogleSheetsService {
    * Specific helper to replace all conversation rows for a single lead.
    * Fetches all rows, removes rows matching leadId, and appends the new list of messages.
    */
-  private async rewriteConversationRows(sheets: any, spreadsheetId: string, sheetName: string, leadId: string, chatRows: string[][]) {
+  private async rewriteConversationRows(
+    sheets: any,
+    spreadsheetId: string,
+    sheetName: string,
+    leadId: string,
+    chatRows: string[][],
+  ) {
     // Fetch all values
     const getRes = await sheets.spreadsheets.values.get({
       spreadsheetId,
@@ -351,7 +438,9 @@ export class GoogleSheetsService {
 
     // Keep header, filter out old messages for this lead
     const header = existingRows[0];
-    const filteredRows = existingRows.slice(1).filter((row) => row[0] !== leadId);
+    const filteredRows = existingRows
+      .slice(1)
+      .filter((row) => row[0] !== leadId);
 
     // Combine remaining rows and new rows
     const finalRows = [header, ...filteredRows, ...chatRows];

@@ -1,4 +1,11 @@
-import { Injectable, NotFoundException, ConflictException, BadRequestException, Inject, forwardRef } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ConflictException,
+  BadRequestException,
+  Inject,
+  forwardRef,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../common/redis/redis.service';
 import { JobsService } from '../jobs/jobs.service';
@@ -34,7 +41,8 @@ export class BusinessService {
         themeColor: dto.themeColor ?? '#10B981',
         agentTone: dto.agentTone ?? 'PROFESSIONAL',
         agentPrompt: dto.agentPrompt,
-        widgetGreeting: dto.widgetGreeting ?? 'Hello! How can we help you today?',
+        widgetGreeting:
+          dto.widgetGreeting ?? 'Hello! How can we help you today?',
         widgetRules: dto.widgetRules ?? '[]',
         widgetPosition: dto.widgetPosition ?? 'bottom-right',
         googleSheetsSpreadsheetId: dto.googleSheetsSpreadsheetId,
@@ -102,7 +110,8 @@ export class BusinessService {
         themeColor: dto.themeColor ?? '#10B981',
         agentTone: dto.agentTone ?? 'PROFESSIONAL',
         agentPrompt: dto.agentPrompt,
-        widgetGreeting: dto.widgetGreeting ?? 'Hello! How can we help you today?',
+        widgetGreeting:
+          dto.widgetGreeting ?? 'Hello! How can we help you today?',
         widgetRules: dto.widgetRules ?? '[]',
         widgetPosition: dto.widgetPosition ?? 'bottom-right',
         googleSheetsSpreadsheetId: dto.googleSheetsSpreadsheetId,
@@ -130,7 +139,11 @@ export class BusinessService {
   private sanitizeHtml(text: string): string {
     if (!text) return '';
     return sanitizeHtml(text, {
-      allowedTags: sanitizeHtml.defaults.allowedTags.concat(['img', 'h1', 'h2']),
+      allowedTags: sanitizeHtml.defaults.allowedTags.concat([
+        'img',
+        'h1',
+        'h2',
+      ]),
       allowedAttributes: {
         ...sanitizeHtml.defaults.allowedAttributes,
         '*': ['class', 'style', 'id'],
@@ -195,12 +208,17 @@ export class BusinessService {
       where: { id: faqId },
     });
 
-    await this.redisService.del(`business:${faq.businessId}:faqs`).catch(() => {});
+    await this.redisService
+      .del(`business:${faq.businessId}:faqs`)
+      .catch(() => {});
     return { success: true };
   }
 
   // --- Visitor Tracking Service ---
-  async trackVisitor(businessId: string, data: { location: string; pagesViewed: string[]; duration: number }) {
+  async trackVisitor(
+    businessId: string,
+    data: { location: string; pagesViewed: string[]; duration: number },
+  ) {
     return this.prisma.visitorTrack.create({
       data: {
         businessId,
@@ -235,7 +253,7 @@ export class BusinessService {
     try {
       const response = await axios.get(url, { timeout: 4000 });
       const html = response.data;
-      
+
       // Basic text cleanup
       scrapedText = html
         .replace(/<script[^>]*>([\s\S]*?)<\/script>/gi, '')
@@ -244,12 +262,18 @@ export class BusinessService {
         .replace(/\s+/g, ' ')
         .substring(0, 4000);
     } catch (err: any) {
-      console.warn(`Direct crawl failed for ${url}, fallback to mock: ${err?.message || String(err)}`);
+      console.warn(
+        `Direct crawl failed for ${url}, fallback to mock: ${err?.message || String(err)}`,
+      );
     }
 
     try {
       let aiServiceUrl = process.env.AI_SERVICE_URL || 'http://localhost:8000';
-      if (aiServiceUrl && !aiServiceUrl.startsWith('http://') && !aiServiceUrl.startsWith('https://')) {
+      if (
+        aiServiceUrl &&
+        !aiServiceUrl.startsWith('http://') &&
+        !aiServiceUrl.startsWith('https://')
+      ) {
         aiServiceUrl = `http://${aiServiceUrl}`;
       }
       const response = await axios.post(`${aiServiceUrl}/extract-faqs`, {
@@ -261,20 +285,22 @@ export class BusinessService {
       });
       faqList = response.data.faqs;
     } catch (err: any) {
-      console.warn(`AI extraction failed, generating fallback FAQs: ${err?.message || String(err)}`);
+      console.warn(
+        `AI extraction failed, generating fallback FAQs: ${err?.message || String(err)}`,
+      );
       faqList = [
         {
           title: `What products/services does ${business.companyName} offer?`,
-          content: `${business.companyName} operates in the ${business.industry} industry, providing expert services including ${business.description.substring(0, 80)}...`
+          content: `${business.companyName} operates in the ${business.industry} industry, providing expert services including ${business.description.substring(0, 80)}...`,
         },
         {
           title: `How can I request support from ${business.companyName}?`,
-          content: `You can reach out to our team directly through our website at ${url} or by leaving your contact details here in this chat widget.`
+          content: `You can reach out to our team directly through our website at ${url} or by leaving your contact details here in this chat widget.`,
         },
         {
           title: `Why choose ${business.companyName}?`,
-          content: `We focus on delivering premium, customized results for our clients. Learn more by browsing our portal or starting a live conversation with us.`
-        }
+          content: `We focus on delivering premium, customized results for our clients. Learn more by browsing our portal or starting a live conversation with us.`,
+        },
       ];
     }
 
@@ -294,12 +320,18 @@ export class BusinessService {
     return { count: createdFAQs.length, faqs: createdFAQs };
   }
 
-  async importText(businessId: string, ownerId: string, body: { title: string; text: string }) {
+  async importText(
+    businessId: string,
+    ownerId: string,
+    body: { title: string; text: string },
+  ) {
     const business = await this.prisma.business.findFirst({
       where: { id: businessId, ownerId },
     });
     if (!business) {
-      throw new NotFoundException('Business profile not found or access denied');
+      throw new NotFoundException(
+        'Business profile not found or access denied',
+      );
     }
 
     const sanitizedText = this.sanitizeHtml(body.text);
@@ -308,7 +340,11 @@ export class BusinessService {
     let faqList: Array<{ title: string; content: string }> = [];
     try {
       let aiServiceUrl = process.env.AI_SERVICE_URL || 'http://localhost:8000';
-      if (aiServiceUrl && !aiServiceUrl.startsWith('http://') && !aiServiceUrl.startsWith('https://')) {
+      if (
+        aiServiceUrl &&
+        !aiServiceUrl.startsWith('http://') &&
+        !aiServiceUrl.startsWith('https://')
+      ) {
         aiServiceUrl = `http://${aiServiceUrl}`;
       }
       const response = await axios.post(`${aiServiceUrl}/extract-faqs`, {
@@ -320,12 +356,14 @@ export class BusinessService {
       });
       faqList = response.data.faqs;
     } catch (err: any) {
-      console.warn(`AI document extraction failed, generating fallback FAQ: ${err?.message || String(err)}`);
+      console.warn(
+        `AI document extraction failed, generating fallback FAQ: ${err?.message || String(err)}`,
+      );
       faqList = [
         {
           title: `What is detailed in the uploaded document "${sanitizedTitle}"?`,
-          content: sanitizedText.substring(0, 400) + '...'
-        }
+          content: sanitizedText.substring(0, 400) + '...',
+        },
       ];
     }
 
@@ -364,12 +402,18 @@ export class BusinessService {
         .replace(/\s+/g, ' ')
         .substring(0, 4000);
     } catch (err: any) {
-      console.warn(`Competitor direct crawl failed for ${competitorUrl}: ${err?.message || String(err)}`);
+      console.warn(
+        `Competitor direct crawl failed for ${competitorUrl}: ${err?.message || String(err)}`,
+      );
     }
 
     try {
       let aiServiceUrl = process.env.AI_SERVICE_URL || 'http://localhost:8000';
-      if (aiServiceUrl && !aiServiceUrl.startsWith('http://') && !aiServiceUrl.startsWith('https://')) {
+      if (
+        aiServiceUrl &&
+        !aiServiceUrl.startsWith('http://') &&
+        !aiServiceUrl.startsWith('https://')
+      ) {
         aiServiceUrl = `http://${aiServiceUrl}`;
       }
       const response = await axios.post(`${aiServiceUrl}/competitor-analysis`, {
@@ -383,13 +427,31 @@ export class BusinessService {
       });
       analysisResult = response.data;
     } catch (err: any) {
-      console.warn(`AI competitor analysis failed: ${err?.message || String(err)}`);
+      console.warn(
+        `AI competitor analysis failed: ${err?.message || String(err)}`,
+      );
       analysisResult = {
         serviceCompare: [
-          { feature: 'Core Offerings', us: 'Custom ' + business.industry + ' services', competitor: 'Generic solutions' },
-          { feature: 'Live AI Support', us: 'Yes (Instant)', competitor: 'No (Contact form only)' },
-          { feature: 'Appointment Scheduling', us: 'Yes (Automated)', competitor: 'Manual' },
-          { feature: 'Multi-Channel support', us: 'WhatsApp & Insta', competitor: 'Web only' },
+          {
+            feature: 'Core Offerings',
+            us: 'Custom ' + business.industry + ' services',
+            competitor: 'Generic solutions',
+          },
+          {
+            feature: 'Live AI Support',
+            us: 'Yes (Instant)',
+            competitor: 'No (Contact form only)',
+          },
+          {
+            feature: 'Appointment Scheduling',
+            us: 'Yes (Automated)',
+            competitor: 'Manual',
+          },
+          {
+            feature: 'Multi-Channel support',
+            us: 'WhatsApp & Insta',
+            competitor: 'Web only',
+          },
         ],
         missingOfferings: [
           'Live instant CRM status callback logs',
@@ -461,7 +523,8 @@ export class BusinessService {
       recommendations.push({
         id: 'rec-leads-empty',
         title: 'Boost Conversions',
-        content: 'You have no HOT leads yet. Go to Widget Settings to test lead qualification in the chat sandbox.',
+        content:
+          'You have no HOT leads yet. Go to Widget Settings to test lead qualification in the chat sandbox.',
         priority: 'MEDIUM',
         category: 'LEAD',
         createdAt: new Date(),
@@ -497,12 +560,15 @@ export class BusinessService {
     }
 
     // Recommendation 4: Connect WhatsApp/Instagram channel
-    const business = await this.prisma.business.findUnique({ where: { id: businessId } });
+    const business = await this.prisma.business.findUnique({
+      where: { id: businessId },
+    });
     if (business && !business.whatsappEnabled && !business.instagramEnabled) {
       recommendations.push({
         id: 'rec-4',
         title: 'Multiply Conversions',
-        content: 'Integrate WhatsApp & Instagram in the multi-channel panel to engage users where they are active.',
+        content:
+          'Integrate WhatsApp & Instagram in the multi-channel panel to engage users where they are active.',
         priority: 'LOW',
         category: 'COMPETITOR',
         createdAt: new Date(),
@@ -513,13 +579,19 @@ export class BusinessService {
   }
 
   // --- Employee / Team Seats Management Services ---
-  async createEmployee(businessId: string, ownerId: string, data: { email: string; name: string; password?: string }) {
+  async createEmployee(
+    businessId: string,
+    ownerId: string,
+    data: { email: string; name: string; password?: string },
+  ) {
     // 1. Verify that requesting user is the owner of the business
     const business = await this.prisma.business.findFirst({
       where: { id: businessId, ownerId },
     });
     if (!business) {
-      throw new NotFoundException('Business profile not found or access denied');
+      throw new NotFoundException(
+        'Business profile not found or access denied',
+      );
     }
 
     // 2. Check if user already exists
@@ -546,13 +618,15 @@ export class BusinessService {
     });
 
     // Queue invite email delivery
-    await this.jobsService.addEmailSendingJob(
-      employee.email,
-      employee.name,
-      business.companyName,
-      `${process.env.FRONTEND_URL || 'http://localhost:3000'}/dashboard`,
-      businessId,
-    ).catch(() => {});
+    await this.jobsService
+      .addEmailSendingJob(
+        employee.email,
+        employee.name,
+        business.companyName,
+        `${process.env.FRONTEND_URL || 'http://localhost:3000'}/dashboard`,
+        businessId,
+      )
+      .catch(() => {});
 
     return {
       id: employee.id,
@@ -570,7 +644,9 @@ export class BusinessService {
         where: { id: businessId, ownerId: userId },
       });
       if (!business) {
-        throw new NotFoundException('Business profile not found or access denied');
+        throw new NotFoundException(
+          'Business profile not found or access denied',
+        );
       }
     } else {
       const employee = await this.prisma.user.findFirst({
@@ -641,13 +717,19 @@ export class BusinessService {
         return false;
       }
       const hostname = parsed.hostname.toLowerCase();
-      
+
       // Block local and loopback hosts
-      const localHosts = ['localhost', '127.0.0.1', '0.0.0.0', '[::1]', '169.254.169.254'];
+      const localHosts = [
+        'localhost',
+        '127.0.0.1',
+        '0.0.0.0',
+        '[::1]',
+        '169.254.169.254',
+      ];
       if (localHosts.includes(hostname)) {
         return false;
       }
-      
+
       // Block private IP ranges
       if (
         hostname.startsWith('10.') ||
@@ -656,7 +738,7 @@ export class BusinessService {
       ) {
         return false;
       }
-      
+
       return true;
     } catch (e) {
       return false;

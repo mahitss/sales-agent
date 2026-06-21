@@ -21,7 +21,9 @@ export class WorkflowAutomationWorker extends WorkerHost {
   async process(job: Job<any, any, string>): Promise<any> {
     const startTime = Date.now();
     const { businessId, leadId, triggerEvent } = job.data;
-    this.logger.log(`Processing Workflow Automation job ${job.id} for lead ${leadId} (trigger: ${triggerEvent})`);
+    this.logger.log(
+      `Processing Workflow Automation job ${job.id} for lead ${leadId} (trigger: ${triggerEvent})`,
+    );
 
     try {
       const lead = await this.prisma.lead.findUnique({
@@ -29,7 +31,9 @@ export class WorkflowAutomationWorker extends WorkerHost {
       });
 
       if (!lead) {
-        throw new Error(`Lead ${leadId} not found, aborting workflow automation.`);
+        throw new Error(
+          `Lead ${leadId} not found, aborting workflow automation.`,
+        );
       }
 
       // Fetch active rules for the business
@@ -44,7 +48,9 @@ export class WorkflowAutomationWorker extends WorkerHost {
       const actionsRun: string[] = [];
 
       for (const rule of rules) {
-        this.logger.log(`Executing rule action: ${rule.action} for lead ${leadId}`);
+        this.logger.log(
+          `Executing rule action: ${rule.action} for lead ${leadId}`,
+        );
         actionsRun.push(rule.action);
 
         if (rule.action === 'SHEET_SYNC') {
@@ -62,46 +68,57 @@ export class WorkflowAutomationWorker extends WorkerHost {
             },
           });
         } else if (rule.action === 'WEBHOOK') {
-          await this.webhookSubscriptionService.publish(businessId, 'lead.qualified', {
-            leadId,
-            name: lead.name,
-            email: lead.email,
-            status: lead.status,
-            sentiment: lead.sentiment,
-          });
+          await this.webhookSubscriptionService.publish(
+            businessId,
+            'lead.qualified',
+            {
+              leadId,
+              name: lead.name,
+              email: lead.email,
+              status: lead.status,
+              sentiment: lead.sentiment,
+            },
+          );
         }
       }
 
       const duration = Date.now() - startTime;
-      await this.prisma.jobLog.create({
-        data: {
-          queueName: 'workflow-automation',
-          jobId: job.id || 'unknown',
-          jobName: job.name,
-          status: 'COMPLETED',
-          data: { ...job.data, actionsRun },
-          duration,
-          businessId,
-        },
-      }).catch(() => {});
+      await this.prisma.jobLog
+        .create({
+          data: {
+            queueName: 'workflow-automation',
+            jobId: job.id || 'unknown',
+            jobName: job.name,
+            status: 'COMPLETED',
+            data: { ...job.data, actionsRun },
+            duration,
+            businessId,
+          },
+        })
+        .catch(() => {});
 
       return { success: true, actionsRun };
     } catch (err: any) {
       const duration = Date.now() - startTime;
-      this.logger.error(`Workflow Automation job ${job.id} failed: ${err.message}`, err.stack);
+      this.logger.error(
+        `Workflow Automation job ${job.id} failed: ${err.message}`,
+        err.stack,
+      );
 
-      await this.prisma.jobLog.create({
-        data: {
-          queueName: 'workflow-automation',
-          jobId: job.id || 'unknown',
-          jobName: job.name,
-          status: 'FAILED',
-          data: job.data,
-          error: `${err.message}\n${err.stack || ''}`,
-          duration,
-          businessId,
-        },
-      }).catch(() => {});
+      await this.prisma.jobLog
+        .create({
+          data: {
+            queueName: 'workflow-automation',
+            jobId: job.id || 'unknown',
+            jobName: job.name,
+            status: 'FAILED',
+            data: job.data,
+            error: `${err.message}\n${err.stack || ''}`,
+            duration,
+            businessId,
+          },
+        })
+        .catch(() => {});
 
       throw err;
     }

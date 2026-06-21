@@ -12,7 +12,7 @@ export class FeedbackService {
    */
   async submitFeedback(
     businessId: string,
-    data: { name: string; email: string; category: string; content: string }
+    data: { name: string; email: string; category: string; content: string },
   ) {
     const feedback = await this.prisma.feedback.create({
       data: {
@@ -25,7 +25,9 @@ export class FeedbackService {
       },
     });
 
-    this.logger.log(`New feedback registered for business ${businessId}: Category: ${data.category}`);
+    this.logger.log(
+      `New feedback registered for business ${businessId}: Category: ${data.category}`,
+    );
     return feedback;
   }
 

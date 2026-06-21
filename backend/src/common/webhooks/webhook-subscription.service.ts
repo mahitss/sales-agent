@@ -12,7 +12,7 @@ export class WebhookSubscriptionService {
   async createSubscription(businessId: string, url: string, events: string[]) {
     // Generate a unique secret for signing webhook payloads
     const secret = 'whsec_' + crypto.randomBytes(16).toString('hex');
-    
+
     return this.prisma.webhookSubscription.create({
       data: {
         businessId,
@@ -44,7 +44,10 @@ export class WebhookSubscriptionService {
       where: { id },
     });
 
-    return { success: true, message: 'Webhook subscription deleted successfully' };
+    return {
+      success: true,
+      message: 'Webhook subscription deleted successfully',
+    };
   }
 
   /**
@@ -77,18 +80,25 @@ export class WebhookSubscriptionService {
         const hmac = crypto.createHmac('sha256', sub.secret);
         const signature = hmac.update(stringifiedPayload).digest('hex');
 
-        axios.post(sub.url, payload, {
-          headers: {
-            'Content-Type': 'application/json',
-            'x-webhook-signature': signature,
-            'user-agent': 'Beacon-Webhook-Dispatcher/1.0',
-          },
-          timeout: 5000,
-        }).then(() => {
-          this.logger.log(`Webhook dispatched successfully to ${sub.url} for event ${event}`);
-        }).catch((err) => {
-          this.logger.warn(`Failed to dispatch webhook to ${sub.url}: ${err.message}`);
-        });
+        axios
+          .post(sub.url, payload, {
+            headers: {
+              'Content-Type': 'application/json',
+              'x-webhook-signature': signature,
+              'user-agent': 'Beacon-Webhook-Dispatcher/1.0',
+            },
+            timeout: 5000,
+          })
+          .then(() => {
+            this.logger.log(
+              `Webhook dispatched successfully to ${sub.url} for event ${event}`,
+            );
+          })
+          .catch((err) => {
+            this.logger.warn(
+              `Failed to dispatch webhook to ${sub.url}: ${err.message}`,
+            );
+          });
       }
     } catch (err: any) {
       this.logger.error(`Webhook publishing error: ${err.message}`);

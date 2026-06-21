@@ -15,7 +15,10 @@ export class AccountIntelligenceWorker extends WorkerHost {
   private isValidWebUrl(val: string): boolean {
     if (!val) return false;
     try {
-      const url = val.startsWith('http://') || val.startsWith('https://') ? val : `http://${val}`;
+      const url =
+        val.startsWith('http://') || val.startsWith('https://')
+          ? val
+          : `http://${val}`;
       const parsed = new URL(url);
       return parsed.protocol === 'http:' || parsed.protocol === 'https:';
     } catch {
@@ -26,7 +29,9 @@ export class AccountIntelligenceWorker extends WorkerHost {
   async process(job: Job<any, any, string>): Promise<any> {
     const startTime = Date.now();
     const { researchId, domain, businessId } = job.data;
-    this.logger.log(`Processing Account Intelligence job ${job.id} for research ${researchId} (domain: ${domain})`);
+    this.logger.log(
+      `Processing Account Intelligence job ${job.id} for research ${researchId} (domain: ${domain})`,
+    );
 
     try {
       // 1. Update progress to 10% - Crawling started
@@ -45,11 +50,12 @@ export class AccountIntelligenceWorker extends WorkerHost {
       if (this.isValidWebUrl(url)) {
         try {
           this.logger.log(`Crawling domain homepage: ${url}`);
-          const response = await axios.get(url, { 
+          const response = await axios.get(url, {
             timeout: 5000,
             headers: {
-              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-            }
+              'User-Agent':
+                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+            },
           });
           const html = response.data;
           // Basic HTML text extraction
@@ -61,7 +67,9 @@ export class AccountIntelligenceWorker extends WorkerHost {
             .trim()
             .substring(0, 4000);
         } catch (err: any) {
-          this.logger.warn(`Direct crawl failed for ${url}, sending minimal content: ${err?.message || String(err)}`);
+          this.logger.warn(
+            `Direct crawl failed for ${url}, sending minimal content: ${err?.message || String(err)}`,
+          );
         }
       }
 
@@ -73,12 +81,18 @@ export class AccountIntelligenceWorker extends WorkerHost {
 
       // Contact FastAPI service
       let aiServiceUrl = process.env.AI_SERVICE_URL || 'http://localhost:8000';
-      if (aiServiceUrl && !aiServiceUrl.startsWith('http://') && !aiServiceUrl.startsWith('https://')) {
+      if (
+        aiServiceUrl &&
+        !aiServiceUrl.startsWith('http://') &&
+        !aiServiceUrl.startsWith('https://')
+      ) {
         aiServiceUrl = `http://${aiServiceUrl}`;
       }
 
-      this.logger.log(`Requesting Gemini analysis from AI service: ${aiServiceUrl}/analyze-account`);
-      
+      this.logger.log(
+        `Requesting Gemini analysis from AI service: ${aiServiceUrl}/analyze-account`,
+      );
+
       const aiResponse = await axios.post(`${aiServiceUrl}/analyze-account`, {
         domain,
         scraped_text: scrapedText,
@@ -113,47 +127,55 @@ export class AccountIntelligenceWorker extends WorkerHost {
 
       // Record job completion log
       const duration = Date.now() - startTime;
-      await this.prisma.jobLog.create({
-        data: {
-          queueName: 'account-intelligence',
-          jobId: job.id || 'unknown',
-          jobName: job.name,
-          status: 'COMPLETED',
-          data: job.data,
-          duration,
-          businessId,
-        },
-      }).catch(() => {});
+      await this.prisma.jobLog
+        .create({
+          data: {
+            queueName: 'account-intelligence',
+            jobId: job.id || 'unknown',
+            jobName: job.name,
+            status: 'COMPLETED',
+            data: job.data,
+            duration,
+            businessId,
+          },
+        })
+        .catch(() => {});
 
       return updatedResearch;
-
     } catch (err: any) {
       const duration = Date.now() - startTime;
-      this.logger.error(`Account Intelligence job ${job.id} failed: ${err.message}`, err.stack);
+      this.logger.error(
+        `Account Intelligence job ${job.id} failed: ${err.message}`,
+        err.stack,
+      );
 
       // Save failure status in DB
-      await this.prisma.accountResearch.update({
-        where: { id: researchId },
-        data: {
-          status: 'FAILED',
-          progress: 100,
-          error: err.message || 'Unknown enrichment error',
-        },
-      }).catch(() => {});
+      await this.prisma.accountResearch
+        .update({
+          where: { id: researchId },
+          data: {
+            status: 'FAILED',
+            progress: 100,
+            error: err.message || 'Unknown enrichment error',
+          },
+        })
+        .catch(() => {});
 
       // Record failure log
-      await this.prisma.jobLog.create({
-        data: {
-          queueName: 'account-intelligence',
-          jobId: job.id || 'unknown',
-          jobName: job.name,
-          status: 'FAILED',
-          data: job.data,
-          error: `${err.message}\n${err.stack || ''}`,
-          duration,
-          businessId,
-        },
-      }).catch(() => {});
+      await this.prisma.jobLog
+        .create({
+          data: {
+            queueName: 'account-intelligence',
+            jobId: job.id || 'unknown',
+            jobName: job.name,
+            status: 'FAILED',
+            data: job.data,
+            error: `${err.message}\n${err.stack || ''}`,
+            duration,
+            businessId,
+          },
+        })
+        .catch(() => {});
 
       throw err;
     }

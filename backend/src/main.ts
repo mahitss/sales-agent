@@ -22,30 +22,35 @@ async function bootstrap() {
   const jwtSecret = process.env.JWT_SECRET;
   if (!jwtSecret || jwtSecret === 'super-secret-key-change-me-in-production') {
     if (process.env.NODE_ENV === 'production') {
-      throw new Error('FATAL: JWT_SECRET environment variable is required and cannot be default placeholder in production!');
+      throw new Error(
+        'FATAL: JWT_SECRET environment variable is required and cannot be default placeholder in production!',
+      );
     }
   }
 
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
-    logger: process.env.NODE_ENV === 'production' 
-      ? ['error', 'warn', 'log'] 
-      : ['error', 'warn', 'log', 'debug', 'verbose'],
+    logger:
+      process.env.NODE_ENV === 'production'
+        ? ['error', 'warn', 'log']
+        : ['error', 'warn', 'log', 'debug', 'verbose'],
   });
-  
+
   app.use(cookieParser());
-  app.use(helmet({
-    contentSecurityPolicy: {
-      directives: {
-        defaultSrc: ["'self'"],
-        scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "*"],
-        styleSrc: ["'self'", "'unsafe-inline'", "*"],
-        imgSrc: ["'self'", "data:", "*"],
-        connectSrc: ["'self'", "*"],
-        frameAncestors: ["*"], // Allow iframe embedding globally for widget
+  app.use(
+    helmet({
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'self'"],
+          scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", '*'],
+          styleSrc: ["'self'", "'unsafe-inline'", '*'],
+          imgSrc: ["'self'", 'data:', '*'],
+          connectSrc: ["'self'", '*'],
+          frameAncestors: ['*'], // Allow iframe embedding globally for widget
+        },
       },
-    },
-    crossOriginEmbedderPolicy: false,
-  }));
+      crossOriginEmbedderPolicy: false,
+    }),
+  );
   app.use(compression());
   app.useGlobalInterceptors(
     new HtmlSanitizationInterceptor(),
@@ -59,7 +64,11 @@ async function bootstrap() {
 
   // Enable CORS with strict origins
   const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-  const allowedOrigins = [frontendUrl, 'http://localhost:3000', 'http://localhost:4000'];
+  const allowedOrigins = [
+    frontendUrl,
+    'http://localhost:3000',
+    'http://localhost:4000',
+  ];
   if (process.env.ALLOWED_ORIGINS) {
     process.env.ALLOWED_ORIGINS.split(',').forEach((origin) => {
       const trimmed = origin.trim();
@@ -68,7 +77,7 @@ async function bootstrap() {
       }
     });
   }
-  
+
   app.enableCors({
     origin: (origin, callback) => {
       if (!origin || allowedOrigins.indexOf(origin) !== -1) {
@@ -86,15 +95,19 @@ async function bootstrap() {
   });
 
   // Enable global validation pipe
-  app.useGlobalPipes(new ValidationPipe({
-    whitelist: true,
-    transform: true,
-  }));
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+      transform: true,
+    }),
+  );
 
   // Configure Swagger OpenAPI Document
   const config = new DocumentBuilder()
     .setTitle('Beacon AI Sales Agent API')
-    .setDescription('The API documentation for the Beacon AI Sales Agent backend.')
+    .setDescription(
+      'The API documentation for the Beacon AI Sales Agent backend.',
+    )
     .setVersion('1.0.0')
     .addBearerAuth()
     .build();
@@ -104,8 +117,8 @@ async function bootstrap() {
   const port = process.env.PORT ?? 4000;
   await app.listen(port);
   console.log(`NestJS Backend running on: http://localhost:${port}`);
-  console.log(`Swagger documentation available at: http://localhost:${port}/api/docs`);
+  console.log(
+    `Swagger documentation available at: http://localhost:${port}/api/docs`,
+  );
 }
 bootstrap();
-
-

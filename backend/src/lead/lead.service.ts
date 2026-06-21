@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException, Inject, forwardRef } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  Inject,
+  forwardRef,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../common/redis/redis.service';
 import { CreateLeadDto, UpdateLeadDto } from './dto/lead.dto';
@@ -31,24 +36,36 @@ export class LeadService {
       },
     });
 
-    await this.redisService.del(`business:${dto.businessId}:lead-stats`).catch(() => {});
+    await this.redisService
+      .del(`business:${dto.businessId}:lead-stats`)
+      .catch(() => {});
 
     // Outbound webhook notification
-    this.webhookService.publish(lead.businessId, 'lead.created', lead).catch(() => {});
+    this.webhookService
+      .publish(lead.businessId, 'lead.created', lead)
+      .catch(() => {});
 
     // Workflow Trigger
-    this.workflowService.trigger('LEAD_CREATED', lead.businessId, lead).catch(() => {});
+    this.workflowService
+      .trigger('LEAD_CREATED', lead.businessId, lead)
+      .catch(() => {});
 
     // Audit log
-    this.auditLog.log({
-      businessId: lead.businessId,
-      action: 'LEAD_CREATED',
-      entity: 'Lead',
-      entityId: lead.id,
-      description: `New lead captured via ${lead.source}: ${lead.name || lead.email || 'Anonymous'}`,
-      severity: 'INFO',
-      metadata: { source: lead.source, status: lead.status, email: lead.email },
-    }).catch(() => {});
+    this.auditLog
+      .log({
+        businessId: lead.businessId,
+        action: 'LEAD_CREATED',
+        entity: 'Lead',
+        entityId: lead.id,
+        description: `New lead captured via ${lead.source}: ${lead.name || lead.email || 'Anonymous'}`,
+        severity: 'INFO',
+        metadata: {
+          source: lead.source,
+          status: lead.status,
+          email: lead.email,
+        },
+      })
+      .catch(() => {});
 
     return lead;
   }
@@ -63,39 +80,61 @@ export class LeadService {
       data: dto,
     });
 
-    await this.redisService.del(`business:${existing.businessId}:lead-stats`).catch(() => {});
+    await this.redisService
+      .del(`business:${existing.businessId}:lead-stats`)
+      .catch(() => {});
 
     // Outbound webhook notifications
-    if (updated.status !== existing.status && (updated.status === 'HOT' || updated.status === 'WARM')) {
-      this.webhookService.publish(updated.businessId, 'lead.qualified', updated).catch(() => {});
+    if (
+      updated.status !== existing.status &&
+      (updated.status === 'HOT' || updated.status === 'WARM')
+    ) {
+      this.webhookService
+        .publish(updated.businessId, 'lead.qualified', updated)
+        .catch(() => {});
     }
-    this.webhookService.publish(updated.businessId, 'lead.updated', updated).catch(() => {});
+    this.webhookService
+      .publish(updated.businessId, 'lead.updated', updated)
+      .catch(() => {});
 
     // Workflow Triggers
     if (updated.status !== existing.status) {
       if (updated.status === 'HOT') {
-        this.workflowService.trigger('DEAL_WON', updated.businessId, updated).catch(() => {});
+        this.workflowService
+          .trigger('DEAL_WON', updated.businessId, updated)
+          .catch(() => {});
       } else if (updated.status === 'COLD') {
-        this.workflowService.trigger('DEAL_LOST', updated.businessId, updated).catch(() => {});
+        this.workflowService
+          .trigger('DEAL_LOST', updated.businessId, updated)
+          .catch(() => {});
       }
     }
-    this.workflowService.trigger('LEAD_UPDATED', updated.businessId, updated).catch(() => {});
+    this.workflowService
+      .trigger('LEAD_UPDATED', updated.businessId, updated)
+      .catch(() => {});
 
     // Audit log: pipeline/status change gets WARN severity for visibility
     const statusChanged = updated.status !== existing.status;
-    this.auditLog.log({
-      businessId: updated.businessId,
-      action: statusChanged ? 'PIPELINE_CHANGED' : 'LEAD_UPDATED',
-      entity: 'Lead',
-      entityId: updated.id,
-      description: statusChanged
-        ? `Lead [${updated.id.substring(0, 8)}] pipeline stage changed: ${existing.status} → ${updated.status}`
-        : `Lead [${updated.id.substring(0, 8)}] details updated`,
-      severity: statusChanged && updated.status === 'HOT' ? 'WARN' : 'INFO',
-      metadata: statusChanged
-        ? { from: existing.status, to: updated.status, leadName: updated.name, leadEmail: updated.email }
-        : { fields: Object.keys(dto) },
-    }).catch(() => {});
+    this.auditLog
+      .log({
+        businessId: updated.businessId,
+        action: statusChanged ? 'PIPELINE_CHANGED' : 'LEAD_UPDATED',
+        entity: 'Lead',
+        entityId: updated.id,
+        description: statusChanged
+          ? `Lead [${updated.id.substring(0, 8)}] pipeline stage changed: ${existing.status} → ${updated.status}`
+          : `Lead [${updated.id.substring(0, 8)}] details updated`,
+        severity: statusChanged && updated.status === 'HOT' ? 'WARN' : 'INFO',
+        metadata: statusChanged
+          ? {
+              from: existing.status,
+              to: updated.status,
+              leadName: updated.name,
+              leadEmail: updated.email,
+            }
+          : { fields: Object.keys(dto) },
+      })
+      .catch(() => {});
 
     return updated;
   }
@@ -125,7 +164,8 @@ export class LeadService {
       include: { score: true },
     });
 
-    const nextCursor = leads.length === take ? leads[leads.length - 1].id : null;
+    const nextCursor =
+      leads.length === take ? leads[leads.length - 1].id : null;
     return {
       data: leads,
       nextCursor,
@@ -144,13 +184,22 @@ export class LeadService {
     }
 
     const totalLeads = await this.prisma.lead.count({ where: { businessId } });
-    const hotLeads = await this.prisma.lead.count({ where: { businessId, status: 'HOT' } });
-    const warmLeads = await this.prisma.lead.count({ where: { businessId, status: 'WARM' } });
-    const coldLeads = await this.prisma.lead.count({ where: { businessId, status: 'COLD' } });
-    const appointments = await this.prisma.appointment.count({ where: { businessId } });
+    const hotLeads = await this.prisma.lead.count({
+      where: { businessId, status: 'HOT' },
+    });
+    const warmLeads = await this.prisma.lead.count({
+      where: { businessId, status: 'WARM' },
+    });
+    const coldLeads = await this.prisma.lead.count({
+      where: { businessId, status: 'COLD' },
+    });
+    const appointments = await this.prisma.appointment.count({
+      where: { businessId },
+    });
 
     const qualifiedLeads = hotLeads + warmLeads;
-    const conversionRate = totalLeads > 0 ? Math.round((qualifiedLeads / totalLeads) * 100) : 0;
+    const conversionRate =
+      totalLeads > 0 ? Math.round((qualifiedLeads / totalLeads) * 100) : 0;
 
     // Advanced Lead Intelligence stats
     const revenuePredictions = await this.prisma.revenuePrediction.findMany({
@@ -160,8 +209,14 @@ export class LeadService {
         },
       },
     });
-    const totalExpectedRevenue = revenuePredictions.reduce((acc, curr) => acc + curr.expectedValue, 0);
-    const totalEstimatedValue = revenuePredictions.reduce((acc, curr) => acc + curr.estimatedValue, 0);
+    const totalExpectedRevenue = revenuePredictions.reduce(
+      (acc, curr) => acc + curr.expectedValue,
+      0,
+    );
+    const totalEstimatedValue = revenuePredictions.reduce(
+      (acc, curr) => acc + curr.estimatedValue,
+      0,
+    );
 
     const leadScores = await this.prisma.leadScore.findMany({
       where: {
@@ -170,9 +225,13 @@ export class LeadService {
         },
       },
     });
-    const averageLeadScore = leadScores.length > 0
-      ? Math.round(leadScores.reduce((acc, curr) => acc + curr.score, 0) / leadScores.length)
-      : 0;
+    const averageLeadScore =
+      leadScores.length > 0
+        ? Math.round(
+            leadScores.reduce((acc, curr) => acc + curr.score, 0) /
+              leadScores.length,
+          )
+        : 0;
 
     const leadsWithAppointments = await this.prisma.lead.count({
       where: {
@@ -182,7 +241,10 @@ export class LeadService {
         },
       },
     });
-    const leadConversionRate = totalLeads > 0 ? Math.round((leadsWithAppointments / totalLeads) * 100) : 0;
+    const leadConversionRate =
+      totalLeads > 0
+        ? Math.round((leadsWithAppointments / totalLeads) * 100)
+        : 0;
 
     const stats = {
       totalLeads,
@@ -213,7 +275,18 @@ export class LeadService {
       orderBy: { createdAt: 'desc' },
     });
 
-    const headers = ['ID', 'Name', 'Email', 'Phone', 'Budget', 'Source', 'Status', 'Sentiment', 'Engagement Score', 'Created At'];
+    const headers = [
+      'ID',
+      'Name',
+      'Email',
+      'Phone',
+      'Budget',
+      'Source',
+      'Status',
+      'Sentiment',
+      'Engagement Score',
+      'Created At',
+    ];
     const rows = leads.map((l) => [
       l.id,
       l.name || 'Anonymous Visitor',
@@ -223,13 +296,17 @@ export class LeadService {
       l.source,
       l.status,
       l.sentiment || 'Neutral',
-      l.engagementScore !== null && l.engagementScore !== undefined ? String(l.engagementScore) : '—',
+      l.engagementScore !== null && l.engagementScore !== undefined
+        ? String(l.engagementScore)
+        : '—',
       l.createdAt.toISOString(),
     ]);
 
     const csvContent = [
       headers.join(','),
-      ...rows.map((row) => row.map((val) => `"${val.replace(/"/g, '""')}"`).join(',')),
+      ...rows.map((row) =>
+        row.map((val) => `"${val.replace(/"/g, '""')}"`).join(','),
+      ),
     ].join('\n');
 
     return csvContent;
@@ -278,7 +355,8 @@ export class LeadService {
     ];
 
     for (const lead of leads) {
-      const requestedServices = lead.intelligence?.requestedServices?.join(', ') || '';
+      const requestedServices =
+        lead.intelligence?.requestedServices?.join(', ') || '';
       sheet1.addRow({
         id: lead.id,
         name: lead.name || 'Anonymous Visitor',
@@ -287,11 +365,17 @@ export class LeadService {
         company: lead.enrichment?.companyName || lead.name || '',
         website: lead.enrichment?.website || '',
         industry: lead.enrichment?.industry || lead.business?.industry || '',
-        budget: lead.budget || lead.revenuePrediction?.estimatedValue?.toString() || '',
+        budget:
+          lead.budget ||
+          lead.revenuePrediction?.estimatedValue?.toString() ||
+          '',
         timeline: lead.intelligence?.timeline || '',
         requestedService: requestedServices,
         leadScore: lead.score?.score || lead.engagementScore || 0,
-        dealProbability: lead.score?.dealProbability !== undefined ? `${Math.round(lead.score.dealProbability * 100)}%` : '0%',
+        dealProbability:
+          lead.score?.dealProbability !== undefined
+            ? `${Math.round(lead.score.dealProbability * 100)}%`
+            : '0%',
         priority: lead.score?.classification || lead.status || 'COLD',
         createdDate: lead.createdAt.toISOString(),
       });
@@ -345,7 +429,7 @@ export class LeadService {
     }
     sheet3.getRow(1).font = { bold: true };
 
-    const buffer = await workbook.xlsx.writeBuffer() as unknown as Buffer;
+    const buffer = (await workbook.xlsx.writeBuffer()) as unknown as Buffer;
     return buffer;
   }
 }

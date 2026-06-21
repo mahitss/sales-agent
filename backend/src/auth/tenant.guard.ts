@@ -1,4 +1,9 @@
-import { CanActivate, ExecutionContext, Injectable, ForbiddenException } from '@nestjs/common';
+import {
+  CanActivate,
+  ExecutionContext,
+  Injectable,
+  ForbiddenException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
@@ -16,7 +21,8 @@ export class TenantGuard implements CanActivate {
     const body = request.body;
     const query = request.query;
 
-    let targetBusinessId = params.businessId || body.businessId || query.businessId;
+    let targetBusinessId =
+      params.businessId || body.businessId || query.businessId;
 
     // Resource-level resolution for lead, conversation, appointment, feedback
     if (!targetBusinessId && (params.id || params.feedbackId)) {
@@ -78,7 +84,9 @@ export class TenantGuard implements CanActivate {
     // Check visitor role
     if (user.role === 'VISITOR') {
       if (user.businessId !== targetBusinessId) {
-        throw new ForbiddenException('Access denied: Visitor token tenant mismatch');
+        throw new ForbiddenException(
+          'Access denied: Visitor token tenant mismatch',
+        );
       }
       return true;
     }

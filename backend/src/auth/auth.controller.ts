@@ -1,10 +1,31 @@
-import { Controller, Post, Get, Body, HttpCode, HttpStatus, Res, Req, UseGuards, Param, BadRequestException } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Get,
+  Body,
+  HttpCode,
+  HttpStatus,
+  Res,
+  Req,
+  UseGuards,
+  Param,
+  BadRequestException,
+} from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
-import { RegisterDto, LoginDto, VerifyEmailDto, RequestPasswordResetDto, ResetPasswordDto } from './dto/auth.dto';
+import {
+  RegisterDto,
+  LoginDto,
+  VerifyEmailDto,
+  RequestPasswordResetDto,
+  ResetPasswordDto,
+} from './dto/auth.dto';
 import { ThrottlerGuard } from '@nestjs/throttler';
 import { AuthGuard } from './auth.guard';
-import { ActivityLogService, extractAuditContext } from '../common/activity-logs/activity-log.service';
+import {
+  ActivityLogService,
+  extractAuditContext,
+} from '../common/activity-logs/activity-log.service';
 import * as express from 'express';
 
 @ApiTags('auth')
@@ -36,24 +57,32 @@ export class AuthController {
   }
 
   @Post('register')
-  async register(@Body() dto: RegisterDto, @Res({ passthrough: true }) response: express.Response, @Req() req: express.Request) {
+  async register(
+    @Body() dto: RegisterDto,
+    @Res({ passthrough: true }) response: express.Response,
+    @Req() req: express.Request,
+  ) {
     const result = await this.authService.register(dto);
     this.setAccessTokenCookie(response, result.token);
     this.setRefreshTokenCookie(response, result.refreshToken);
     // Audit: new account registration
     const regUser = result.user as any;
-    this.auditLog.log({
-      userId: regUser?.id,
-      businessId: regUser?.businessId || null,
-      action: 'AUTH_REGISTER',
-      entity: 'User',
-      entityId: regUser?.id,
-      description: `New account registered: ${dto.email}`,
-      ipAddress: (req as any).headers?.['x-forwarded-for']?.split(',')[0]?.trim() || (req as any).ip,
-      userAgent: req.headers?.['user-agent'],
-      severity: 'INFO',
-      metadata: { email: dto.email, role: regUser?.role },
-    }).catch(() => {});
+    this.auditLog
+      .log({
+        userId: regUser?.id,
+        businessId: regUser?.businessId || null,
+        action: 'AUTH_REGISTER',
+        entity: 'User',
+        entityId: regUser?.id,
+        description: `New account registered: ${dto.email}`,
+        ipAddress:
+          (req as any).headers?.['x-forwarded-for']?.split(',')[0]?.trim() ||
+          (req as any).ip,
+        userAgent: req.headers?.['user-agent'],
+        severity: 'INFO',
+        metadata: { email: dto.email, role: regUser?.role },
+      })
+      .catch(() => {});
     return {
       user: result.user,
       token: result.token,
@@ -62,7 +91,11 @@ export class AuthController {
 
   @Post('login')
   @HttpCode(HttpStatus.OK)
-  async login(@Body() dto: LoginDto, @Res({ passthrough: true }) response: express.Response, @Req() req: express.Request) {
+  async login(
+    @Body() dto: LoginDto,
+    @Res({ passthrough: true }) response: express.Response,
+    @Req() req: express.Request,
+  ) {
     const result = await this.authService.login(dto);
     if ('require2fa' in result && result.require2fa) {
       return {
@@ -81,18 +114,22 @@ export class AuthController {
     this.setRefreshTokenCookie(response, successResult.refreshToken);
 
     // Audit: successful login
-    this.auditLog.log({
-      userId: successResult.user?.id,
-      businessId: successResult.user?.businessId,
-      action: 'AUTH_LOGIN',
-      entity: 'User',
-      entityId: successResult.user?.id,
-      description: `User signed in: ${dto.email}`,
-      ipAddress: (req as any).headers?.['x-forwarded-for']?.split(',')[0]?.trim() || (req as any).ip,
-      userAgent: req.headers?.['user-agent'],
-      severity: 'INFO',
-      metadata: { email: dto.email, provider: 'password' },
-    }).catch(() => {});
+    this.auditLog
+      .log({
+        userId: successResult.user?.id,
+        businessId: successResult.user?.businessId,
+        action: 'AUTH_LOGIN',
+        entity: 'User',
+        entityId: successResult.user?.id,
+        description: `User signed in: ${dto.email}`,
+        ipAddress:
+          (req as any).headers?.['x-forwarded-for']?.split(',')[0]?.trim() ||
+          (req as any).ip,
+        userAgent: req.headers?.['user-agent'],
+        severity: 'INFO',
+        metadata: { email: dto.email, provider: 'password' },
+      })
+      .catch(() => {});
 
     return {
       user: successResult.user,
@@ -102,7 +139,10 @@ export class AuthController {
 
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
-  async refresh(@Req() request: express.Request, @Res({ passthrough: true }) response: express.Response) {
+  async refresh(
+    @Req() request: express.Request,
+    @Res({ passthrough: true }) response: express.Response,
+  ) {
     const refreshToken = request.cookies['beacon_refresh_token'];
     const result = await this.authService.refresh(refreshToken);
     this.setAccessTokenCookie(response, result.token);
@@ -114,7 +154,10 @@ export class AuthController {
 
   @Post('logout')
   @HttpCode(HttpStatus.OK)
-  async logout(@Req() request: express.Request, @Res({ passthrough: true }) response: express.Response) {
+  async logout(
+    @Req() request: express.Request,
+    @Res({ passthrough: true }) response: express.Response,
+  ) {
     const refreshToken = request.cookies['beacon_refresh_token'];
     if (refreshToken) {
       await this.authService.revokeRefreshToken(refreshToken);
@@ -154,18 +197,23 @@ export class AuthController {
     // Audit: logout event (best-effort — user context may no longer be in request)
     const logoutUser = (request as any).user;
     if (logoutUser) {
-      this.auditLog.log({
-        userId: logoutUser.id || logoutUser.userId,
-        businessId: logoutUser.businessId,
-        action: 'AUTH_LOGOUT',
-        entity: 'User',
-        entityId: logoutUser.id || logoutUser.userId,
-        description: `User signed out: ${logoutUser.email || 'unknown'}`,
-        ipAddress: (request as any).headers?.['x-forwarded-for']?.split(',')[0]?.trim() || (request as any).ip,
-        userAgent: request.headers?.['user-agent'],
-        severity: 'INFO',
-        metadata: {},
-      }).catch(() => {});
+      this.auditLog
+        .log({
+          userId: logoutUser.id || logoutUser.userId,
+          businessId: logoutUser.businessId,
+          action: 'AUTH_LOGOUT',
+          entity: 'User',
+          entityId: logoutUser.id || logoutUser.userId,
+          description: `User signed out: ${logoutUser.email || 'unknown'}`,
+          ipAddress:
+            (request as any).headers?.['x-forwarded-for']
+              ?.split(',')[0]
+              ?.trim() || (request as any).ip,
+          userAgent: request.headers?.['user-agent'],
+          severity: 'INFO',
+          metadata: {},
+        })
+        .catch(() => {});
     }
 
     return { success: true, message: 'Logged out successfully' };
@@ -221,7 +269,7 @@ export class AuthController {
   async verify2FA(
     @Body('tempToken') tempToken: string,
     @Body('code') code: string,
-    @Res({ passthrough: true }) response: express.Response
+    @Res({ passthrough: true }) response: express.Response,
   ) {
     const result = await this.authService.verify2FA(tempToken, code);
     this.setAccessTokenCookie(response, result.token);
@@ -273,11 +321,19 @@ export class AuthController {
 
   @UseGuards(AuthGuard)
   @Post('invite')
-  async createInvitation(@Body() body: { email: string; businessId: string; role: string }) {
+  async createInvitation(
+    @Body() body: { email: string; businessId: string; role: string },
+  ) {
     if (!body.email || !body.businessId) {
-      throw new BadRequestException('Missing required fields: email, businessId');
+      throw new BadRequestException(
+        'Missing required fields: email, businessId',
+      );
     }
-    return this.authService.createInvitation(body.email, body.businessId, body.role || 'EMPLOYEE');
+    return this.authService.createInvitation(
+      body.email,
+      body.businessId,
+      body.role || 'EMPLOYEE',
+    );
   }
 
   @Post('waitlist')
@@ -322,7 +378,8 @@ export class AuthController {
 
   @Get('sso/saml')
   async initiateSSO(@Res() response: express.Response) {
-    const ssoRedirectUrl = 'https://mock-identity-provider.com/sso/saml/login?clientId=beacon-saas';
+    const ssoRedirectUrl =
+      'https://mock-identity-provider.com/sso/saml/login?clientId=beacon-saas';
     return response.send({
       message: 'SAML SSO integration initiated',
       redirectUrl: ssoRedirectUrl,
@@ -332,7 +389,7 @@ export class AuthController {
   @Post('sso/callback')
   async handleSSOCallback(
     @Body() body: { samlResponse: string },
-    @Res() response: express.Response
+    @Res() response: express.Response,
   ) {
     if (!body.samlResponse) {
       throw new BadRequestException('Missing SAMLResponse token assertion');
@@ -341,7 +398,10 @@ export class AuthController {
     const mockEmail = 'sso-enterprise-user@company.com';
     const mockName = 'Enterprise SSO User';
 
-    const result = await this.authService.loginOrCreateSSOUser(mockEmail, mockName);
+    const result = await this.authService.loginOrCreateSSOUser(
+      mockEmail,
+      mockName,
+    );
 
     this.setAccessTokenCookie(response, result.accessToken);
     this.setRefreshTokenCookie(response, result.refreshToken);

@@ -1,4 +1,16 @@
-import { Controller, Post, Get, Put, Delete, Body, Param, UseGuards, Request, Inject, forwardRef } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Get,
+  Put,
+  Delete,
+  Body,
+  Param,
+  UseGuards,
+  Request,
+  Inject,
+  forwardRef,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { BusinessService } from './business.service';
 import { JobsService } from '../jobs/jobs.service';
@@ -44,14 +56,22 @@ export class BusinessController {
   @UseGuards(AuthGuard, RolesGuard)
   @Roles('ADMIN')
   @Put(':id')
-  async update(@Param('id') id: string, @Request() req, @Body() dto: CreateBusinessDto) {
+  async update(
+    @Param('id') id: string,
+    @Request() req,
+    @Body() dto: CreateBusinessDto,
+  ) {
     return this.businessService.update(id, req.user.sub, dto);
   }
 
   @UseGuards(AuthGuard, RolesGuard)
   @Roles('ADMIN')
   @Post(':id/faq')
-  async createFAQ(@Param('id') id: string, @Request() req, @Body() dto: CreateFAQDto) {
+  async createFAQ(
+    @Param('id') id: string,
+    @Request() req,
+    @Body() dto: CreateFAQDto,
+  ) {
     return this.businessService.createFAQ(id, req.user.sub, dto);
   }
 
@@ -71,7 +91,7 @@ export class BusinessController {
   @Post(':id/track-visitor')
   async trackVisitor(
     @Param('id') id: string,
-    @Body() body: { location: string; pagesViewed: string[]; duration: number }
+    @Body() body: { location: string; pagesViewed: string[]; duration: number },
   ) {
     return this.businessService.trackVisitor(id, body);
   }
@@ -98,7 +118,7 @@ export class BusinessController {
   async importText(
     @Param('id') id: string,
     @Request() req,
-    @Body() body: { title: string; text: string }
+    @Body() body: { title: string; text: string },
   ) {
     return this.businessService.importText(id, req.user.sub, body);
   }
@@ -107,7 +127,10 @@ export class BusinessController {
   @UseGuards(AuthGuard, RolesGuard)
   @Roles('ADMIN')
   @Post(':id/competitor-analysis')
-  async competitorAnalysis(@Param('id') id: string, @Body('competitorUrl') competitorUrl: string) {
+  async competitorAnalysis(
+    @Param('id') id: string,
+    @Body('competitorUrl') competitorUrl: string,
+  ) {
     return this.businessService.competitorAnalysis(id, competitorUrl);
   }
 
@@ -133,7 +156,7 @@ export class BusinessController {
   async createEmployee(
     @Param('id') id: string,
     @Request() req,
-    @Body() body: { email: string; name: string; password?: string }
+    @Body() body: { email: string; name: string; password?: string },
   ) {
     return this.businessService.createEmployee(id, req.user.sub, body);
   }

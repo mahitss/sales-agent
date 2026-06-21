@@ -14,12 +14,12 @@ export function encrypt(text: string, secretKey: string): string {
   const key = crypto.createHash('sha256').update(secretKey).digest();
   const iv = crypto.randomBytes(IV_LENGTH);
   const cipher = crypto.createCipheriv(ALGORITHM, key, iv);
-  
+
   let encrypted = cipher.update(text, 'utf8', 'hex');
   encrypted += cipher.final('hex');
-  
+
   const authTag = cipher.getAuthTag().toString('hex');
-  
+
   return `${iv.toString('hex')}:${encrypted}:${authTag}`;
 }
 
@@ -33,19 +33,21 @@ export function decrypt(encryptedData: string, secretKey: string): string {
   if (!encryptedData) return '';
   const parts = encryptedData.split(':');
   if (parts.length !== 3) {
-    throw new Error('Invalid encrypted text payload format (missing IV or AuthTag)');
+    throw new Error(
+      'Invalid encrypted text payload format (missing IV or AuthTag)',
+    );
   }
-  
+
   const iv = Buffer.from(parts[0], 'hex');
   const encryptedText = parts[1];
   const authTag = Buffer.from(parts[2], 'hex');
-  
+
   const key = crypto.createHash('sha256').update(secretKey).digest();
   const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
   decipher.setAuthTag(authTag);
-  
+
   let decrypted = decipher.update(encryptedText, 'hex', 'utf8');
   decrypted += decipher.final('utf8');
-  
+
   return decrypted;
 }

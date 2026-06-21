@@ -1,4 +1,10 @@
-import { Injectable, ConflictException, UnauthorizedException, Logger, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  ConflictException,
+  UnauthorizedException,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
@@ -8,7 +14,13 @@ import * as crypto from 'crypto';
 import * as speakeasy from 'speakeasy';
 import * as QRCode from 'qrcode';
 import { EmailService } from '../common/email/email.service';
-import { RegisterDto, LoginDto, VerifyEmailDto, RequestPasswordResetDto, ResetPasswordDto } from './dto/auth.dto';
+import {
+  RegisterDto,
+  LoginDto,
+  VerifyEmailDto,
+  RequestPasswordResetDto,
+  ResetPasswordDto,
+} from './dto/auth.dto';
 
 @Injectable()
 export class AuthService {
@@ -60,7 +72,9 @@ export class AuthService {
 
     const hashedPassword = await bcrypt.hash(dto.password, 10);
     const verificationToken = isVerified ? null : crypto.randomUUID();
-    const verificationTokenExp = isVerified ? null : new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+    const verificationTokenExp = isVerified
+      ? null
+      : new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
 
     const user = await this.prisma.user.create({
       data: {
@@ -80,28 +94,35 @@ export class AuthService {
         where: { id: invitationId },
         data: { status: 'ACCEPTED' },
       });
-      
+
       // Add employee user to business list
       if (resolvedBusinessId) {
         await this.prisma.business.update({
           where: { id: resolvedBusinessId },
           data: {
             employees: {
-              connect: { id: user.id }
-            }
-          }
+              connect: { id: user.id },
+            },
+          },
         });
       }
     }
 
     // Generate token pair (access token + refresh token)
-    const tokens = await this.generateTokensPair(user.id, user.email, user.role);
+    const tokens = await this.generateTokensPair(
+      user.id,
+      user.email,
+      user.role,
+    );
 
     // Save refresh token to db
     await this.saveRefreshToken(user.id, tokens.refreshToken);
 
     if (!isVerified && verificationToken) {
-      await this.emailService.sendVerificationEmail(user.email, verificationToken);
+      await this.emailService.sendVerificationEmail(
+        user.email,
+        verificationToken,
+      );
     }
 
     return {
@@ -132,14 +153,16 @@ export class AuthService {
 
     // Check if verified (skip during testing to keep tests simple unless mocked)
     if (!user.isVerified && process.env.NODE_ENV !== 'test') {
-      throw new UnauthorizedException('Email address is not verified. Please verify your email first.');
+      throw new UnauthorizedException(
+        'Email address is not verified. Please verify your email first.',
+      );
     }
 
     if (user.twoFactorEnabled) {
       const jwtSecret = this.configService.get<string>('JWT_SECRET');
       const tempToken = await this.jwtService.signAsync(
         { sub: user.id, temp2fa: true },
-        { secret: jwtSecret, expiresIn: '5m' }
+        { secret: jwtSecret, expiresIn: '5m' },
       );
       return {
         require2fa: true,
@@ -147,7 +170,11 @@ export class AuthService {
       };
     }
 
-    const tokens = await this.generateTokensPair(user.id, user.email, user.role);
+    const tokens = await this.generateTokensPair(
+      user.id,
+      user.email,
+      user.role,
+    );
     await this.saveRefreshToken(user.id, tokens.refreshToken);
 
     return {
@@ -181,7 +208,10 @@ export class AuthService {
         isVerified: true,
       },
     });
-    return { success: true, message: 'Email address has been successfully verified.' };
+    return {
+      success: true,
+      message: 'Email address has been successfully verified.',
+    };
   }
 
   async requestPasswordReset(dto: RequestPasswordResetDto) {
@@ -189,7 +219,10 @@ export class AuthService {
       where: { email: dto.email },
     });
     if (!user) {
-      return { success: true, message: 'If the email exists, a password reset link has been sent.' };
+      return {
+        success: true,
+        message: 'If the email exists, a password reset link has been sent.',
+      };
     }
     const resetToken = crypto.randomUUID();
     const resetTokenExp = new Date(Date.now() + 15 * 60 * 1000); // 15 mins
@@ -240,8 +273,12 @@ export class AuthService {
     // Verify token structure and expiration via JWT service
     let payload;
     try {
-      const refreshSecret = this.configService.get<string>('JWT_REFRESH_SECRET') || 'super-secret-refresh-key-change-me';
-      payload = await this.jwtService.verifyAsync(refreshToken, { secret: refreshSecret });
+      const refreshSecret =
+        this.configService.get<string>('JWT_REFRESH_SECRET') ||
+        'super-secret-refresh-key-change-me';
+      payload = await this.jwtService.verifyAsync(refreshToken, {
+        secret: refreshSecret,
+      });
     } catch (err) {
       throw new UnauthorizedException('Invalid or expired refresh token');
     }
@@ -268,8 +305,12 @@ export class AuthService {
       await this.prisma.refreshToken.deleteMany({
         where: { userId: dbToken.userId },
       });
-      this.logger.warn(`Security alert! Revoked refresh token reuse detected for user ${dbToken.userId}. Invalidating all sessions.`);
-      throw new UnauthorizedException('Access denied. Compromised session detected.');
+      this.logger.warn(
+        `Security alert! Revoked refresh token reuse detected for user ${dbToken.userId}. Invalidating all sessions.`,
+      );
+      throw new UnauthorizedException(
+        'Access denied. Compromised session detected.',
+      );
     }
 
     // Mark current token as revoked (used)
@@ -279,7 +320,11 @@ export class AuthService {
     });
 
     // Generate new pair
-    const tokens = await this.generateTokensPair(dbToken.user.id, dbToken.user.email, dbToken.user.role);
+    const tokens = await this.generateTokensPair(
+      dbToken.user.id,
+      dbToken.user.email,
+      dbToken.user.role,
+    );
     await this.saveRefreshToken(dbToken.user.id, tokens.refreshToken);
 
     return tokens;
@@ -300,11 +345,18 @@ export class AuthService {
     if (!token) return;
     try {
       const hashedToken = this.hashToken(token);
-      const payload = this.jwtService.decode(token) as any;
+      const payload = this.jwtService.decode(token);
       const exp = payload?.exp;
       if (exp) {
-        const remainingSeconds = Math.max(1, exp - Math.floor(Date.now() / 1000));
-        await this.redisService.set(`blacklist:${hashedToken}`, '1', remainingSeconds);
+        const remainingSeconds = Math.max(
+          1,
+          exp - Math.floor(Date.now() / 1000),
+        );
+        await this.redisService.set(
+          `blacklist:${hashedToken}`,
+          '1',
+          remainingSeconds,
+        );
       }
     } catch (err) {
       this.logger.error(`Failed to blacklist access token: ${err.message}`);
@@ -313,7 +365,12 @@ export class AuthService {
 
   async generateVisitorToken(businessId: string) {
     const visitorId = `visitor-${crypto.randomUUID()}`;
-    const payload = { sub: visitorId, email: `${visitorId}@anonymous.local`, role: 'VISITOR', businessId };
+    const payload = {
+      sub: visitorId,
+      email: `${visitorId}@anonymous.local`,
+      role: 'VISITOR',
+      businessId,
+    };
     const token = await this.jwtService.signAsync(payload, {
       secret: this.configService.get<string>('JWT_SECRET'),
       expiresIn: '7d',
@@ -321,13 +378,21 @@ export class AuthService {
     return { token };
   }
 
-  private async generateTokensPair(userId: string, email: string, role: string) {
+  private async generateTokensPair(
+    userId: string,
+    email: string,
+    role: string,
+  ) {
     const payload = { sub: userId, email, role };
     const jwtSecret = this.configService.get<string>('JWT_SECRET');
-    const jwtExpiration = this.configService.get<string>('JWT_EXPIRATION') || '15m';
-    
-    const refreshSecret = this.configService.get<string>('JWT_REFRESH_SECRET') || 'super-secret-refresh-key-change-me';
-    const refreshExpiration = this.configService.get<string>('JWT_REFRESH_EXPIRATION') || '7d';
+    const jwtExpiration =
+      this.configService.get<string>('JWT_EXPIRATION') || '15m';
+
+    const refreshSecret =
+      this.configService.get<string>('JWT_REFRESH_SECRET') ||
+      'super-secret-refresh-key-change-me';
+    const refreshExpiration =
+      this.configService.get<string>('JWT_REFRESH_EXPIRATION') || '7d';
 
     const accessToken = await this.jwtService.signAsync(payload, {
       secret: jwtSecret,
@@ -347,8 +412,9 @@ export class AuthService {
 
   private async saveRefreshToken(userId: string, token: string) {
     const hashedToken = this.hashToken(token);
-    const refreshExpiration = this.configService.get<string>('JWT_REFRESH_EXPIRATION') || '7d';
-    
+    const refreshExpiration =
+      this.configService.get<string>('JWT_REFRESH_EXPIRATION') || '7d';
+
     // Parse duration (e.g. '7d' or default to 7 days)
     let days = 7;
     if (refreshExpiration.endsWith('d')) {
@@ -371,8 +437,10 @@ export class AuthService {
       throw new UnauthorizedException('User not found');
     }
 
-    const secret = speakeasy.generateSecret({ name: `BeaconSales:${user.email}` });
-    
+    const secret = speakeasy.generateSecret({
+      name: `BeaconSales:${user.email}`,
+    });
+
     await this.prisma.user.update({
       where: { id: userId },
       data: {
@@ -412,7 +480,10 @@ export class AuthService {
       },
     });
 
-    return { success: true, message: 'Two-factor authentication has been enabled.' };
+    return {
+      success: true,
+      message: 'Two-factor authentication has been enabled.',
+    };
   }
 
   async disable2FA(userId: string) {
@@ -423,14 +494,19 @@ export class AuthService {
         twoFactorSecret: null,
       },
     });
-    return { success: true, message: 'Two-factor authentication has been disabled.' };
+    return {
+      success: true,
+      message: 'Two-factor authentication has been disabled.',
+    };
   }
 
   async verify2FA(tempToken: string, code: string) {
     let payload;
     try {
       const jwtSecret = this.configService.get<string>('JWT_SECRET');
-      payload = await this.jwtService.verifyAsync(tempToken, { secret: jwtSecret });
+      payload = await this.jwtService.verifyAsync(tempToken, {
+        secret: jwtSecret,
+      });
     } catch (err) {
       throw new UnauthorizedException('Invalid or expired 2FA temporary token');
     }
@@ -439,7 +515,9 @@ export class AuthService {
       throw new UnauthorizedException('Invalid 2FA token type');
     }
 
-    const user = await this.prisma.user.findUnique({ where: { id: payload.sub } });
+    const user = await this.prisma.user.findUnique({
+      where: { id: payload.sub },
+    });
     if (!user || !user.twoFactorSecret) {
       throw new UnauthorizedException('User does not have 2FA set up');
     }
@@ -455,7 +533,11 @@ export class AuthService {
       throw new UnauthorizedException('Invalid 2FA code');
     }
 
-    const tokens = await this.generateTokensPair(user.id, user.email, user.role);
+    const tokens = await this.generateTokensPair(
+      user.id,
+      user.email,
+      user.role,
+    );
     await this.saveRefreshToken(user.id, tokens.refreshToken);
 
     return {
@@ -474,10 +556,18 @@ export class AuthService {
   async resendVerificationEmail(email: string) {
     const user = await this.prisma.user.findUnique({ where: { email } });
     if (!user) {
-      return { success: true, message: 'If the email exists and is not verified, a new verification link has been sent.' };
+      return {
+        success: true,
+        message:
+          'If the email exists and is not verified, a new verification link has been sent.',
+      };
     }
     if (user.isVerified) {
-      return { success: true, message: 'If the email exists and is not verified, a new verification link has been sent.' };
+      return {
+        success: true,
+        message:
+          'If the email exists and is not verified, a new verification link has been sent.',
+      };
     }
 
     const verificationToken = crypto.randomUUID();
@@ -491,12 +581,21 @@ export class AuthService {
       },
     });
 
-    await this.emailService.sendVerificationEmail(user.email, verificationToken);
-    return { success: true, message: 'If the email exists and is not verified, a new verification link has been sent.' };
+    await this.emailService.sendVerificationEmail(
+      user.email,
+      verificationToken,
+    );
+    return {
+      success: true,
+      message:
+        'If the email exists and is not verified, a new verification link has been sent.',
+    };
   }
 
   async changeEmail(userId: string, newEmail: string) {
-    const existing = await this.prisma.user.findUnique({ where: { email: newEmail } });
+    const existing = await this.prisma.user.findUnique({
+      where: { email: newEmail },
+    });
     if (existing) {
       throw new ConflictException('Email address is already in use.');
     }
@@ -515,7 +614,11 @@ export class AuthService {
     });
 
     await this.emailService.sendVerificationEmail(newEmail, verificationToken);
-    return { success: true, message: 'Email changed successfully. Please verify your new email address.' };
+    return {
+      success: true,
+      message:
+        'Email changed successfully. Please verify your new email address.',
+    };
   }
 
   async deleteAccount(userId: string) {
@@ -580,11 +683,17 @@ export class AuthService {
       },
     });
 
-    const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000';
+    const frontendUrl =
+      this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000';
     const inviteUrl = `${frontendUrl}/register?token=${token}`;
 
     // Send email invite asynchronously
-    await this.emailService.sendInviteEmail(email, 'Team Member', business.companyName, inviteUrl);
+    await this.emailService.sendInviteEmail(
+      email,
+      'Team Member',
+      business.companyName,
+      inviteUrl,
+    );
 
     return { success: true, invitation };
   }
@@ -594,7 +703,11 @@ export class AuthService {
       where: { token },
     });
 
-    if (!invitation || invitation.status !== 'PENDING' || invitation.expiresAt < new Date()) {
+    if (
+      !invitation ||
+      invitation.status !== 'PENDING' ||
+      invitation.expiresAt < new Date()
+    ) {
       throw new ConflictException('Invalid or expired team invitation token');
     }
 
@@ -664,13 +777,22 @@ export class AuthService {
     let invite: any = null;
     if (firstBusiness) {
       try {
-        invite = await this.createInvitation(entry.email, firstBusiness.id, 'EMPLOYEE');
+        invite = await this.createInvitation(
+          entry.email,
+          firstBusiness.id,
+          'EMPLOYEE',
+        );
       } catch (err) {
         // Silently skip if invite creation fails (e.g. unique constraint)
       }
     }
 
-    return { success: true, entry: updated, invite, msg: 'Waitlisted user approved!' };
+    return {
+      success: true,
+      entry: updated,
+      invite,
+      msg: 'Waitlisted user approved!',
+    };
   }
 
   async getReferrals(userId: string) {
@@ -680,8 +802,11 @@ export class AuthService {
     });
 
     const totalCount = referrals.length;
-    const convertedCount = referrals.filter(r => r.status === 'CONVERTED').length;
-    const conversionRate = totalCount > 0 ? Math.round((convertedCount / totalCount) * 100) : 0;
+    const convertedCount = referrals.filter(
+      (r) => r.status === 'CONVERTED',
+    ).length;
+    const conversionRate =
+      totalCount > 0 ? Math.round((convertedCount / totalCount) * 100) : 0;
 
     return {
       referrals,
@@ -689,7 +814,7 @@ export class AuthService {
         totalCount,
         convertedCount,
         conversionRate,
-      }
+      },
     };
   }
 
@@ -706,19 +831,28 @@ export class AuthService {
       where: { referrerId: userId },
     });
     if (existing) {
-      return { success: true, referral: existing, msg: 'Already have a referral code.' };
+      return {
+        success: true,
+        referral: existing,
+        msg: 'Already have a referral code.',
+      };
     }
 
-    const code = 'REF-' + Math.random().toString(36).substring(2, 8).toUpperCase();
+    const code =
+      'REF-' + Math.random().toString(36).substring(2, 8).toUpperCase();
     const referral = await this.prisma.referral.create({
       data: {
         code,
         referrerId: userId,
         referrerName: finalName,
         status: 'PENDING',
-      }
+      },
     });
-    return { success: true, referral, msg: 'Referral code generated successfully!' };
+    return {
+      success: true,
+      referral,
+      msg: 'Referral code generated successfully!',
+    };
   }
 
   async loginOrCreateSSOUser(email: string, name: string) {
@@ -747,7 +881,11 @@ export class AuthService {
       });
     }
 
-    const tokens = await this.generateTokensPair(user.id, user.email, user.role);
+    const tokens = await this.generateTokensPair(
+      user.id,
+      user.email,
+      user.role,
+    );
 
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 7);
@@ -771,4 +909,3 @@ export class AuthService {
     };
   }
 }
-

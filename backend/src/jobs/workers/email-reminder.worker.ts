@@ -15,22 +15,28 @@ export class EmailReminderWorker extends WorkerHost {
     const { activityId } = job.data;
     const startTime = Date.now();
 
-    this.logger.log(`Running follow-up reminder check for activity: ${activityId}`);
+    this.logger.log(
+      `Running follow-up reminder check for activity: ${activityId}`,
+    );
 
     try {
       const activity = await this.prisma.emailActivity.findUnique({
         where: { id: activityId },
-        include: { lead: true }
+        include: { lead: true },
       });
 
       if (!activity) {
-        this.logger.warn(`Email Activity ${activityId} not found. Skipping reminder.`);
+        this.logger.warn(
+          `Email Activity ${activityId} not found. Skipping reminder.`,
+        );
         return { status: 'SKIPPED' };
       }
 
       // If a reply has already been received, skip creating a reminder
       if (activity.repliedAt) {
-        this.logger.log(`Reply already received for thread: ${activity.threadId}. Skipping follow-up reminder.`);
+        this.logger.log(
+          `Reply already received for thread: ${activity.threadId}. Skipping follow-up reminder.`,
+        );
         return { status: 'SKIPPED' };
       }
 
@@ -46,51 +52,57 @@ export class EmailReminderWorker extends WorkerHost {
             activityId,
             leadId,
             toAddress: activity.toAddress,
-            subject: activity.subject
-          }
-        }
+            subject: activity.subject,
+          },
+        },
       });
 
-      this.logger.log(`Follow-up alert registered for lead ${leadName} on email activity ${activityId}`);
+      this.logger.log(
+        `Follow-up alert registered for lead ${leadName} on email activity ${activityId}`,
+      );
 
       await this.logJob(
-        job.id || 'remind', 
-        'email-reminder', 
-        'check-reminder', 
-        'COMPLETED', 
-        job.data, 
-        Date.now() - startTime, 
-        activity.businessId
+        job.id || 'remind',
+        'email-reminder',
+        'check-reminder',
+        'COMPLETED',
+        job.data,
+        Date.now() - startTime,
+        activity.businessId,
       );
       return { status: 'REMINDER_CREATED' };
-
     } catch (err: any) {
-      this.logger.error(`Email Reminder Worker failed: ${err.message}`, err.stack);
+      this.logger.error(
+        `Email Reminder Worker failed: ${err.message}`,
+        err.stack,
+      );
       throw err;
     }
   }
 
   private async logJob(
-    jobId: string, 
-    queueName: string, 
-    jobName: string, 
-    status: 'COMPLETED' | 'FAILED', 
-    data: any, 
-    duration: number, 
-    businessId: string, 
-    error?: string
+    jobId: string,
+    queueName: string,
+    jobName: string,
+    status: 'COMPLETED' | 'FAILED',
+    data: any,
+    duration: number,
+    businessId: string,
+    error?: string,
   ) {
-    await this.prisma.jobLog.create({
-      data: {
-        queueName,
-        jobId,
-        jobName,
-        status,
-        data: data || {},
-        duration,
-        businessId,
-        error
-      }
-    }).catch(() => {});
+    await this.prisma.jobLog
+      .create({
+        data: {
+          queueName,
+          jobId,
+          jobName,
+          status,
+          data: data || {},
+          duration,
+          businessId,
+          error,
+        },
+      })
+      .catch(() => {});
   }
 }

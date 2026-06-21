@@ -1,4 +1,9 @@
-import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  CanActivate,
+  ExecutionContext,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import * as crypto from 'crypto';
 
@@ -11,7 +16,9 @@ export class ApiKeyGuard implements CanActivate {
     const key = request.headers['x-api-key'] as string;
 
     if (!key) {
-      throw new UnauthorizedException('Developer API key is missing. Pass it in the x-api-key header.');
+      throw new UnauthorizedException(
+        'Developer API key is missing. Pass it in the x-api-key header.',
+      );
     }
 
     const hashedKey = crypto.createHash('sha256').update(key).digest('hex');
@@ -37,10 +44,12 @@ export class ApiKeyGuard implements CanActivate {
     };
 
     // Update lastUsedAt asynchronously
-    this.prisma.apiKey.update({
-      where: { id: keyRecord.id },
-      data: { lastUsedAt: new Date() },
-    }).catch(() => {});
+    this.prisma.apiKey
+      .update({
+        where: { id: keyRecord.id },
+        data: { lastUsedAt: new Date() },
+      })
+      .catch(() => {});
 
     return true;
   }

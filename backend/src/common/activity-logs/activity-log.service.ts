@@ -34,7 +34,10 @@ export function extractAuditContext(req: any): Partial<AuditLogDto> {
   return {
     userId: req?.user?.id || req?.user?.userId || null,
     businessId: req?.user?.businessId || null,
-    ipAddress: req?.headers?.['x-forwarded-for']?.split(',')[0]?.trim() || req?.ip || null,
+    ipAddress:
+      req?.headers?.['x-forwarded-for']?.split(',')[0]?.trim() ||
+      req?.ip ||
+      null,
     userAgent: req?.headers?.['user-agent'] || null,
   };
 }
@@ -70,7 +73,10 @@ export class ActivityLogService {
         `[Audit] ${dto.severity || 'INFO'} | ${dto.action} | ${dto.entity || '-'}:${dto.entityId || '-'} | User:${dto.userId || 'SYSTEM'} | ${dto.description}`,
       );
     } catch (err: any) {
-      this.logger.error(`[Audit] Failed to write log: ${err.message}`, err.stack);
+      this.logger.error(
+        `[Audit] Failed to write log: ${err.message}`,
+        err.stack,
+      );
     }
   }
 
@@ -85,7 +91,8 @@ export class ActivityLogService {
     const where: any = { businessId };
 
     if (filters.userId) where.userId = filters.userId;
-    if (filters.action) where.action = { contains: filters.action, mode: 'insensitive' };
+    if (filters.action)
+      where.action = { contains: filters.action, mode: 'insensitive' };
     if (filters.entity) where.entity = filters.entity;
     if (filters.severity) where.severity = filters.severity;
 
@@ -149,9 +156,15 @@ export class ActivityLogService {
       topActors,
     ] = await Promise.all([
       this.prisma.activityLog.count({ where: { businessId } }),
-      this.prisma.activityLog.count({ where: { businessId, createdAt: { gte: since24h } } }),
-      this.prisma.activityLog.count({ where: { businessId, severity: 'CRITICAL' } }),
-      this.prisma.activityLog.count({ where: { businessId, severity: 'WARN' } }),
+      this.prisma.activityLog.count({
+        where: { businessId, createdAt: { gte: since24h } },
+      }),
+      this.prisma.activityLog.count({
+        where: { businessId, severity: 'CRITICAL' },
+      }),
+      this.prisma.activityLog.count({
+        where: { businessId, severity: 'WARN' },
+      }),
       this.prisma.activityLog.groupBy({
         by: ['action'],
         where: { businessId, createdAt: { gte: since7d } },
@@ -161,7 +174,11 @@ export class ActivityLogService {
       }),
       this.prisma.activityLog.groupBy({
         by: ['userId'],
-        where: { businessId, userId: { not: null }, createdAt: { gte: since7d } },
+        where: {
+          businessId,
+          userId: { not: null },
+          createdAt: { gte: since7d },
+        },
         _count: { id: true },
         orderBy: { _count: { id: 'desc' } },
         take: 5,
@@ -197,8 +214,15 @@ export class ActivityLogService {
   /**
    * Export filtered audit logs to CSV for compliance downloads.
    */
-  async exportToCsv(businessId: string, filters: AuditFilterDto): Promise<string> {
-    const { data } = await this.getLogsWithFilters(businessId, { ...filters, limit: 5000, page: 1 });
+  async exportToCsv(
+    businessId: string,
+    filters: AuditFilterDto,
+  ): Promise<string> {
+    const { data } = await this.getLogsWithFilters(businessId, {
+      ...filters,
+      limit: 5000,
+      page: 1,
+    });
 
     const csvStringifier = createObjectCsvStringifier({
       header: [
@@ -230,7 +254,10 @@ export class ActivityLogService {
       userAgent: log.userAgent || '',
     }));
 
-    return csvStringifier.getHeaderString() + csvStringifier.stringifyRecords(records);
+    return (
+      csvStringifier.getHeaderString() +
+      csvStringifier.stringifyRecords(records)
+    );
   }
 
   /**

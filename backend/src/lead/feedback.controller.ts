@@ -1,4 +1,12 @@
-import { Controller, Post, Get, Put, Body, Param, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Get,
+  Put,
+  Body,
+  Param,
+  UseGuards,
+} from '@nestjs/common';
 import { FeedbackService } from './feedback.service';
 import { AuthGuard } from '../auth/auth.guard';
 import { Roles } from '../auth/roles.decorator';
@@ -12,7 +20,8 @@ export class FeedbackController {
   @Post('business/:businessId/feedback')
   async submitFeedback(
     @Param('businessId') businessId: string,
-    @Body() body: { name: string; email: string; category: string; content: string }
+    @Body()
+    body: { name: string; email: string; category: string; content: string },
   ) {
     return this.feedbackService.submitFeedback(businessId, body);
   }
@@ -29,7 +38,7 @@ export class FeedbackController {
   @Put('feedback/:feedbackId/status')
   async updateStatus(
     @Param('feedbackId') feedbackId: string,
-    @Body('status') status: string
+    @Body('status') status: string,
   ) {
     return this.feedbackService.updateStatus(feedbackId, status);
   }

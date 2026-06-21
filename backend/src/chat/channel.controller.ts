@@ -9,14 +9,15 @@ export class ChannelController {
   @UseGuards(WebhookSignatureGuard)
   @Post('webhook')
   async handleIncomingWebhook(
-    @Body() body: {
+    @Body()
+    body: {
       businessId: string;
       channel: string;
       message: string;
       leadName?: string;
       leadPhone?: string;
       leadEmail?: string;
-    }
+    },
   ) {
     return this.chatService.simulateIncomingMessage(body);
   }

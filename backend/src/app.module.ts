@@ -1,4 +1,9 @@
-import { Module, NestModule, MiddlewareConsumer, RequestMethod } from '@nestjs/common';
+import {
+  Module,
+  NestModule,
+  MiddlewareConsumer,
+  RequestMethod,
+} from '@nestjs/common';
 import { APP_INTERCEPTOR } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
 import { AppController } from './app.controller';
@@ -36,10 +41,12 @@ import { SearchModule } from './search/search.module';
       isGlobal: true,
       validate,
     }),
-    ThrottlerModule.forRoot([{
-      ttl: 60000,
-      limit: 100, // General high rate limit for app routes
-    }]),
+    ThrottlerModule.forRoot([
+      {
+        ttl: 60000,
+        limit: 100, // General high rate limit for app routes
+      },
+    ]),
     RedisModule,
     EmailModule,
     JobsModule,
@@ -80,4 +87,3 @@ export class AppModule implements NestModule {
       .forRoutes('*');
   }
 }
-

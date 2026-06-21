@@ -1,4 +1,9 @@
-import { Injectable, OnModuleInit, OnModuleDestroy, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  OnModuleInit,
+  OnModuleDestroy,
+  Logger,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Redis from 'ioredis';
 
@@ -6,7 +11,10 @@ import Redis from 'ioredis';
 export class RedisService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(RedisService.name);
   private client: Redis | null = null;
-  private memoryCache = new Map<string, { value: string; expiresAt: number | null }>();
+  private memoryCache = new Map<
+    string,
+    { value: string; expiresAt: number | null }
+  >();
 
   constructor(private configService: ConfigService) {}
 
@@ -26,7 +34,9 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
         maxRetriesPerRequest: 1,
         retryStrategy: (times) => {
           if (times > 3) {
-            this.logger.error('Redis connection failed permanently. Falling back to in-memory cache.');
+            this.logger.error(
+              'Redis connection failed permanently. Falling back to in-memory cache.',
+            );
             this.client = null;
             return null; // Stop retrying
           }
@@ -42,7 +52,10 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
         this.logger.log(`Connected to Redis at ${host}:${port}`);
       });
     } catch (error) {
-      this.logger.error('Failed to initialize Redis client. Falling back to in-memory.', error);
+      this.logger.error(
+        'Failed to initialize Redis client. Falling back to in-memory.',
+        error,
+      );
       this.client = null;
     }
   }
@@ -62,10 +75,12 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       try {
         return await this.client.get(key);
       } catch (err) {
-        this.logger.error(`Failed to get key "${key}" from Redis: ${err.message}`);
+        this.logger.error(
+          `Failed to get key "${key}" from Redis: ${err.message}`,
+        );
       }
     }
-    
+
     // In-memory fallback
     const cached = this.memoryCache.get(key);
     if (!cached) return null;
@@ -86,7 +101,9 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
         }
         return;
       } catch (err) {
-        this.logger.error(`Failed to set key "${key}" in Redis: ${err.message}`);
+        this.logger.error(
+          `Failed to set key "${key}" in Redis: ${err.message}`,
+        );
       }
     }
 
@@ -101,7 +118,9 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
         await this.client.del(key);
         return;
       } catch (err) {
-        this.logger.error(`Failed to delete key "${key}" from Redis: ${err.message}`);
+        this.logger.error(
+          `Failed to delete key "${key}" from Redis: ${err.message}`,
+        );
       }
     }
     this.memoryCache.delete(key);

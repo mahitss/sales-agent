@@ -23,14 +23,19 @@ export class EmailService {
           pass: smtpPass,
         },
       });
-      this.logger.log(`SMTP Email Transporter initialized using host: ${smtpHost}`);
+      this.logger.log(
+        `SMTP Email Transporter initialized using host: ${smtpHost}`,
+      );
     } else {
-      this.logger.warn('SMTP configuration is missing. Falling back to log-only console email delivery.');
+      this.logger.warn(
+        'SMTP configuration is missing. Falling back to log-only console email delivery.',
+      );
     }
   }
 
   async sendVerificationEmail(to: string, token: string) {
-    const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000';
+    const frontendUrl =
+      this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000';
     const verifyUrl = `${frontendUrl}/verify-email?token=${token}`;
     const subject = 'Verify your Beacon AI Sales Agent account';
     const html = `
@@ -51,7 +56,9 @@ export class EmailService {
     if (this.transporter) {
       try {
         await this.transporter.sendMail({
-          from: this.configService.get<string>('SMTP_FROM') || 'no-reply@beacon-sales.com',
+          from:
+            this.configService.get<string>('SMTP_FROM') ||
+            'no-reply@beacon-sales.com',
           to,
           subject,
           html,
@@ -59,15 +66,20 @@ export class EmailService {
         this.logger.log(`Verification email sent successfully to ${to}`);
         return;
       } catch (err: any) {
-        this.logger.error(`Failed to send verification email to ${to}: ${err.message}`);
+        this.logger.error(
+          `Failed to send verification email to ${to}: ${err.message}`,
+        );
       }
     }
 
-    this.logger.log(`[CONSOLE EMAIL Verification] To: ${to} | URL: ${verifyUrl}`);
+    this.logger.log(
+      `[CONSOLE EMAIL Verification] To: ${to} | URL: ${verifyUrl}`,
+    );
   }
 
   async sendPasswordResetEmail(to: string, token: string) {
-    const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000';
+    const frontendUrl =
+      this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000';
     const resetUrl = `${frontendUrl}/reset-password?token=${token}`;
     const subject = 'Reset your Beacon AI Password';
     const html = `
@@ -88,7 +100,9 @@ export class EmailService {
     if (this.transporter) {
       try {
         await this.transporter.sendMail({
-          from: this.configService.get<string>('SMTP_FROM') || 'no-reply@beacon-sales.com',
+          from:
+            this.configService.get<string>('SMTP_FROM') ||
+            'no-reply@beacon-sales.com',
           to,
           subject,
           html,
@@ -96,14 +110,21 @@ export class EmailService {
         this.logger.log(`Password reset email sent successfully to ${to}`);
         return;
       } catch (err: any) {
-        this.logger.error(`Failed to send password reset email to ${to}: ${err.message}`);
+        this.logger.error(
+          `Failed to send password reset email to ${to}: ${err.message}`,
+        );
       }
     }
 
     this.logger.log(`[CONSOLE EMAIL Reset] To: ${to} | URL: ${resetUrl}`);
   }
 
-  async sendInviteEmail(to: string, name: string, businessName: string, inviteUrl: string) {
+  async sendInviteEmail(
+    to: string,
+    name: string,
+    businessName: string,
+    inviteUrl: string,
+  ) {
     const subject = `You are invited to join ${businessName} on Beacon AI`;
     const html = `
       <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px;">
@@ -125,7 +146,9 @@ export class EmailService {
     if (this.transporter) {
       try {
         await this.transporter.sendMail({
-          from: this.configService.get<string>('SMTP_FROM') || 'no-reply@beacon-sales.com',
+          from:
+            this.configService.get<string>('SMTP_FROM') ||
+            'no-reply@beacon-sales.com',
           to,
           subject,
           html,
@@ -133,7 +156,9 @@ export class EmailService {
         this.logger.log(`Invite email sent successfully to ${to}`);
         return;
       } catch (err: any) {
-        this.logger.error(`Failed to send invite email to ${to}: ${err.message}`);
+        this.logger.error(
+          `Failed to send invite email to ${to}: ${err.message}`,
+        );
       }
     }
 
@@ -144,7 +169,9 @@ export class EmailService {
     if (this.transporter) {
       try {
         await this.transporter.sendMail({
-          from: this.configService.get<string>('SMTP_FROM') || 'no-reply@beacon-sales.com',
+          from:
+            this.configService.get<string>('SMTP_FROM') ||
+            'no-reply@beacon-sales.com',
           to,
           subject,
           html,
@@ -152,10 +179,14 @@ export class EmailService {
         this.logger.log(`Custom email sent successfully to ${to}`);
         return;
       } catch (err: any) {
-        this.logger.error(`Failed to send custom email to ${to}: ${err.message}`);
+        this.logger.error(
+          `Failed to send custom email to ${to}: ${err.message}`,
+        );
         throw err;
       }
     }
-    this.logger.log(`[CONSOLE EMAIL Custom] To: ${to} | Subject: ${subject} | Content: ${html}`);
+    this.logger.log(
+      `[CONSOLE EMAIL Custom] To: ${to} | Subject: ${subject} | Content: ${html}`,
+    );
   }
 }

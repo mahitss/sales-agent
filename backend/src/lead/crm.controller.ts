@@ -1,4 +1,13 @@
-import { Controller, Get, Post, Put, Body, Param, UseGuards, BadRequestException } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Put,
+  Body,
+  Param,
+  UseGuards,
+  BadRequestException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthGuard } from '../auth/auth.guard';
 import { Roles } from '../auth/roles.decorator';
@@ -36,10 +45,19 @@ export class CRMController {
    */
   @Post('business/:businessId/outreach')
   async scheduleOutreach(
-    @Body() body: { leadId: string; template: string; subject: string; bodyText: string; delayMinutes?: number }
+    @Body()
+    body: {
+      leadId: string;
+      template: string;
+      subject: string;
+      bodyText: string;
+      delayMinutes?: number;
+    },
   ) {
     if (!body.leadId || !body.template || !body.subject || !body.bodyText) {
-      throw new BadRequestException('Missing parameters: leadId, template, subject, bodyText');
+      throw new BadRequestException(
+        'Missing parameters: leadId, template, subject, bodyText',
+      );
     }
 
     const delay = body.delayMinutes || 10;
@@ -75,7 +93,7 @@ export class CRMController {
         { trigger: 'NEW_LEAD', action: 'GOOGLE_SHEETS_SYNC', isEnabled: false },
       ];
       await this.prisma.workflowRule.createMany({
-        data: defaults.map(d => ({ ...d, businessId })),
+        data: defaults.map((d) => ({ ...d, businessId })),
       });
       return this.prisma.workflowRule.findMany({
         where: { businessId },
@@ -91,7 +109,7 @@ export class CRMController {
   @Put('workflow-rules/:ruleId')
   async toggleWorkflowRule(
     @Param('ruleId') ruleId: string,
-    @Body('isEnabled') isEnabled: boolean
+    @Body('isEnabled') isEnabled: boolean,
   ) {
     return this.prisma.workflowRule.update({
       where: { id: ruleId },
@@ -103,9 +121,7 @@ export class CRMController {
    * Lead Enrichment - Company intelligence search simulation
    */
   @Post('company/enrich')
-  async enrichCompany(
-    @Body() body: { leadId: string; domain: string }
-  ) {
+  async enrichCompany(@Body() body: { leadId: string; domain: string }) {
     if (!body.leadId || !body.domain) {
       throw new BadRequestException('Missing leadId or domain name.');
     }
@@ -121,7 +137,8 @@ export class CRMController {
       headquarters: 'Bengaluru, India',
       employees: '50-200',
       revenue: '$5M - $10M',
-      techStack: 'React, TailwindCSS, NestJS, PostgreSQL, Redis, OpenAI, Google Analytics',
+      techStack:
+        'React, TailwindCSS, NestJS, PostgreSQL, Redis, OpenAI, Google Analytics',
       industry: 'SaaS Software & AI Automation Solutions',
       socialLinks: {
         linkedin: `https://linkedin.com/company/${body.domain.split('.')[0]}`,
@@ -162,23 +179,38 @@ export class CRMController {
    * Email Finder - Find corporate contact emails for a target domain
    */
   @Post('company/email-finder')
-  async findCompanyEmails(
-    @Body() body: { domain: string }
-  ) {
+  async findCompanyEmails(@Body() body: { domain: string }) {
     if (!body.domain) {
       throw new BadRequestException('Missing company domain name.');
     }
 
-    const domainName = body.domain.replace(/^https?:\/\//, '').replace(/^www\./, '');
+    const domainName = body.domain
+      .replace(/^https?:\/\//, '')
+      .replace(/^www\./, '');
     const prefix = domainName.split('.')[0];
 
     // Return mock verified contacts from directory
     return {
       domain: domainName,
       contacts: [
-        { name: 'John Doe', email: `john.doe@${domainName}`, role: 'Founder & CEO', confidence: 98 },
-        { name: 'Sarah Smith', email: `sarah.s@${domainName}`, role: 'Head of Sales', confidence: 95 },
-        { name: 'David Lee', email: `d.lee@${domainName}`, role: 'CTO', confidence: 91 },
+        {
+          name: 'John Doe',
+          email: `john.doe@${domainName}`,
+          role: 'Founder & CEO',
+          confidence: 98,
+        },
+        {
+          name: 'Sarah Smith',
+          email: `sarah.s@${domainName}`,
+          role: 'Head of Sales',
+          confidence: 95,
+        },
+        {
+          name: 'David Lee',
+          email: `d.lee@${domainName}`,
+          role: 'CTO',
+          confidence: 91,
+        },
       ],
     };
   }

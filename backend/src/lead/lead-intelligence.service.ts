@@ -35,25 +35,35 @@ export class LeadIntelligenceService {
       });
 
       if (!lead) {
-        this.logger.error(`Lead ${leadId} not found, aborting intelligence analysis.`);
+        this.logger.error(
+          `Lead ${leadId} not found, aborting intelligence analysis.`,
+        );
         return false;
       }
 
       const conversation = lead.conversations[0];
       if (!conversation) {
-        this.logger.warn(`No conversations found for lead ${leadId}, skipping analysis.`);
+        this.logger.warn(
+          `No conversations found for lead ${leadId}, skipping analysis.`,
+        );
         return false;
       }
 
       const messages = (conversation.messages as any[]) || [];
       if (messages.length === 0) {
-        this.logger.warn(`Conversation history is empty for lead ${leadId}, skipping analysis.`);
+        this.logger.warn(
+          `Conversation history is empty for lead ${leadId}, skipping analysis.`,
+        );
         return false;
       }
 
       // 2. Prepare payload for FastAPI
       let aiServiceUrl = process.env.AI_SERVICE_URL || 'http://localhost:8000';
-      if (aiServiceUrl && !aiServiceUrl.startsWith('http://') && !aiServiceUrl.startsWith('https://')) {
+      if (
+        aiServiceUrl &&
+        !aiServiceUrl.startsWith('http://') &&
+        !aiServiceUrl.startsWith('https://')
+      ) {
         aiServiceUrl = `http://${aiServiceUrl}`;
       }
 
@@ -77,14 +87,22 @@ export class LeadIntelligenceService {
 
       while (attempt <= maxRetries) {
         try {
-          const res = await axios.post(`${aiServiceUrl}/analyze-lead`, payload, { timeout: 12000 });
+          const res = await axios.post(
+            `${aiServiceUrl}/analyze-lead`,
+            payload,
+            { timeout: 12000 },
+          );
           analysisResult = res.data;
           break;
         } catch (err: any) {
           attempt++;
-          this.logger.warn(`FastAPI /analyze-lead attempt ${attempt} failed: ${err.message}`);
+          this.logger.warn(
+            `FastAPI /analyze-lead attempt ${attempt} failed: ${err.message}`,
+          );
           if (attempt > maxRetries) {
-            this.logger.error('FastAPI /analyze-lead failed permanently. Using local fallback.');
+            this.logger.error(
+              'FastAPI /analyze-lead failed permanently. Using local fallback.',
+            );
             analysisResult = this.generateFallbackAnalysis(lead, messages);
             break;
           }
@@ -96,14 +114,17 @@ export class LeadIntelligenceService {
       const promptStr = JSON.stringify(payload);
       const completionStr = JSON.stringify(analysisResult);
       const promptTokens = Math.max(10, Math.round(promptStr.length / 4));
-      const completionTokens = Math.max(10, Math.round(completionStr.length / 4));
+      const completionTokens = Math.max(
+        10,
+        Math.round(completionStr.length / 4),
+      );
 
       await this.aiCostService.logUsage(
         lead.businessId,
         'gemini-2.5-flash',
         promptTokens,
         completionTokens,
-        'lead_analysis'
+        'lead_analysis',
       );
 
       // 4. Save results atomically to database
@@ -117,7 +138,11 @@ export class LeadIntelligenceService {
       };
 
       // Extract budget value string if not already present
-      if (lead.budget === null || lead.budget === 'Not provided yet' || lead.budget === '') {
+      if (
+        lead.budget === null ||
+        lead.budget === 'Not provided yet' ||
+        lead.budget === ''
+      ) {
         coreUpdate.budget = `₹${analysisResult.revenue.estimated_value.toLocaleString()}`;
       }
 
@@ -127,19 +152,25 @@ export class LeadIntelligenceService {
       });
 
       // Clear cache for lead stats
-      await this.redisService.del(`business:${lead.businessId}:lead-stats`).catch(() => {});
+      await this.redisService
+        .del(`business:${lead.businessId}:lead-stats`)
+        .catch(() => {});
 
       // 6. Trigger Google Sheets Sync
       if (lead.business.googleSheetsEnabled) {
-        this.logger.log(`Sheets Sync enabled for business ${lead.businessId}. Triggering sync job...`);
+        this.logger.log(
+          `Sheets Sync enabled for business ${lead.businessId}. Triggering sync job...`,
+        );
         // We call this asynchronously or synchronously. Since we are in the background queue/event context, we call it directly.
         await this.googleSheetsService.syncLead(leadId);
       }
 
       return true;
-
     } catch (error: any) {
-      this.logger.error(`Failed to analyze lead ${leadId}: ${error.message}`, error.stack);
+      this.logger.error(
+        `Failed to analyze lead ${leadId}: ${error.message}`,
+        error.stack,
+      );
       return false;
     }
   }
@@ -193,7 +224,8 @@ export class LeadIntelligenceService {
         classification: scoring.classification || 'COLD',
         dealProbability: scoring.deal_probability || 0,
         urgency: scoring.factors?.urgency || 'Medium',
-        decisionMakerStatus: scoring.factors?.decision_maker_status || 'Undetermined',
+        decisionMakerStatus:
+          scoring.factors?.decision_maker_status || 'Undetermined',
         businessSize: scoring.factors?.business_size || 'SMB',
         serviceMatch: scoring.factors?.service_match || 'Medium Match',
         engagement: scoring.factors?.engagement || 0,
@@ -203,7 +235,8 @@ export class LeadIntelligenceService {
         classification: scoring.classification || 'COLD',
         dealProbability: scoring.deal_probability || 0,
         urgency: scoring.factors?.urgency || 'Medium',
-        decisionMakerStatus: scoring.factors?.decision_maker_status || 'Undetermined',
+        decisionMakerStatus:
+          scoring.factors?.decision_maker_status || 'Undetermined',
         businessSize: scoring.factors?.business_size || 'SMB',
         serviceMatch: scoring.factors?.service_match || 'Medium Match',
         engagement: scoring.factors?.engagement || 0,
@@ -255,18 +288,29 @@ export class LeadIntelligenceService {
    * Generates a local fallback analysis structure when FastAPI is offline.
    */
   private generateFallbackAnalysis(lead: any, messages: any[]): any {
-    const textCombined = messages.map((m) => m.content).join(' ').toLowerCase();
-    
+    const textCombined = messages
+      .map((m) => m.content)
+      .join(' ')
+      .toLowerCase();
+
     // Estimate value from text
     let estimatedVal = 30000.0;
-    if (textCombined.includes('100k') || textCombined.includes('1,00') || textCombined.includes('lakh')) {
+    if (
+      textCombined.includes('100k') ||
+      textCombined.includes('1,00') ||
+      textCombined.includes('lakh')
+    ) {
       estimatedVal = 100000.0;
     } else if (textCombined.includes('50k') || textCombined.includes('50,00')) {
       estimatedVal = 50000.0;
     }
 
     let prob = 0.6;
-    if (textCombined.includes('urgent') || textCombined.includes('immediate') || textCombined.includes('schedule')) {
+    if (
+      textCombined.includes('urgent') ||
+      textCombined.includes('immediate') ||
+      textCombined.includes('schedule')
+    ) {
       prob = 0.85;
     }
 
@@ -276,12 +320,14 @@ export class LeadIntelligenceService {
     return {
       summary: {
         summary: `Lead is discussing needs in ${lead.business.industry}.`,
-        goals: 'Expand business presence and integrate AI assistant capabilities.',
+        goals:
+          'Expand business presence and integrate AI assistant capabilities.',
         pain_points: 'Lack of support coverage during offline hours.',
         requested_services: ['AI Chat Widget Setup'],
         timeline: '30 Days',
         objections: 'None',
-        recommended_action: 'Send onboarding email and follow up with custom demo scheduling.',
+        recommended_action:
+          'Send onboarding email and follow up with custom demo scheduling.',
       },
       scoring: {
         score,
@@ -298,7 +344,8 @@ export class LeadIntelligenceService {
         },
       },
       enrichment: {
-        company_name: lead.name === 'Anonymous Visitor' ? 'Acme Corp' : (lead.name + ' Inc.'),
+        company_name:
+          lead.name === 'Anonymous Visitor' ? 'Acme Corp' : lead.name + ' Inc.',
         website: 'https://clientbusiness.com',
         industry: lead.business.industry,
         description: 'Lead company operating in service field.',

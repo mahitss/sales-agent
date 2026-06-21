@@ -11,24 +11,14 @@ import { JobsModule } from '../../jobs/jobs.module';
 
 @Global()
 @Module({
-  imports: [
-    PrismaModule,
-    ConfigModule,
-    forwardRef(() => JobsModule),
-  ],
+  imports: [PrismaModule, ConfigModule, forwardRef(() => JobsModule)],
   controllers: [
     IntegrationsEmailController,
     EmailTrackingController,
     EmailTemplateController,
     EmailSequenceController,
   ],
-  providers: [
-    EmailService,
-    EmailIntegrationService,
-  ],
-  exports: [
-    EmailService,
-    EmailIntegrationService,
-  ],
+  providers: [EmailService, EmailIntegrationService],
+  exports: [EmailService, EmailIntegrationService],
 })
 export class EmailModule {}

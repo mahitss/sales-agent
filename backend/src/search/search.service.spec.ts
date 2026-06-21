@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { Test, TestingModule } from '@nestjs/testing';
 import { SearchService } from './search.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -8,10 +9,8 @@ jest.mock('../prisma/prisma.service', () => {
   };
 });
 
-
 describe('SearchService', () => {
   let service: SearchService;
-  let prisma: PrismaService;
 
   const mockPrismaService = {
     lead: {
@@ -44,7 +43,6 @@ describe('SearchService', () => {
     }).compile();
 
     service = module.get<SearchService>(SearchService);
-    prisma = module.get<PrismaService>(PrismaService);
   });
 
   afterEach(() => {
@@ -70,20 +68,39 @@ describe('SearchService', () => {
     });
 
     it('should query all entities with correct tenant businessId and query term', async () => {
-      const mockLeads = [{ id: 'l1', name: 'John Doe', email: 'john@example.com' }];
+      const mockLeads = [
+        { id: 'l1', name: 'John Doe', email: 'john@example.com' },
+      ];
       const mockCompanies = [{ id: 'c1', companyName: 'Acme Corp' }];
       const mockUsers = [{ id: 'u1', name: 'Agent Smith' }];
-      const mockAppts = [{ id: 'a1', date: '2026-06-22', time: '10:00', lead: { name: 'John Doe' } }];
-      const mockWorkflows = [{ id: 'w1', status: 'COMPLETED', workflow: { name: 'Trigger Outbound' } }];
+      const mockAppts = [
+        {
+          id: 'a1',
+          date: '2026-06-22',
+          time: '10:00',
+          lead: { name: 'John Doe' },
+        },
+      ];
+      const mockWorkflows = [
+        {
+          id: 'w1',
+          status: 'COMPLETED',
+          workflow: { name: 'Trigger Outbound' },
+        },
+      ];
       const mockConversations = [
         { id: 'conv1', leadId: 'l1', channel: 'EMAIL', leadName: 'John Doe' },
       ];
 
       mockPrismaService.lead.findMany.mockResolvedValue(mockLeads);
-      mockPrismaService.companyEnrichment.findMany.mockResolvedValue(mockCompanies);
+      mockPrismaService.companyEnrichment.findMany.mockResolvedValue(
+        mockCompanies,
+      );
       mockPrismaService.user.findMany.mockResolvedValue(mockUsers);
       mockPrismaService.appointment.findMany.mockResolvedValue(mockAppts);
-      mockPrismaService.workflowExecution.findMany.mockResolvedValue(mockWorkflows);
+      mockPrismaService.workflowExecution.findMany.mockResolvedValue(
+        mockWorkflows,
+      );
       mockPrismaService.$queryRawUnsafe.mockResolvedValue(mockConversations);
 
       const query = 'john';
@@ -94,11 +111,13 @@ describe('SearchService', () => {
           where: expect.objectContaining({
             businessId: 'business-123',
             OR: expect.arrayContaining([
-              expect.objectContaining({ name: { contains: query, mode: 'insensitive' } }),
+              expect.objectContaining({
+                name: { contains: query, mode: 'insensitive' },
+              }),
             ]),
           }),
           take: 8,
-        })
+        }),
       );
 
       expect(mockPrismaService.companyEnrichment.findMany).toHaveBeenCalledWith(
@@ -107,13 +126,13 @@ describe('SearchService', () => {
             lead: { businessId: 'business-123' },
           }),
           take: 8,
-        })
+        }),
       );
 
       expect(mockPrismaService.$queryRawUnsafe).toHaveBeenCalledWith(
         expect.stringContaining('SELECT c.id, c."leadId", c.channel'),
         'business-123',
-        '%john%'
+        '%john%',
       );
 
       expect(result).toEqual({
@@ -139,14 +158,23 @@ describe('SearchService', () => {
       mockPrismaService.user.findMany.mockResolvedValue([]);
       mockPrismaService.appointment.findMany.mockResolvedValue([]);
       mockPrismaService.workflowExecution.findMany.mockResolvedValue([]);
-      
+
       // Simulate raw query throwing an error (e.g. database schema is different/sqlite)
-      mockPrismaService.$queryRawUnsafe.mockRejectedValue(new Error('SQL Syntax Error'));
-      
+      mockPrismaService.$queryRawUnsafe.mockRejectedValue(
+        new Error('SQL Syntax Error'),
+      );
+
       const mockConversationsFallback = [
-        { id: 'conv2', leadId: 'l2', channel: 'SMS', lead: { name: 'Fallback Lead' } },
+        {
+          id: 'conv2',
+          leadId: 'l2',
+          channel: 'SMS',
+          lead: { name: 'Fallback Lead' },
+        },
       ];
-      mockPrismaService.conversation.findMany.mockResolvedValue(mockConversationsFallback);
+      mockPrismaService.conversation.findMany.mockResolvedValue(
+        mockConversationsFallback,
+      );
 
       const result = await service.searchAll('business-123', 'fallback-term');
 
@@ -155,7 +183,7 @@ describe('SearchService', () => {
           where: expect.objectContaining({
             businessId: 'business-123',
           }),
-        })
+        }),
       );
 
       expect(result.conversations).toEqual([

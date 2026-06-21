@@ -1,4 +1,10 @@
-import { Injectable, NestMiddleware, HttpException, HttpStatus, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  NestMiddleware,
+  HttpException,
+  HttpStatus,
+  Logger,
+} from '@nestjs/common';
 import { Request, Response, NextFunction } from 'express';
 import { RedisService } from '../redis/redis.service';
 
@@ -11,7 +17,8 @@ export class RateLimiterMiddleware implements NestMiddleware {
   constructor(private redisService: RedisService) {}
 
   async use(req: Request, res: Response, next: NextFunction) {
-    const ip = req.ip || req.headers['x-forwarded-for']?.toString() || 'unknown';
+    const ip =
+      req.ip || req.headers['x-forwarded-for']?.toString() || 'unknown';
     const now = Date.now();
 
     const isSensitive =
@@ -37,7 +44,13 @@ export class RateLimiterMiddleware implements NestMiddleware {
     }
 
     const windowSec = 60;
-    const category = isSensitive ? 'sensitive' : isChat ? 'chat' : isAuth ? 'auth' : 'anon';
+    const category = isSensitive
+      ? 'sensitive'
+      : isChat
+        ? 'chat'
+        : isAuth
+          ? 'auth'
+          : 'anon';
     const redisClient = (this.redisService as any).client;
 
     // 1. Check for Active IP Ban
@@ -69,7 +82,9 @@ export class RateLimiterMiddleware implements NestMiddleware {
         }
         count = currentCount;
       } catch (err: any) {
-        this.logger.error(`Redis rate limiting failed: ${err.message}. Falling back to in-memory.`);
+        this.logger.error(
+          `Redis rate limiting failed: ${err.message}. Falling back to in-memory.`,
+        );
         fallbackUsed = true;
       }
     } else {
@@ -99,7 +114,10 @@ export class RateLimiterMiddleware implements NestMiddleware {
 
     // 3. Set standard API Rate Limit Headers
     res.setHeader('X-RateLimit-Limit', limit.toString());
-    res.setHeader('X-RateLimit-Remaining', Math.max(0, limit - count).toString());
+    res.setHeader(
+      'X-RateLimit-Remaining',
+      Math.max(0, limit - count).toString(),
+    );
 
     // 4. Handle Limit Exceeded
     if (count > limit) {
@@ -112,7 +130,9 @@ export class RateLimiterMiddleware implements NestMiddleware {
           }
           if (violations >= 3) {
             await this.redisService.set(`ban:${ip}`, 'true', 900); // Ban for 15 mins
-            this.logger.warn(`IP ${ip} temporarily banned for 15 minutes due to repeated rate limit violations.`);
+            this.logger.warn(
+              `IP ${ip} temporarily banned for 15 minutes due to repeated rate limit violations.`,
+            );
             throw new HttpException(
               'This IP address has been temporarily blocked due to excessive requests. Please try again in 15 minutes.',
               HttpStatus.TOO_MANY_REQUESTS,

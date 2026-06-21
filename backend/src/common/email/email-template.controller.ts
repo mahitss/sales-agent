@@ -1,4 +1,16 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, UseGuards, Req, NotFoundException, ForbiddenException } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Put,
+  Delete,
+  Body,
+  Param,
+  UseGuards,
+  Req,
+  NotFoundException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { AuthGuard } from '../../auth/auth.guard';
 import { TenantGuard } from '../../auth/tenant.guard';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -13,7 +25,7 @@ export class EmailTemplateController {
     const businessId = req.user.businessId;
     return this.prisma.emailTemplate.findMany({
       where: { businessId },
-      orderBy: { updatedAt: 'desc' }
+      orderBy: { updatedAt: 'desc' },
     });
   }
 
@@ -28,8 +40,8 @@ export class EmailTemplateController {
         businessId,
         name: body.name,
         subject: body.subject,
-        body: body.body
-      }
+        body: body.body,
+      },
     });
   }
 
@@ -42,7 +54,7 @@ export class EmailTemplateController {
     const businessId = req.user.businessId;
 
     const template = await this.prisma.emailTemplate.findUnique({
-      where: { id }
+      where: { id },
     });
 
     if (!template) {
@@ -58,8 +70,8 @@ export class EmailTemplateController {
       data: {
         name: body.name,
         subject: body.subject,
-        body: body.body
-      }
+        body: body.body,
+      },
     });
   }
 
@@ -68,7 +80,7 @@ export class EmailTemplateController {
     const businessId = req.user.businessId;
 
     const template = await this.prisma.emailTemplate.findUnique({
-      where: { id }
+      where: { id },
     });
 
     if (!template) {
@@ -80,7 +92,7 @@ export class EmailTemplateController {
     }
 
     await this.prisma.emailTemplate.delete({
-      where: { id }
+      where: { id },
     });
 
     return { success: true, message: 'Template deleted successfully' };

@@ -1,4 +1,13 @@
-import { Controller, Post, Get, Put, Body, Param, UseGuards, Req } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Get,
+  Put,
+  Body,
+  Param,
+  UseGuards,
+  Req,
+} from '@nestjs/common';
 import { WorkflowService } from './workflow.service';
 import { AuthGuard } from '../auth/auth.guard';
 import { TenantGuard } from '../auth/tenant.guard';
@@ -26,7 +35,14 @@ export class WorkflowController {
   @Put(':id')
   async updateWorkflow(
     @Param('id') id: string,
-    @Body() body: { name: string; trigger: string; nodes: any[]; edges: any[]; isEnabled?: boolean },
+    @Body()
+    body: {
+      name: string;
+      trigger: string;
+      nodes: any[];
+      edges: any[];
+      isEnabled?: boolean;
+    },
     @Req() req: any,
   ) {
     const businessId = req.user.businessId;
@@ -60,7 +76,10 @@ export class WorkflowController {
   }
 
   @Get('executions/:executionId')
-  async getExecutionDetails(@Param('executionId') executionId: string, @Req() req: any) {
+  async getExecutionDetails(
+    @Param('executionId') executionId: string,
+    @Req() req: any,
+  ) {
     const businessId = req.user.businessId;
     return this.workflowService.getExecutionDetails(executionId, businessId);
   }

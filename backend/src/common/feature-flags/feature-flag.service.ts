@@ -1,4 +1,9 @@
-import { Injectable, OnModuleInit, OnModuleDestroy, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  OnModuleInit,
+  OnModuleDestroy,
+  Logger,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as LDClient from '@launchdarkly/node-server-sdk';
 
@@ -19,11 +24,15 @@ export class FeatureFlagService implements OnModuleInit, OnModuleDestroy {
         this.useLaunchDarkly = true;
         this.logger.log('LaunchDarkly SDK initialized successfully');
       } catch (err: any) {
-        this.logger.error(`LaunchDarkly initialization failed: ${err.message}. Falling back to env flags.`);
+        this.logger.error(
+          `LaunchDarkly initialization failed: ${err.message}. Falling back to env flags.`,
+        );
         this.useLaunchDarkly = false;
       }
     } else {
-      this.logger.log('No LAUNCHDARKLY_SDK_KEY found. Using local environment-based feature flags.');
+      this.logger.log(
+        'No LAUNCHDARKLY_SDK_KEY found. Using local environment-based feature flags.',
+      );
     }
   }
 
@@ -34,7 +43,11 @@ export class FeatureFlagService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  async getBoolFlag(flagKey: string, userKey: string, defaultValue = false): Promise<boolean> {
+  async getBoolFlag(
+    flagKey: string,
+    userKey: string,
+    defaultValue = false,
+  ): Promise<boolean> {
     if (this.useLaunchDarkly && this.ldClient) {
       const context = { key: userKey || 'anonymous-user', kind: 'user' };
       return this.ldClient.variation(flagKey, context, defaultValue);

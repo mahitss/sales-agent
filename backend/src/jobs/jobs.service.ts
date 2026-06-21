@@ -13,7 +13,8 @@ export class JobsService {
     @InjectQueue('email-sending') private emailSendingQueue: Queue,
     @InjectQueue('report-generation') private reportGenerationQueue: Queue,
     @InjectQueue('workflow-automation') private workflowAutomationQueue: Queue,
-    @InjectQueue('account-intelligence') private accountIntelligenceQueue: Queue,
+    @InjectQueue('account-intelligence')
+    private accountIntelligenceQueue: Queue,
     @InjectQueue('workflow-execution') private workflowExecutionQueue: Queue,
     @InjectQueue('email-sync') private emailSyncQueue: Queue,
     @InjectQueue('email-sequence') private emailSequenceQueue: Queue,
@@ -55,9 +56,15 @@ export class JobsService {
   async addAIResearchJob(businessId: string, url: string) {
     const key = `ai-research:${businessId}:${url}`;
     const opts = this.getStandardJobOptions(key);
-    this.logger.log(`Enqueuing AI Research job for business ${businessId} with URL ${url}`);
-    
-    return this.aiResearchQueue.add('scrape-website', { businessId, url }, opts);
+    this.logger.log(
+      `Enqueuing AI Research job for business ${businessId} with URL ${url}`,
+    );
+
+    return this.aiResearchQueue.add(
+      'scrape-website',
+      { businessId, url },
+      opts,
+    );
   }
 
   async addLeadEnrichmentJob(leadId: string, businessId: string) {
@@ -65,50 +72,103 @@ export class JobsService {
     const opts = this.getStandardJobOptions(key);
     this.logger.log(`Enqueuing Lead Enrichment job for lead ${leadId}`);
 
-    return this.leadEnrichmentQueue.add('enrich-lead', { leadId, businessId }, opts);
+    return this.leadEnrichmentQueue.add(
+      'enrich-lead',
+      { leadId, businessId },
+      opts,
+    );
   }
 
-  async addEmailSendingJob(email: string, name: string, businessName: string, inviteUrl: string, businessId?: string) {
+  async addEmailSendingJob(
+    email: string,
+    name: string,
+    businessName: string,
+    inviteUrl: string,
+    businessId?: string,
+  ) {
     const key = `email-sending:${email}:${inviteUrl}`;
     const opts = this.getStandardJobOptions(key);
     this.logger.log(`Enqueuing Email Sending job to ${email}`);
 
-    return this.emailSendingQueue.add('send-invite-email', { email, name, businessName, inviteUrl, businessId }, opts);
+    return this.emailSendingQueue.add(
+      'send-invite-email',
+      { email, name, businessName, inviteUrl, businessId },
+      opts,
+    );
   }
 
-  async addReportGenerationJob(businessId: string, format: 'csv' | 'excel' | 'json') {
+  async addReportGenerationJob(
+    businessId: string,
+    format: 'csv' | 'excel' | 'json',
+  ) {
     // Unique per business + format + hour to prevent overload, but allow updates
     const hourBucket = Math.floor(Date.now() / 3600000);
     const key = `report-gen:${businessId}:${format}:${hourBucket}`;
     const opts = this.getStandardJobOptions(key);
-    this.logger.log(`Enqueuing Report Generation job for business ${businessId} (${format})`);
+    this.logger.log(
+      `Enqueuing Report Generation job for business ${businessId} (${format})`,
+    );
 
-    return this.reportGenerationQueue.add('compile-report', { businessId, format }, opts);
+    return this.reportGenerationQueue.add(
+      'compile-report',
+      { businessId, format },
+      opts,
+    );
   }
 
-  async addWorkflowAutomationJob(businessId: string, leadId: string, triggerEvent: string) {
+  async addWorkflowAutomationJob(
+    businessId: string,
+    leadId: string,
+    triggerEvent: string,
+  ) {
     const key = `workflow-auto:${businessId}:${leadId}:${triggerEvent}`;
     const opts = this.getStandardJobOptions(key);
-    this.logger.log(`Enqueuing Workflow Automation job for lead ${leadId} (trigger: ${triggerEvent})`);
+    this.logger.log(
+      `Enqueuing Workflow Automation job for lead ${leadId} (trigger: ${triggerEvent})`,
+    );
 
-    return this.workflowAutomationQueue.add('execute-workflow', { businessId, leadId, triggerEvent }, opts);
+    return this.workflowAutomationQueue.add(
+      'execute-workflow',
+      { businessId, leadId, triggerEvent },
+      opts,
+    );
   }
 
-  async addAccountIntelligenceJob(researchId: string, domain: string, businessId: string) {
+  async addAccountIntelligenceJob(
+    researchId: string,
+    domain: string,
+    businessId: string,
+  ) {
     // Unique key includes timestamp to allow multiple research requests on the same domain
     const key = `account-intel:${researchId}:${domain}:${Date.now()}`;
     const opts = this.getStandardJobOptions(key);
-    this.logger.log(`Enqueuing Account Intelligence job for domain ${domain} and researchId ${researchId}`);
+    this.logger.log(
+      `Enqueuing Account Intelligence job for domain ${domain} and researchId ${researchId}`,
+    );
 
-    return this.accountIntelligenceQueue.add('analyze-account', { researchId, domain, businessId }, opts);
+    return this.accountIntelligenceQueue.add(
+      'analyze-account',
+      { researchId, domain, businessId },
+      opts,
+    );
   }
 
-  async addWorkflowExecutionJob(executionId: string, workflowId: string, businessId: string) {
+  async addWorkflowExecutionJob(
+    executionId: string,
+    workflowId: string,
+    businessId: string,
+  ) {
     const key = `workflow-exec:${executionId}:${Date.now()}`;
     const opts = this.getStandardJobOptions(key);
-    this.logger.log(`Enqueuing Workflow Execution job for executionId ${executionId}`);
+    this.logger.log(
+      `Enqueuing Workflow Execution job for executionId ${executionId}`,
+    );
 
-    return this.workflowExecutionQueue.add('execute-workflow', { executionId, workflowId, businessId }, opts);
+    return this.workflowExecutionQueue.add(
+      'execute-workflow',
+      { executionId, workflowId, businessId },
+      opts,
+    );
   }
 
   async addEmailSyncJob(accountId: string, businessId: string) {
@@ -116,35 +176,61 @@ export class JobsService {
     const opts = this.getStandardJobOptions(key);
     this.logger.log(`Enqueuing email sync job for account: ${accountId}`);
 
-    return this.emailSyncQueue.add('sync-inbox', { accountId, businessId }, opts);
+    return this.emailSyncQueue.add(
+      'sync-inbox',
+      { accountId, businessId },
+      opts,
+    );
   }
 
-  async addSimulatedReplyJob(accountId: string, sentActivityId: string, businessId: string) {
+  async addSimulatedReplyJob(
+    accountId: string,
+    sentActivityId: string,
+    businessId: string,
+  ) {
     const key = `sim-reply:${sentActivityId}:${Date.now()}`;
     const opts = this.getStandardJobOptions(key);
-    this.logger.log(`Enqueuing simulated reply job for sent activity: ${sentActivityId}`);
+    this.logger.log(
+      `Enqueuing simulated reply job for sent activity: ${sentActivityId}`,
+    );
 
-    return this.emailSyncQueue.add('simulated-reply', { accountId, sentActivityId, businessId }, opts);
+    return this.emailSyncQueue.add(
+      'simulated-reply',
+      { accountId, sentActivityId, businessId },
+      opts,
+    );
   }
 
-  async addEmailSequenceExecutionJob(enrollmentId: string, businessId: string, delayMs: number) {
+  async addEmailSequenceExecutionJob(
+    enrollmentId: string,
+    businessId: string,
+    delayMs: number,
+  ) {
     const key = `seq-exec:${enrollmentId}:${Date.now()}`;
     const opts = {
       ...this.getStandardJobOptions(key),
-      delay: delayMs
+      delay: delayMs,
     };
-    this.logger.log(`Enqueuing Sequence Step execution job for enrollment ${enrollmentId} with delay ${delayMs}ms`);
+    this.logger.log(
+      `Enqueuing Sequence Step execution job for enrollment ${enrollmentId} with delay ${delayMs}ms`,
+    );
 
-    return this.emailSequenceQueue.add('execute-step', { enrollmentId, businessId }, opts);
+    return this.emailSequenceQueue.add(
+      'execute-step',
+      { enrollmentId, businessId },
+      opts,
+    );
   }
 
   async addEmailReminderJob(activityId: string, delayMs: number) {
     const key = `email-remind:${activityId}:${Date.now()}`;
     const opts = {
       ...this.getStandardJobOptions(key),
-      delay: delayMs
+      delay: delayMs,
     };
-    this.logger.log(`Enqueuing Follow-up reminder checking job for activity ${activityId} with delay ${delayMs}ms`);
+    this.logger.log(
+      `Enqueuing Follow-up reminder checking job for activity ${activityId} with delay ${delayMs}ms`,
+    );
 
     return this.emailReminderQueue.add('check-reminder', { activityId }, opts);
   }

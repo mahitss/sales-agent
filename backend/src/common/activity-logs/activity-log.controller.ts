@@ -33,15 +33,15 @@ export class ActivityLogController {
     this.enforceAccess(req, businessId);
 
     const filters: AuditFilterDto = {
-      userId:   query.userId,
-      action:   query.action,
-      entity:   query.entity,
+      userId: query.userId,
+      action: query.action,
+      entity: query.entity,
       severity: query.severity,
-      search:   query.search,
+      search: query.search,
       dateFrom: query.dateFrom,
-      dateTo:   query.dateTo,
-      page:     query.page   ? parseInt(query.page,  10) : 1,
-      limit:    query.limit  ? parseInt(query.limit, 10) : 50,
+      dateTo: query.dateTo,
+      page: query.page ? parseInt(query.page, 10) : 1,
+      limit: query.limit ? parseInt(query.limit, 10) : 50,
     };
 
     return this.activityLogService.getLogsWithFilters(businessId, filters);
@@ -91,13 +91,13 @@ export class ActivityLogController {
     this.enforceAccess(req, businessId);
 
     const filters: AuditFilterDto = {
-      userId:   query.userId,
-      action:   query.action,
-      entity:   query.entity,
+      userId: query.userId,
+      action: query.action,
+      entity: query.entity,
       severity: query.severity,
-      search:   query.search,
+      search: query.search,
       dateFrom: query.dateFrom,
-      dateTo:   query.dateTo,
+      dateTo: query.dateTo,
     };
 
     const csv = await this.activityLogService.exportToCsv(businessId, filters);
@@ -121,13 +121,18 @@ export class ActivityLogController {
     @Req() req: any,
   ) {
     this.enforceAccess(req, businessId);
-    const result = await this.activityLogService.getLogsWithFilters(businessId, { limit: 100, page: 1 });
+    const result = await this.activityLogService.getLogsWithFilters(
+      businessId,
+      { limit: 100, page: 1 },
+    );
     return result.data;
   }
 
   private enforceAccess(req: any, businessId: string) {
     if (req.user.role !== 'ADMIN' && req.user.businessId !== businessId) {
-      throw new ForbiddenException('Access denied to other business audit logs');
+      throw new ForbiddenException(
+        'Access denied to other business audit logs',
+      );
     }
   }
 }

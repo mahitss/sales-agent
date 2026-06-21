@@ -15,7 +15,9 @@ export class StripeService {
       this.mockMode = false;
       this.logger.log('Stripe Service initialized in Production Mode.');
     } else {
-      this.logger.warn('Stripe API Key not configured. Operating in MOCK MODE.');
+      this.logger.warn(
+        'Stripe API Key not configured. Operating in MOCK MODE.',
+      );
     }
   }
 
@@ -26,9 +28,15 @@ export class StripeService {
   /**
    * Generates a checkout session URL for a plan upgrade.
    */
-  async createCheckoutSession(businessId: string, planId: string, returnUrl: string) {
+  async createCheckoutSession(
+    businessId: string,
+    planId: string,
+    returnUrl: string,
+  ) {
     if (this.mockMode || !this.stripe) {
-      this.logger.log(`Mock mode checkout session requested for business ${businessId}, plan ${planId}`);
+      this.logger.log(
+        `Mock mode checkout session requested for business ${businessId}, plan ${planId}`,
+      );
       // Return a local URL with parameters that the frontend can read to complete a simulated checkout
       return `${returnUrl}?mock_session_id=mock_sub_${planId}_${businessId}&plan_id=${planId}&business_id=${businessId}`;
     }
@@ -58,7 +66,13 @@ export class StripeService {
       }
 
       const customer = await this.stripe.customers.create({
-        email: business.ownerId ? (await this.prisma.user.findUnique({ where: { id: business.ownerId } }))?.email : undefined,
+        email: business.ownerId
+          ? (
+              await this.prisma.user.findUnique({
+                where: { id: business.ownerId },
+              })
+            )?.email
+          : undefined,
         name: business.companyName,
         metadata: { businessId },
       });
@@ -82,7 +96,9 @@ export class StripeService {
    */
   async createBillingPortal(businessId: string, returnUrl: string) {
     if (this.mockMode || !this.stripe) {
-      this.logger.log(`Mock billing portal requested for business ${businessId}`);
+      this.logger.log(
+        `Mock billing portal requested for business ${businessId}`,
+      );
       return returnUrl;
     }
 
@@ -105,7 +121,12 @@ export class StripeService {
   /**
    * Provision a subscription in the local database.
    */
-  async provisionSubscription(businessId: string, planId: string, stripeCustomerId?: string, stripeSubscriptionId?: string) {
+  async provisionSubscription(
+    businessId: string,
+    planId: string,
+    stripeCustomerId?: string,
+    stripeSubscriptionId?: string,
+  ) {
     const endPeriod = new Date();
     endPeriod.setDate(endPeriod.getDate() + 30); // 30 days plan duration
 
@@ -130,14 +151,20 @@ export class StripeService {
       },
     });
 
-    this.logger.log(`Provisioned subscription plan "${planId}" for business ${businessId}`);
+    this.logger.log(
+      `Provisioned subscription plan "${planId}" for business ${businessId}`,
+    );
     return updated;
   }
 
   /**
    * Handles Stripe webhooks signatures.
    */
-  constructWebhookEvent(rawBody: string, signature: string, secret: string): Stripe.Event {
+  constructWebhookEvent(
+    rawBody: string,
+    signature: string,
+    secret: string,
+  ): Stripe.Event {
     if (!this.stripe) {
       throw new Error('Stripe client not initialized');
     }
@@ -154,11 +181,16 @@ export class StripeService {
         const businessId = session.metadata?.businessId;
         const stripeCustomerId = session.customer;
         const stripeSubscriptionId = session.subscription;
-        
+
         // Find price/plan details from line items if active
         // Fallback to growth plan
         if (businessId) {
-          await this.provisionSubscription(businessId, 'growth', stripeCustomerId, stripeSubscriptionId);
+          await this.provisionSubscription(
+            businessId,
+            'growth',
+            stripeCustomerId,
+            stripeSubscriptionId,
+          );
         }
         break;
       }

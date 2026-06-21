@@ -1,4 +1,11 @@
-import { ExceptionFilter, Catch, ArgumentsHost, HttpException, HttpStatus, Logger } from '@nestjs/common';
+import {
+  ExceptionFilter,
+  Catch,
+  ArgumentsHost,
+  HttpException,
+  HttpStatus,
+  Logger,
+} from '@nestjs/common';
 import { Request, Response } from 'express';
 import * as Sentry from '@sentry/node';
 
@@ -10,7 +17,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
     const request = ctx.getRequest<Request>();
-    
+
     const status =
       exception instanceof HttpException
         ? exception.getStatus()
@@ -21,17 +28,26 @@ export class HttpExceptionFilter implements ExceptionFilter {
         ? exception.getResponse()
         : { message: 'Internal server error' };
 
-    const errorDetails = typeof message === 'object' ? message as any : { message };
+    const errorDetails =
+      typeof message === 'object' ? (message as any) : { message };
 
     const responseBody = {
       statusCode: status,
       timestamp: new Date().toISOString(),
       path: request.url,
-      message: errorDetails.message || errorDetails.error || 'An error occurred',
-      error: errorDetails.error || (status === HttpStatus.INTERNAL_SERVER_ERROR ? 'Internal Server Error' : undefined),
+      message:
+        errorDetails.message || errorDetails.error || 'An error occurred',
+      error:
+        errorDetails.error ||
+        (status === HttpStatus.INTERNAL_SERVER_ERROR
+          ? 'Internal Server Error'
+          : undefined),
     };
 
-    if (status === HttpStatus.INTERNAL_SERVER_ERROR || !(exception instanceof HttpException)) {
+    if (
+      status === HttpStatus.INTERNAL_SERVER_ERROR ||
+      !(exception instanceof HttpException)
+    ) {
       Sentry.captureException(exception);
     }
 

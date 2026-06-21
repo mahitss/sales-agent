@@ -27,14 +27,20 @@ export class WorkflowExecutionWorker extends WorkerHost {
 
   async process(job: Job<any, any, string>): Promise<any> {
     const { executionId, workflowId, businessId } = job.data;
-    this.logger.log(`Executing workflow execution ${executionId} (workflow: ${workflowId})`);
+    this.logger.log(
+      `Executing workflow execution ${executionId} (workflow: ${workflowId})`,
+    );
 
     const execution = await this.prisma.workflowExecution.findUnique({
       where: { id: executionId },
       include: { workflow: true },
     });
 
-    if (!execution || execution.status === 'COMPLETED' || execution.status === 'FAILED') {
+    if (
+      !execution ||
+      execution.status === 'COMPLETED' ||
+      execution.status === 'FAILED'
+    ) {
       return;
     }
 
@@ -60,7 +66,9 @@ export class WorkflowExecutionWorker extends WorkerHost {
 
       while (currentNode) {
         if (visited.has(currentNode.id)) {
-          this.logger.warn(`Cycle detected at node ${currentNode.id}. Stopping execution.`);
+          this.logger.warn(
+            `Cycle detected at node ${currentNode.id}. Stopping execution.`,
+          );
           break;
         }
         visited.add(currentNode.id);
@@ -85,10 +93,17 @@ export class WorkflowExecutionWorker extends WorkerHost {
 
         if (currentNode.type === 'condition') {
           // Evaluate conditional logic to choose the correct edge
-          const conditionPassed = await this.evalCondition(currentNode, payload);
+          const conditionPassed = await this.evalCondition(
+            currentNode,
+            payload,
+          );
           const handleTarget = conditionPassed ? 'true' : 'false';
-          const matchEdge = outgoingEdges.find((e) => e.sourceHandle === handleTarget || e.sourceHandle === (conditionPassed ? 'yes' : 'no'));
-          
+          const matchEdge = outgoingEdges.find(
+            (e) =>
+              e.sourceHandle === handleTarget ||
+              e.sourceHandle === (conditionPassed ? 'yes' : 'no'),
+          );
+
           if (matchEdge) {
             currentNode = nodes.find((n) => n.id === matchEdge.target);
           } else {
@@ -109,14 +124,16 @@ export class WorkflowExecutionWorker extends WorkerHost {
       });
 
       return { status: 'SUCCESS' };
-
     } catch (err: any) {
-      this.logger.error(`Workflow execution ${executionId} failed: ${err.message}`, err.stack);
-      
+      this.logger.error(
+        `Workflow execution ${executionId} failed: ${err.message}`,
+        err.stack,
+      );
+
       // Update execution status to FAILED
       await this.prisma.workflowExecution.update({
         where: { id: executionId },
-        data: { 
+        data: {
           status: 'FAILED',
           error: err.message || 'Unknown execution failure',
         },
@@ -126,9 +143,14 @@ export class WorkflowExecutionWorker extends WorkerHost {
     }
   }
 
-  private async executeNode(node: any, executionId: string, payload: any, businessId: string) {
+  private async executeNode(
+    node: any,
+    executionId: string,
+    payload: any,
+    businessId: string,
+  ) {
     const startTime = Date.now();
-    
+
     // Log running state for this step
     const stepLog = await this.prisma.workflowStepLog.create({
       data: {
@@ -155,12 +177,17 @@ export class WorkflowExecutionWorker extends WorkerHost {
         if (lead && lead.email) {
           const domain = lead.email.split('@')[1];
           if (domain) {
-            const research = await this.accountResearchService.createResearch(businessId, domain);
+            const research = await this.accountResearchService.createResearch(
+              businessId,
+              domain,
+            );
             output = { researchId: research.id, domain };
           }
         }
       } else if (actionType === 'LEAD_SCORING') {
-        const scoreRecord = await this.leadScoringService.scoreLead(payload.leadId || payload.id);
+        const scoreRecord = await this.leadScoringService.scoreLead(
+          payload.leadId || payload.id,
+        );
         output = {
           leadScore: scoreRecord?.score || 85,
           classification: scoreRecord?.classification || 'HOT',
@@ -170,10 +197,18 @@ export class WorkflowExecutionWorker extends WorkerHost {
         const lead = await this.prisma.lead.findUnique({
           where: { id: payload.leadId || payload.id },
         });
-        const recipient = config.to ? this.replacePlaceholders(config.to, lead) : (lead?.email || '');
-        const subject = this.replacePlaceholders(config.subject || 'Follow up from Beacon', lead);
-        const bodyText = this.replacePlaceholders(config.body || 'Hi, just checking in.', lead);
-        
+        const recipient = config.to
+          ? this.replacePlaceholders(config.to, lead)
+          : lead?.email || '';
+        const subject = this.replacePlaceholders(
+          config.subject || 'Follow up from Beacon',
+          lead,
+        );
+        const bodyText = this.replacePlaceholders(
+          config.body || 'Hi, just checking in.',
+          lead,
+        );
+
         if (recipient) {
           await this.emailService.sendCustomEmail(recipient, subject, bodyText);
           output = { recipient, subject };
@@ -194,20 +229,29 @@ export class WorkflowExecutionWorker extends WorkerHost {
         });
         output = { taskId: appt.id, date: appt.date, time: appt.time };
       } else if (actionType === 'NOTIFY_SLACK') {
-        const webhookUrl = config.webhookUrl || 'https://hooks.slack.com/services/mock/url';
+        const webhookUrl =
+          config.webhookUrl || 'https://hooks.slack.com/services/mock/url';
         const lead = await this.prisma.lead.findUnique({
           where: { id: payload.leadId || payload.id },
         });
-        const msg = this.replacePlaceholders(config.message || 'Notification: New workflow activity triggered.', lead);
-        
+        const msg = this.replacePlaceholders(
+          config.message || 'Notification: New workflow activity triggered.',
+          lead,
+        );
+
         try {
           await axios.post(webhookUrl, { text: msg }, { timeout: 3000 });
         } catch (err: any) {
-          this.logger.warn(`Slack webhook dispatch failed (expected in test/mock setups): ${err.message}`);
+          this.logger.warn(
+            `Slack webhook dispatch failed (expected in test/mock setups): ${err.message}`,
+          );
         }
         output = { status: 'DISPATCHED_TO_SLACK', message: msg };
       } else if (actionType === 'GENERATE_REPORT') {
-        output = { status: 'COMPILED', downloadUrl: `/downloads/reports/report-${businessId}.xlsx` };
+        output = {
+          status: 'COMPILED',
+          downloadUrl: `/downloads/reports/report-${businessId}.xlsx`,
+        };
       }
 
       // Update log to completed
@@ -220,7 +264,6 @@ export class WorkflowExecutionWorker extends WorkerHost {
           duration,
         },
       });
-
     } catch (err: any) {
       const duration = Date.now() - startTime;
       await this.prisma.workflowStepLog.update({

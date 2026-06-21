@@ -5,7 +5,12 @@ import { JwtService } from '@nestjs/jwt';
 import { ConflictException, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { RedisService } from '../common/redis/redis.service';
+import { EmailService } from '../common/email/email.service';
 import * as bcrypt from 'bcrypt';
+
+jest.mock('../prisma/prisma.service', () => ({
+  PrismaService: jest.fn(),
+}));
 
 jest.mock('bcrypt', () => ({
   compare: jest.fn(),
@@ -50,6 +55,11 @@ describe('AuthService', () => {
     del: jest.fn().mockResolvedValue(undefined),
   };
 
+  const mockEmailService = {
+    sendVerificationEmail: jest.fn().mockResolvedValue(undefined),
+    sendPasswordResetEmail: jest.fn().mockResolvedValue(undefined),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -58,6 +68,7 @@ describe('AuthService', () => {
         { provide: JwtService, useValue: mockJwtService },
         { provide: ConfigService, useValue: mockConfigService },
         { provide: RedisService, useValue: mockRedisService },
+        { provide: EmailService, useValue: mockEmailService },
       ],
     }).compile();
 
@@ -72,7 +83,11 @@ describe('AuthService', () => {
 
   describe('register', () => {
     it('should successfully register a new admin user', async () => {
-      const dto = { email: 'test@example.com', password: 'password123', name: 'Test User' };
+      const dto = {
+        email: 'test@example.com',
+        password: 'password123',
+        name: 'Test User',
+      };
       const hashedPassword = 'hashedPassword123';
       const mockCreatedUser = {
         id: 'user-uuid',
@@ -91,7 +106,9 @@ describe('AuthService', () => {
 
       const result = await service.register(dto);
 
-      expect(prisma.user.findUnique).toHaveBeenCalledWith({ where: { email: dto.email } });
+      expect(prisma.user.findUnique).toHaveBeenCalledWith({
+        where: { email: dto.email },
+      });
       expect(prisma.user.create).toHaveBeenCalled();
       expect(result.token).toBe('mock-jwt-token');
       expect(result.user.email).toBe(dto.email);
@@ -99,7 +116,11 @@ describe('AuthService', () => {
     });
 
     it('should throw ConflictException if email already registered', async () => {
-      const dto = { email: 'test@example.com', password: 'password123', name: 'Test User' };
+      const dto = {
+        email: 'test@example.com',
+        password: 'password123',
+        name: 'Test User',
+      };
       const existingUser = { id: 'existing-id', email: dto.email } as any;
 
       jest.spyOn(prisma.user, 'findUnique').mockResolvedValue(existingUser);
@@ -125,7 +146,9 @@ describe('AuthService', () => {
 
       const result = (await service.login(dto)) as any;
 
-      expect(prisma.user.findUnique).toHaveBeenCalledWith({ where: { email: dto.email } });
+      expect(prisma.user.findUnique).toHaveBeenCalledWith({
+        where: { email: dto.email },
+      });
       expect(result.token).toBe('mock-jwt-token');
       expect(result.user.email).toBe(dto.email);
     });

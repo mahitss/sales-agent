@@ -10,7 +10,10 @@ export class RequestLoggerMiddleware implements NestMiddleware {
     const start = Date.now();
 
     // Extract or generate unique Request ID
-    const requestId = req.headers['x-request-id'] || req.headers['x-correlation-id'] || crypto.randomUUID();
+    const requestId =
+      req.headers['x-request-id'] ||
+      req.headers['x-correlation-id'] ||
+      crypto.randomUUID();
     req.headers['x-request-id'] = requestId;
     res.setHeader('x-request-id', requestId);
 
