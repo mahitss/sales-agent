@@ -20,7 +20,8 @@ import {
   Sparkles,
   Zap,
   Settings,
-  Globe
+  Globe,
+  Cpu
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -50,6 +51,7 @@ const SettingsTab = dynamic(() => import("./components/SettingsTab").then(m => m
 const QueuesTab = dynamic(() => import("./components/QueuesTab").then(m => m.QueuesTab), { ssr: false });
 const AccountIntelTab = dynamic(() => import("./components/AccountIntelTab").then(m => m.AccountIntelTab), { ssr: false });
 const ScoringDashboard = dynamic(() => import("./components/ScoringDashboard").then(m => m.ScoringDashboard), { ssr: false });
+const AIAnalyticsDashboard = dynamic(() => import("./components/AIAnalyticsDashboard").then(m => m.AIAnalyticsDashboard), { ssr: false });
 const CommandPalette = dynamic(() => import("@/components/CommandPalette").then(m => m.CommandPalette), { ssr: false });
 
 import { FeedbackModal } from "@/components/FeedbackModal";
@@ -599,6 +601,17 @@ export default function DashboardPage() {
                   <Zap className="h-4.5 w-4.5" />
                   Queue Monitor
                 </button>
+                <button
+                  onClick={() => setActiveTab("ai-analytics")}
+                  className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-xl transition-all cursor-pointer ${
+                    activeTab === "ai-analytics"
+                      ? "bg-accent-primary/10 text-accent-primary border border-accent-primary/20 font-semibold"
+                      : "text-muted-text hover:bg-card/40 hover:text-foreground"
+                  }`}
+                >
+                  <Cpu className="h-4.5 w-4.5" />
+                  AI Analytics
+                </button>
               </>
             )}
           </nav>
@@ -649,6 +662,7 @@ export default function DashboardPage() {
                activeTab === "team" ? "Team Seats Management" :
                activeTab === "settings" ? "Workspace Growth Settings" :
                activeTab === "queues" ? "Background Queue Monitor" :
+               activeTab === "ai-analytics" ? "AI Engine Analytics & Cost" :
                activeTab}
             </h2>
             {dataLoading && <RefreshCw className="h-4 w-4 animate-spin text-accent-primary" />}
@@ -980,6 +994,16 @@ export default function DashboardPage() {
                         emailLoading={emailLoading}
                         handleConnectEmailAccount={handleConnectEmailAccount}
                         handleDisconnectEmailAccount={handleDisconnectEmailAccount}
+                      />
+                    </ErrorBoundary>
+                  )}
+
+                  {activeTab === "ai-analytics" && (
+                    <ErrorBoundary>
+                      <AIAnalyticsDashboard
+                        businessId={business?.id || ""}
+                        token={token || ""}
+                        API_URL={API_URL}
                       />
                     </ErrorBoundary>
                   )}

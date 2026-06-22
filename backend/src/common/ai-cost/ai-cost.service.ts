@@ -20,6 +20,8 @@ export class AICostService {
     promptTokens: number,
     completionTokens: number,
     action: string,
+    status: string = 'SUCCESS',
+    errorMessage?: string,
   ) {
     try {
       const calculatedCost =
@@ -34,11 +36,13 @@ export class AICostService {
           completionTokens,
           cost: calculatedCost,
           action,
+          status,
+          errorMessage,
         },
       });
 
       this.logger.log(
-        `[AI Cost Log] Action: ${action} | Model: ${model} | Cost: $${calculatedCost.toFixed(6)} | Business: ${businessId}`,
+        `[AI Cost Log] Action: ${action} | Model: ${model} | Cost: $${calculatedCost.toFixed(6)} | Status: ${status} | Business: ${businessId}`,
       );
       return log;
     } catch (err: any) {
@@ -55,6 +59,7 @@ export class AICostService {
   async getCostStats(businessId: string) {
     const logs = await this.prisma.aICostLog.findMany({
       where: { businessId },
+      orderBy: { createdAt: 'desc' },
     });
 
     const totalQueries = logs.length;
@@ -64,6 +69,13 @@ export class AICostService {
       (acc, l) => acc + l.completionTokens,
       0,
     );
+    const totalTokens = totalPromptTokens + totalCompletionTokens;
+
+    const successfulQueries = logs.filter((l) => l.status === 'SUCCESS').length;
+    const failedQueries = logs.filter((l) => l.status === 'FAILED').length;
+
+    const successRate = totalQueries > 0 ? (successfulQueries / totalQueries) * 100 : 100;
+    const failureRate = totalQueries > 0 ? (failedQueries / totalQueries) * 100 : 0;
 
     // Group costs by action
     const byAction: Record<string, { count: number; cost: number }> = {};
@@ -80,7 +92,13 @@ export class AICostService {
       totalCost,
       totalPromptTokens,
       totalCompletionTokens,
+      totalTokens,
+      successfulQueries,
+      failedQueries,
+      successRate,
+      failureRate,
       byAction,
+      history: logs.slice(0, 100), // Expose last 100 request history entries
     };
   }
 }

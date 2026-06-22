@@ -412,15 +412,17 @@ model Feedback {
 }
 
 model AICostLog {
-  id          String   @id @default(uuid())
-  businessId  String
-  business    Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  model       String   // e.g. "gemini-2.5-flash"
-  promptTokens Int
-  completionTokens Int
-  cost        Float    // Calculated cost in USD
-  action      String   // e.g. "chat", "lead_analysis", "faq_extract"
-  createdAt   DateTime @default(now())
+  id               String   @id @default(uuid())
+  businessId       String
+  business         Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  model            String   // e.g. "gemini-2.5-flash"
+  promptTokens     Int      @default(0)
+  completionTokens Int      @default(0)
+  cost             Float    @default(0.0) // Calculated cost in USD
+  action           String   // e.g. "chat", "lead_analysis", "faq_extract", "account_research"
+  status           String   @default("SUCCESS") // "SUCCESS", "FAILED"
+  errorMessage     String?  @db.Text
+  createdAt        DateTime @default(now())
 }
 
 model OutreachSequence {

@@ -28,6 +28,21 @@ export class AccountResearchService {
     let cleanDomain = domain.trim().toLowerCase();
     cleanDomain = cleanDomain.replace(/^(https?:\/\/)?(www\.)?/, '');
 
+    // Check if there is an existing COMPLETED research for this domain and business to reuse/cache results
+    const completed = await this.prisma.accountResearch.findFirst({
+      where: {
+        businessId,
+        domain: cleanDomain,
+        status: 'COMPLETED',
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (completed) {
+      this.logger.log(`Reusing completed research for domain: ${cleanDomain} (Business: ${businessId})`);
+      return completed;
+    }
+
     // Check if there is an existing PENDING or PROCESSING research for this domain and business to avoid duplicate work
     const existing = await this.prisma.accountResearch.findFirst({
       where: {

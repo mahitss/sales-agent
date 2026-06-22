@@ -17,6 +17,9 @@ import { EmailReminderWorker } from './workers/email-reminder.worker';
 import { BusinessModule } from '../business/business.module';
 import { LeadModule } from '../lead/lead.module';
 import { EmailModule } from '../common/email/email.module';
+import { AccountResearchModule } from '../account-research/account-research.module';
+import { AIModule } from '../common/ai/ai.module';
+
 
 @Module({
   imports: [
@@ -46,7 +49,10 @@ import { EmailModule } from '../common/email/email.module';
     forwardRef(() => EmailModule),
     forwardRef(() => BusinessModule),
     forwardRef(() => LeadModule),
+    forwardRef(() => AccountResearchModule),
+    AIModule,
   ],
+
   controllers: [JobsController],
   providers: [
     JobsService,

@@ -150,7 +150,8 @@ export type TabType =
   | "settings"
   | "queues"
   | "account-research"
-  | "scoring";
+  | "scoring"
+  | "ai-analytics";
 
 
 export function useDashboardData() {

@@ -1,14 +1,36 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
-import { Logger } from '@nestjs/common';
+import { Logger, Inject, forwardRef } from '@nestjs/common';
 import { Job } from 'bullmq';
 import { PrismaService } from '../../prisma/prisma.service';
+import { OpenRouterService } from '../../common/ai/openrouter.service';
+import { EmailService } from '../../common/email/email.service';
+import { AccountResearchService } from '../../account-research/account-research.service';
 import axios from 'axios';
+
+interface StructuredResearch {
+  summary: string;
+  industry: string;
+  employeeEstimate: string;
+  techStack: string[];
+  challenges: string[];
+  opportunities: string[];
+  buyingSignals: string[];
+  outreachStrategy: string;
+  emailDraft: string;
+  meetingNotes: string;
+}
 
 @Processor('account-intelligence')
 export class AccountIntelligenceWorker extends WorkerHost {
   private readonly logger = new Logger(AccountIntelligenceWorker.name);
 
-  constructor(private prisma: PrismaService) {
+  constructor(
+    private prisma: PrismaService,
+    private openRouterService: OpenRouterService,
+    private emailService: EmailService,
+    @Inject(forwardRef(() => AccountResearchService))
+    private accountResearchService: AccountResearchService,
+  ) {
     super();
   }
 
@@ -79,26 +101,40 @@ export class AccountIntelligenceWorker extends WorkerHost {
         data: { progress: 40 },
       });
 
-      // Contact FastAPI service
-      let aiServiceUrl = process.env.AI_SERVICE_URL || 'http://localhost:8000';
-      if (
-        aiServiceUrl &&
-        !aiServiceUrl.startsWith('http://') &&
-        !aiServiceUrl.startsWith('https://')
-      ) {
-        aiServiceUrl = `http://${aiServiceUrl}`;
-      }
+      // Formulate prompts for OpenRouter structured completion
+      const systemPrompt = `You are an elite AI Account Intelligence Engine and Sales Intelligence Architect.
+You must return a JSON object with the following exact keys and types:
+{
+  "summary": "A concise summary of the company, its mission, and its value proposition.",
+  "industry": "The primary industry or sector of the company.",
+  "employeeEstimate": "An estimate of the company size or employee count range (e.g. '100-500 employees').",
+  "techStack": ["React", "Next.js"], // Key technologies, software, frameworks, or platforms detected in use (array of strings)
+  "challenges": ["Challenge 1", "Challenge 2"], // Likely business challenges or pain points faced by the company (array of strings)
+  "opportunities": ["Opportunity 1", "Opportunity 2"], // Key sales opportunities, new product matches, or value-add areas for our CRM/SaaS automation tools (array of strings)
+  "buyingSignals": ["Signal 1", "Signal 2"], // Growth or buying signals detected (e.g. hiring, fundraising, expansion, new product launches, technology shifts) (array of strings)
+  "outreachStrategy": "A recommended personalized sales outreach strategy highlighting why they need our platform.",
+  "emailDraft": "A draft of a highly personalized outreach email targeting the company's pain points and showing how we solve them.",
+  "meetingNotes": "Meeting preparation notes to guide a sales representative during a first call with this account."
+}
+Do NOT wrap the JSON inside markdown code blocks. Output raw JSON only.`;
 
-      this.logger.log(
-        `Requesting Gemini analysis from AI service: ${aiServiceUrl}/analyze-account`,
+      const userPrompt = `Perform deep account research and analysis on the company website domain: "${domain}".
+Use the scraped website content below to extract and synthesize the required intelligence details:
+--- SCRAPED WEB CONTENT ---
+${scrapedText || 'No website content available. Please simulate details professionally based on the domain name.'}
+---------------------------`;
+
+      // Caching key is tenant-scoped and domain specific to avoid redundant external requests
+      const cacheKey = `research:${businessId}:${domain}`;
+
+      this.logger.log(`Calling OpenRouter service for domain: ${domain}`);
+      const data = await this.openRouterService.generateStructuredCompletion<StructuredResearch>(
+        businessId,
+        'account_research',
+        systemPrompt,
+        userPrompt,
+        cacheKey,
       );
-
-      const aiResponse = await axios.post(`${aiServiceUrl}/analyze-account`, {
-        domain,
-        scraped_text: scrapedText,
-      });
-
-      const data = aiResponse.data;
 
       // 3. Update progress to 80% - AI enrichment finished, preparing database entries
       await this.prisma.accountResearch.update({
@@ -114,16 +150,54 @@ export class AccountIntelligenceWorker extends WorkerHost {
           progress: 100,
           summary: data.summary,
           industry: data.industry,
-          employeeEstimate: data.employee_estimate,
-          techStack: data.tech_stack || [],
+          employeeEstimate: data.employeeEstimate,
+          techStack: data.techStack || [],
           challenges: data.challenges || [],
           opportunities: data.opportunities || [],
-          buyingSignals: data.buying_signals || [],
-          outreachStrategy: data.outreach_strategy,
-          emailDraft: data.email_draft,
-          meetingNotes: data.meeting_notes,
+          buyingSignals: data.buyingSignals || [],
+          outreachStrategy: data.outreachStrategy,
+          emailDraft: data.emailDraft,
+          meetingNotes: data.meetingNotes,
         },
       });
+
+      // 5. Generate PDF briefing report & email the user
+      try {
+        this.logger.log(`Generating PDF briefing for research ${researchId}`);
+        const pdfBuffer = await this.accountResearchService.generatePdf(researchId, businessId);
+
+        const business = await this.prisma.business.findUnique({
+          where: { id: businessId },
+          include: { owner: true },
+        });
+
+        const ownerEmail = business?.owner?.email;
+        if (ownerEmail) {
+          this.logger.log(`Sending research notification email with PDF to ${ownerEmail}`);
+          const emailSubject = `Beacon AI Research Report: ${domain}`;
+          const emailHtml = `
+            <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px;">
+              <h1 style="color: #10B981;">Account Research Complete</h1>
+              <p>Great news! The background research for <strong>${domain}</strong> is complete.</p>
+              <p>We have compiled a full briefing including tech stack, pain points, opportunities, outreach strategy, and a personalized email draft.</p>
+              <p>Your custom PDF briefing report is attached to this email.</p>
+              <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 20px 0;" />
+              <p style="font-size: 12px; color: #9ca3af;">Beacon AI Sales Team Agent</p>
+            </div>
+          `;
+          await this.emailService.sendCustomEmail(ownerEmail, emailSubject, emailHtml, [
+            {
+              filename: `Beacon_Research_${domain}.pdf`,
+              content: pdfBuffer,
+            },
+          ]);
+        }
+      } catch (notifyErr: any) {
+        this.logger.error(
+          `Failed to compile PDF or send notification email: ${notifyErr.message}`,
+          notifyErr.stack,
+        );
+      }
 
       // Record job completion log
       const duration = Date.now() - startTime;
@@ -181,3 +255,4 @@ export class AccountIntelligenceWorker extends WorkerHost {
     }
   }
 }
+

@@ -165,7 +165,7 @@ export class EmailService {
     this.logger.log(`[CONSOLE EMAIL Invite] To: ${to} | URL: ${inviteUrl}`);
   }
 
-  async sendCustomEmail(to: string, subject: string, html: string) {
+  async sendCustomEmail(to: string, subject: string, html: string, attachments?: any[]) {
     if (this.transporter) {
       try {
         await this.transporter.sendMail({
@@ -175,8 +175,9 @@ export class EmailService {
           to,
           subject,
           html,
+          attachments,
         });
-        this.logger.log(`Custom email sent successfully to ${to}`);
+        this.logger.log(`Custom email sent successfully to ${to} (with ${attachments?.length || 0} attachments)`);
         return;
       } catch (err: any) {
         this.logger.error(
@@ -186,7 +187,7 @@ export class EmailService {
       }
     }
     this.logger.log(
-      `[CONSOLE EMAIL Custom] To: ${to} | Subject: ${subject} | Content: ${html}`,
+      `[CONSOLE EMAIL Custom] To: ${to} | Subject: ${subject} | Content: ${html} | Attachments: ${attachments?.length || 0}`,
     );
   }
 }

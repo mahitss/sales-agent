@@ -16,7 +16,8 @@ import {
   Globe,
   Trash2,
   Clock,
-  Briefcase
+  Briefcase,
+  Cpu
 } from "lucide-react";
 import { useTheme } from "../hooks/useTheme";
 
@@ -204,6 +205,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
     { id: "nav-overview", title: "Go to Overview Dashboard", category: "Navigation", icon: Compass, action: () => { setActiveTab("overview"); onClose(); } },
     { id: "nav-leads", title: "Go to CRM Leads Table", category: "Navigation", icon: Users, action: () => { setActiveTab("leads"); onClose(); } },
     { id: "nav-scoring", title: "Go to AI Lead Scoring Tab", category: "Navigation", icon: Sparkles, action: () => { setActiveTab("scoring"); onClose(); } },
+    { id: "nav-ai-analytics", title: "Go to AI Analytics & Cost Stats", category: "Navigation", icon: Cpu, action: () => { setActiveTab("ai-analytics"); onClose(); } },
     { id: "nav-settings", title: "Go to Growth Settings", category: "Navigation", icon: Terminal, action: () => { setActiveTab("settings"); onClose(); } },
     { id: "act-theme", title: `Switch to ${theme === "dark" ? "Light" : "Dark"} Mode`, category: "Actions", icon: theme === "dark" ? Sun : Moon, action: () => { toggleTheme(); onClose(); } },
     { id: "act-feedback", title: "Submit App Feedback", category: "Actions", icon: MessageSquare, action: () => { onOpenFeedback(); onClose(); } },
