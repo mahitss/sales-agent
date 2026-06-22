@@ -22,14 +22,14 @@ export class RateLimiterMiddleware implements NestMiddleware {
     const now = Date.now();
 
     const isSensitive =
-      req.path.includes('/auth/login') ||
-      req.path.includes('/auth/register') ||
-      req.path.includes('/auth/verify-email') ||
-      req.path.includes('/auth/request-password-reset') ||
-      req.path.includes('/auth/reset-password') ||
-      req.path.includes('/auth/2fa');
+      req.originalUrl.includes('/auth/login') ||
+      req.originalUrl.includes('/auth/register') ||
+      req.originalUrl.includes('/auth/verify-email') ||
+      req.originalUrl.includes('/auth/request-password-reset') ||
+      req.originalUrl.includes('/auth/reset-password') ||
+      req.originalUrl.includes('/auth/2fa');
 
-    const isChat = req.path.includes('/chat');
+    const isChat = req.originalUrl.includes('/chat');
     const isAuth = !!req.headers.authorization;
 
     let limit = 100;

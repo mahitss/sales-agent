@@ -50,7 +50,7 @@ export class CsrfMiddleware implements NestMiddleware {
       '/stripe',
     ];
 
-    const isExcluded = excludedPaths.some((path) => req.path.includes(path));
+    const isExcluded = excludedPaths.some((path) => req.originalUrl.includes(path));
     if (isExcluded) {
       return next();
     }
