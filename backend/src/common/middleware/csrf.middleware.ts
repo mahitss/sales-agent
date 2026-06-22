@@ -27,8 +27,19 @@ export class CsrfMiddleware implements NestMiddleware {
       return next();
     }
 
-    // Exclude public chat widget and external incoming integration webhooks
+    // Exclude JWT authenticated requests from CSRF (they send Authorization Bearer headers, not cookie-based auth, making them CSRF-safe)
+    if (req.headers.authorization?.startsWith('Bearer ')) {
+      return next();
+    }
+
+    // Exclude public chat widget, auth routes, and external incoming webhooks (e.g., Stripe)
     const excludedPaths = [
+      '/auth/login',
+      '/auth/register',
+      '/auth/verify-email',
+      '/auth/request-password-reset',
+      '/auth/reset-password',
+      '/auth/visitor-token',
       '/chat',
       '/chat/stream',
       '/chat/simulate-incoming',
@@ -36,6 +47,7 @@ export class CsrfMiddleware implements NestMiddleware {
       '/track-visitor',
       '/visitor-token',
       '/channels',
+      '/stripe',
     ];
 
     const isExcluded = excludedPaths.some((path) => req.path.includes(path));
