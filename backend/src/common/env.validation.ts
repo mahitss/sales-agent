@@ -44,6 +44,10 @@ class EnvironmentVariables {
   @IsNumber()
   @IsOptional()
   REDIS_PORT?: number = 6379;
+
+  @IsString()
+  @IsOptional()
+  REDIS_URL?: string;
 }
 
 export function validate(config: Record<string, any>) {

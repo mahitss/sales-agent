@@ -19,37 +19,54 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   constructor(private configService: ConfigService) {}
 
   async onModuleInit() {
+    const url = this.configService.get<string>('REDIS_URL');
     const host = this.configService.get<string>('REDIS_HOST');
     const port = this.configService.get<number>('REDIS_PORT') || 6379;
 
-    if (!host) {
-      this.logger.warn('REDIS_HOST not set. Falling back to in-memory cache.');
+    if (!url && !host) {
+      this.logger.warn('Neither REDIS_URL nor REDIS_HOST set. Falling back to in-memory cache.');
       return;
     }
 
     try {
-      this.client = new Redis({
-        host,
-        port,
-        maxRetriesPerRequest: 1,
-        retryStrategy: (times) => {
-          if (times > 3) {
-            this.logger.error(
-              'Redis connection failed permanently. Falling back to in-memory cache.',
-            );
-            this.client = null;
-            return null; // Stop retrying
-          }
-          return Math.min(times * 100, 1000);
-        },
-      });
+      this.client = url
+        ? new Redis(url, {
+            maxRetriesPerRequest: 1,
+            retryStrategy: (times) => {
+              if (times > 3) {
+                this.logger.error(
+                  'Redis connection failed permanently. Falling back to in-memory cache.',
+                );
+                this.client = null;
+                return null; // Stop retrying
+              }
+              return Math.min(times * 100, 1000);
+            },
+          })
+        : new Redis({
+            host,
+            port,
+            maxRetriesPerRequest: 1,
+            retryStrategy: (times) => {
+              if (times > 3) {
+                this.logger.error(
+                  'Redis connection failed permanently. Falling back to in-memory cache.',
+                );
+                this.client = null;
+                return null; // Stop retrying
+              }
+              return Math.min(times * 100, 1000);
+            },
+          });
 
       this.client.on('error', (err) => {
         this.logger.error('Redis error: ' + err.message);
       });
 
       this.client.on('connect', () => {
-        this.logger.log(`Connected to Redis at ${host}:${port}`);
+        this.logger.log(
+          url ? 'Connected to Redis via connection URL' : `Connected to Redis at ${host}:${port}`,
+        );
       });
     } catch (error) {
       this.logger.error(

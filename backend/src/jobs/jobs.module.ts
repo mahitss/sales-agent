@@ -25,12 +25,30 @@ import { AIModule } from '../common/ai/ai.module';
   imports: [
     BullModule.forRootAsync({
       imports: [ConfigModule],
-      useFactory: async (configService: ConfigService) => ({
-        connection: {
-          host: configService.get<string>('REDIS_HOST') || 'localhost',
-          port: parseInt(configService.get<string>('REDIS_PORT') || '6379'),
-        },
-      }),
+      useFactory: async (configService: ConfigService) => {
+        const url = configService.get<string>('REDIS_URL');
+        if (url) {
+          try {
+            const parsed = new URL(url);
+            return {
+              connection: {
+                host: parsed.hostname,
+                port: parsed.port ? parseInt(parsed.port, 10) : 6379,
+                username: parsed.username ? decodeURIComponent(parsed.username) : undefined,
+                password: parsed.password ? decodeURIComponent(parsed.password) : undefined,
+              },
+            };
+          } catch (e) {
+            // connection URL parsing failed, let it fall through
+          }
+        }
+        return {
+          connection: {
+            host: configService.get<string>('REDIS_HOST') || 'localhost',
+            port: parseInt(configService.get<string>('REDIS_PORT') || '6379'),
+          },
+        };
+      },
       inject: [ConfigService],
     }),
     BullModule.registerQueue(
