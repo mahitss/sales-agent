@@ -29,27 +29,21 @@ services:
     rootDir: backend
     envVars:
       - key: DATABASE_URL
-        sync: false # Set to Supabase connection string (IPv4 pooler on port 6543)
+        value: postgresql://postgres.odxsbxdlyodjdvhdricv:Mahitsaxena%402006@aws-1-ap-southeast-1.pooler.supabase.com:5432/postgres?sslmode=require
       - key: FRONTEND_URL
-        sync: false # Set to your Vercel deployment URL (e.g. https://sales-agent-ai.vercel.app)
+        value: https://sales-agent-plum-two.vercel.app
       - key: JWT_SECRET
-        generateValue: true
+        value: super-secret-key-change-me-in-production-12345
       - key: JWT_REFRESH_SECRET
-        generateValue: true
+        value: super-secret-refresh-key-change-me-45678
       - key: JWT_EXPIRATION
         value: 15m
       - key: JWT_REFRESH_EXPIRATION
         value: 7d
       - key: REDIS_HOST
-        fromService:
-          type: keyvalue
-          name: beacon-redis
-          property: host
+        value: red-d8snn3flk1mo73da1tag
       - key: REDIS_PORT
-        fromService:
-          type: keyvalue
-          name: beacon-redis
-          property: port
+        value: 6379
       - key: AI_SERVICE_URL
         value: http://beacon-ai-service:8000
       - key: OPENROUTER_API_KEY
