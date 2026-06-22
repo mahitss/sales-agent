@@ -26,6 +26,7 @@ services:
     plan: free
     buildCommand: npm run build
     startCommand: npm run start:prod
+    releaseCommand: npx prisma db push --accept-data-loss
     rootDir: backend
     envVars:
       - key: DATABASE_URL
