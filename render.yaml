@@ -1,11 +1,11 @@
-databases:
-  - name: beacon-db
-    databaseName: beacon
-    user: beacon_user
-    plan: free
-
 services:
-  # 1. FastAPI AI Service
+  # 1. Redis Key-Value Store for BullMQ & Caching
+  - type: keyvalue
+    name: beacon-redis
+    plan: free
+    ipAllowList: [] # Private network only
+
+  # 2. FastAPI AI Service
   - type: web
     name: beacon-ai-service
     env: python
@@ -15,11 +15,11 @@ services:
     rootDir: ai-service
     envVars:
       - key: GEMINI_API_KEY
-        sync: false # User will input their Google Gemini API Key in the Render Dashboard
+        sync: false # Set in Render Dashboard if using Gemini API
       - key: HOST
         value: 0.0.0.0
 
-  # 2. NestJS Backend API
+  # 3. NestJS Backend API
   - type: web
     name: beacon-backend
     env: node
@@ -29,32 +29,28 @@ services:
     rootDir: backend
     envVars:
       - key: DATABASE_URL
-        fromDatabase:
-          name: beacon-db
-          property: connectionString
+        sync: false # Set to Supabase connection string (IPv4 pooler on port 6543)
       - key: JWT_SECRET
         generateValue: true
       - key: JWT_REFRESH_SECRET
         generateValue: true
       - key: JWT_EXPIRATION
-        value: 1d
+        value: 15m
       - key: JWT_REFRESH_EXPIRATION
         value: 7d
+      - key: REDIS_HOST
+        fromService:
+          type: keyvalue
+          name: beacon-redis
+          property: host
+      - key: REDIS_PORT
+        fromService:
+          type: keyvalue
+          name: beacon-redis
+          property: port
       - key: AI_SERVICE_URL
         value: http://beacon-ai-service:8000
-
-  # 3. Next.js Frontend
-  - type: web
-    name: beacon-frontend
-    env: node
-    plan: free
-    buildCommand: npm run build
-    startCommand: npm run start
-    rootDir: frontend
-    envVars:
-      - key: NEXT_PUBLIC_API_URL
-        fromService:
-          type: web
-          name: beacon-backend
-          property: host
-
+      - key: OPENROUTER_API_KEY
+        sync: false # Set to your OpenRouter API Key
+      - key: OPENROUTER_MODEL
+        value: deepseek/deepseek-chat-v3-0324:free
