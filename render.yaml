@@ -30,6 +30,8 @@ services:
     envVars:
       - key: DATABASE_URL
         sync: false # Set to Supabase connection string (IPv4 pooler on port 6543)
+      - key: FRONTEND_URL
+        sync: false # Set to your Vercel deployment URL (e.g. https://sales-agent-ai.vercel.app)
       - key: JWT_SECRET
         generateValue: true
       - key: JWT_REFRESH_SECRET
