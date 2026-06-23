@@ -88,13 +88,17 @@ export class JobsService {
   ) {
     const key = `email-sending:${email}:${inviteUrl}`;
     const opts = this.getStandardJobOptions(key);
-    this.logger.log(`Enqueuing Email Sending job to ${email}`);
-
-    return this.emailSendingQueue.add(
+    
+    this.logger.log(`Job Created: [send-invite-email] for recipient=${email}, businessName=${businessName}`);
+    
+    const job = await this.emailSendingQueue.add(
       'send-invite-email',
       { email, name, businessName, inviteUrl, businessId },
       opts,
     );
+
+    this.logger.log(`Job Queued: [send-invite-email] successfully in queue 'email-sending', jobId=${job.id}`);
+    return job;
   }
 
   async addGenericEmailJob(data: {
@@ -112,13 +116,17 @@ export class JobsService {
     const timestamp = Date.now();
     const key = `email-delivery:${data.to}:${data.subject.substring(0, 10)}:${timestamp}`;
     const opts = this.getStandardJobOptions(key);
-    this.logger.log(`Enqueuing generic email job to ${data.to} (subject: ${data.subject})`);
+    
+    this.logger.log(`Job Created: [send-generic-email] (type: ${data.emailType || 'SYSTEM'}) for recipient=${data.to}, subject=${data.subject}`);
 
-    return this.emailSendingQueue.add(
+    const job = await this.emailSendingQueue.add(
       'send-generic-email',
       data,
       opts,
     );
+
+    this.logger.log(`Job Queued: [send-generic-email] successfully in queue 'email-sending', jobId=${job.id}`);
+    return job;
   }
 
   async addReportGenerationJob(

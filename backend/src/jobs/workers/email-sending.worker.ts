@@ -38,7 +38,7 @@ export class EmailSendingWorker extends WorkerHost {
     let activityId = '';
     let emailType = 'SYSTEM';
 
-    this.logger.log(`Processing email job ${job.id} of name ${job.name}`);
+    this.logger.log(`Worker Started: Processing job ${job.id} (name: ${job.name})`);
 
     // 1. Extract payload details based on job name
     if (job.name === 'send-invite-email') {
@@ -152,13 +152,14 @@ export class EmailSendingWorker extends WorkerHost {
           },
         });
 
+        this.logger.log(`Worker Completed: Job ${job.id} successfully processed and email dispatched to ${to}`);
         return { status: 'DELIVERED', messageId: result.messageId };
       } else {
         throw new Error(result.error || 'Provider failed to deliver email.');
       }
     } catch (err: any) {
       const duration = Date.now() - startTime;
-      this.logger.error(`Email sending failed to ${to}: ${err.message}`, err.stack);
+      this.logger.error(`Worker Failed: Job ${job.id} failed to send email to ${to}: ${err.message}`, err.stack);
 
       // Update activity to FAILED
       await this.prisma.emailActivity.update({
