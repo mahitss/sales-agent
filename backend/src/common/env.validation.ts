@@ -6,6 +6,7 @@ import {
   IsEnum,
   IsNumber,
   IsOptional,
+  IsUrl,
 } from 'class-validator';
 
 class EnvironmentVariables {
@@ -20,6 +21,11 @@ class EnvironmentVariables {
   @IsString()
   @IsNotEmpty()
   DATABASE_URL: string;
+
+  @IsString()
+  @IsNotEmpty()
+  @IsUrl({ require_tld: false })
+  FRONTEND_URL: string;
 
   @IsString()
   @IsNotEmpty()
@@ -63,5 +69,16 @@ export function validate(config: Record<string, any>) {
       'Environment variable validation failed:\n' + errors.toString(),
     );
   }
+
+  // Prevent accidental localhost links in production
+  if (validatedConfig.NODE_ENV === 'production' && validatedConfig.FRONTEND_URL) {
+    const urlStr = validatedConfig.FRONTEND_URL.toLowerCase();
+    if (urlStr.includes('localhost') || urlStr.includes('127.0.0.1')) {
+      throw new Error(
+        'FRONTEND_URL cannot point to localhost/127.0.0.1 in production environments!'
+      );
+    }
+  }
+
   return validatedConfig;
 }

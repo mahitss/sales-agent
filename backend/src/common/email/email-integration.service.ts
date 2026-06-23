@@ -295,7 +295,8 @@ export class EmailIntegrationService {
     });
     if (!account) throw new Error('Email integration account not found');
 
-    const trackingPixelUrl = `${this.configService.get<string>('BACKEND_URL') || 'http://localhost:4000'}/email-tracking/open`;
+    const rawBackendUrl = (this.configService.get<string>('BACKEND_URL') || 'http://localhost:4000').replace(/\/+$/, '');
+    const trackingPixelUrl = `${rawBackendUrl}/api/v1/email-tracking/open`;
 
     // Create preliminary EmailActivity record to generate a tracking ID
     const activity = await this.prisma.emailActivity.create({

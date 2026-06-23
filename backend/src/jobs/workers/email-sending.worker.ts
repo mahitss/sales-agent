@@ -21,14 +21,16 @@ export class EmailSendingWorker extends WorkerHost {
       if (url.includes('/email-tracking/')) {
         return match;
       }
-      const trackingUrl = `${backendUrl}/email-tracking/click/${activityId}?url=${encodeURIComponent(url)}`;
+      const trackingUrl = `${backendUrl}/api/v1/email-tracking/click/${activityId}?url=${encodeURIComponent(url)}`;
       return `href=${quote}${trackingUrl}${quote}`;
     });
   }
 
   async process(job: Job<any, any, string>): Promise<any> {
     const startTime = Date.now();
-    const backendUrl = process.env.BACKEND_URL || 'http://localhost:4000';
+    const rawBackendUrl = process.env.BACKEND_URL || 'http://localhost:4000';
+    // Strip trailing slash to avoid double-slash in URL construction
+    const backendUrl = rawBackendUrl.replace(/\/+$/, '');
     let to = '';
     let subject = '';
     let html = '';
@@ -99,7 +101,7 @@ export class EmailSendingWorker extends WorkerHost {
     try {
       // 2. Perform open tracking and click tracking modifications
       const trackedHtml = this.rewriteUrls(html, activityId, backendUrl);
-      const trackingPixelUrl = `${backendUrl}/email-tracking/open/${activityId}`;
+      const trackingPixelUrl = `${backendUrl}/api/v1/email-tracking/open/${activityId}`;
       const trackingPixel = `<img src="${trackingPixelUrl}" width="1" height="1" alt="" style="display:none;" />`;
       const finalHtml = `${trackedHtml}${trackingPixel}`;
 

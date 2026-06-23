@@ -45,6 +45,7 @@ services:
       - JWT_REFRESH_EXPIRATION=7d
       - AI_SERVICE_URL=http://ai-service:8000
       - FRONTEND_URL=http://localhost:3000
+      - BACKEND_URL=http://localhost:4000
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - SMTP_HOST=
@@ -73,6 +74,7 @@ services:
       - JWT_REFRESH_EXPIRATION=7d
       - AI_SERVICE_URL=http://ai-service:8000
       - FRONTEND_URL=http://localhost:3000
+      - BACKEND_URL=http://localhost:4000
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - SMTP_HOST=
@@ -108,7 +110,7 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:4000
+      - NEXT_PUBLIC_API_URL=http://localhost:4000/api/v1
       - NEXT_PUBLIC_WIDGET_SCRIPT_URL=http://localhost:4000/widget/logicra-widget.js
       - NEXT_PUBLIC_SENTRY_DSN=
     depends_on:
