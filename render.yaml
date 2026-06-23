@@ -47,7 +47,7 @@ services:
           name: beacon-redis
           property: connectionString
       - key: AI_SERVICE_URL
-        value: http://beacon-ai-service:8000
+        value: http://beacon-ai-service:10000
       - key: OPENROUTER_API_KEY
         sync: false # Set to your OpenRouter API Key
       - key: OPENROUTER_MODEL
