@@ -107,6 +107,7 @@ export class JobsService {
     emailActivityId?: string;
     emailAccountId?: string;
     emailType?: string;
+    metadata?: any;
   }) {
     const timestamp = Date.now();
     const key = `email-delivery:${data.to}:${data.subject.substring(0, 10)}:${timestamp}`;

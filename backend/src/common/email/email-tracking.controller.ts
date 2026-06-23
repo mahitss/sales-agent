@@ -11,8 +11,8 @@ export class EmailTrackingController {
   @Get('open/:activityId')
   async trackOpen(
     @Param('activityId') activityId: string,
-    @Req() req: Request,
-    @Res() res: Response,
+    @Req() req: any,
+    @Res() res: any,
   ) {
     try {
       const rawIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
@@ -73,8 +73,8 @@ export class EmailTrackingController {
   async trackClick(
     @Param('activityId') activityId: string,
     @Query('url') targetUrl: string,
-    @Req() req: Request,
-    @Res() res: Response,
+    @Req() req: any,
+    @Res() res: any,
   ) {
     const rawIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
     const ipAddress = Array.isArray(rawIp) ? rawIp[0] : String(rawIp);

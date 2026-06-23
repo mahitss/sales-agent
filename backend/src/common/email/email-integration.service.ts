@@ -810,7 +810,7 @@ export class EmailIntegrationService {
         subject: `Re: ${activity.subject}`,
         body: replyBody,
         fromAddress: lead.email || '',
-        toAddress: activity.emailAccount.email,
+        toAddress: activity.emailAccount?.email || activity.toAddress || '',
         direction: 'RECEIVED',
         status: 'RECEIVED',
         leadId: lead.id,

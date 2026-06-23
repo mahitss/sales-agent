@@ -1187,12 +1187,16 @@ export function useDashboardData() {
 
   const handleExportLeads = () => {
     if (!business) return;
-    window.open(`${API_URL}/leads/business/${business.id}/export`, "_blank");
+    const token = localStorage.getItem("beacon_token");
+    const query = token ? `?token=${encodeURIComponent(token)}` : "";
+    window.open(`${API_URL}/leads/business/${business.id}/export${query}`, "_blank");
   };
 
   const handleExportLeadsExcel = () => {
     if (!business) return;
-    window.open(`${API_URL}/leads/business/${business.id}/export/excel`, "_blank");
+    const token = localStorage.getItem("beacon_token");
+    const query = token ? `?token=${encodeURIComponent(token)}` : "";
+    window.open(`${API_URL}/leads/business/${business.id}/export/excel${query}`, "_blank");
   };
 
   const handleDeleteFAQ = async (faqId: string) => {

@@ -99,7 +99,12 @@ export class AuthGuard implements CanActivate {
     if (type === 'Bearer' && token) {
       return token;
     }
-    // 2. Try to extract token from cookies
+    // 2. Try to extract token from query parameters (e.g. for window.open file downloads)
+    const queryToken = request.query?.token;
+    if (queryToken && typeof queryToken === 'string') {
+      return queryToken;
+    }
+    // 3. Try to extract token from cookies
     const cookieHeader = request.headers.cookie;
     if (cookieHeader) {
       const tokenCookie = cookieHeader

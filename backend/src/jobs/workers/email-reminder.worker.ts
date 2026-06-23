@@ -87,7 +87,7 @@ export class EmailReminderWorker extends WorkerHost {
     status: 'COMPLETED' | 'FAILED',
     data: any,
     duration: number,
-    businessId: string,
+    businessId?: string | null,
     error?: string,
   ) {
     await this.prisma.jobLog
