@@ -646,7 +646,10 @@ export function useDashboardData() {
           handleUnauthorized();
           return;
         }
-        if (res.ok) setLeads(await res.json());
+        if (res.ok) {
+          const json = await res.json();
+          setLeads(Array.isArray(json) ? json : json.data || []);
+        }
         // Pre-fetch email data for lead detail drawer
         await fetchEmailAccounts();
         await fetchEmailTemplates();
@@ -658,7 +661,8 @@ export function useDashboardData() {
           return;
         }
         if (res.ok) {
-          const list = await res.json();
+          const json = await res.json();
+          const list = Array.isArray(json) ? json : json.data || [];
           setConversations(list);
           if (selectedConv) {
             const updated = list.find((c: Conversation) => c.id === selectedConv.id);
