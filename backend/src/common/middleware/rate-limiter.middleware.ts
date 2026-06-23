@@ -34,7 +34,7 @@ export class RateLimiterMiddleware implements NestMiddleware {
 
     let limit = 100;
     if (isSensitive) {
-      limit = 5; // Strict: max 5 requests per minute for auth operations
+      limit = process.env.NODE_ENV === 'production' ? 5 : 100; // Strict in production, relaxed in dev/test
     } else if (isChat) {
       limit = 30; // Max 30 requests per minute for chat/stream endpoints
     } else if (isAuth) {

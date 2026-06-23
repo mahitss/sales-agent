@@ -17,9 +17,9 @@ export class TenantGuard implements CanActivate {
       throw new ForbiddenException('User session not found');
     }
 
-    const params = request.params;
-    const body = request.body;
-    const query = request.query;
+    const params = request.params || {};
+    const body = request.body || {};
+    const query = request.query || {};
 
     let targetBusinessId =
       params.businessId || body.businessId || query.businessId;
@@ -91,17 +91,21 @@ export class TenantGuard implements CanActivate {
       return true;
     }
 
-    // Resolve user's actual database businessId
+    // Resolve user's actual database businessId and owned businesses
     const dbUser = await this.prisma.user.findUnique({
       where: { id: user.sub },
-      select: { businessId: true, role: true },
+      select: { businessId: true, role: true, businesses: { select: { id: true } } },
     });
 
     if (!dbUser) {
       throw new ForbiddenException('User record not found');
     }
 
-    if (dbUser.businessId !== targetBusinessId) {
+    const ownedBusinessIds = dbUser.businesses.map((b) => b.id);
+    const isOwner = ownedBusinessIds.includes(targetBusinessId);
+    const isEmployee = dbUser.businessId === targetBusinessId;
+
+    if (!isOwner && !isEmployee) {
       throw new ForbiddenException('Access denied: Tenancy isolation mismatch');
     }
 

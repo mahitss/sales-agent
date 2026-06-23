@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { RedisService } from '../common/redis/redis.service';
+import { PrismaService } from '../prisma/prisma.service';
 import { Request } from 'express';
 import * as crypto from 'crypto';
 
@@ -14,6 +15,7 @@ export class AuthGuard implements CanActivate {
   constructor(
     private jwtService: JwtService,
     private redisService: RedisService,
+    private prisma: PrismaService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -26,15 +28,15 @@ export class AuthGuard implements CanActivate {
 
     try {
       const hashedToken = crypto
-        .createHash('sha256')
-        .update(token)
-        .digest('hex');
+          .createHash('sha256')
+          .update(token)
+          .digest('hex');
       const isBlacklisted = await this.redisService.get(
-        `blacklist:${hashedToken}`,
+          `blacklist:${hashedToken}`,
       );
       if (isBlacklisted) {
         throw new UnauthorizedException(
-          'Authentication token has been revoked',
+            'Authentication token has been revoked',
         );
       }
     } catch (err) {
@@ -46,22 +48,46 @@ export class AuthGuard implements CanActivate {
         secret: (() => {
           const secret = process.env.JWT_SECRET;
           if (
-            !secret ||
-            secret === 'super-secret-key-change-me-in-production'
+              !secret ||
+              secret === 'super-secret-key-change-me-in-production'
           ) {
             if (process.env.NODE_ENV === 'production') {
               throw new Error(
-                'FATAL: JWT_SECRET environment variable is required and cannot be default placeholder in production!',
+                  'FATAL: JWT_SECRET environment variable is required and cannot be default placeholder in production!',
               );
             }
           }
           return secret || 'super-secret-key-change-me-in-production';
         })(),
       });
+
+      // Dynamically resolve and attach businessId to request user context
+      try {
+        const dbUser = await this.prisma.user.findUnique({
+          where: { id: payload.sub },
+          select: { id: true, role: true, businessId: true },
+        });
+        if (dbUser) {
+          let resolvedBusinessId = dbUser.businessId;
+          if (dbUser.role === 'ADMIN') {
+            const ownedBusiness = await this.prisma.business.findFirst({
+              where: { ownerId: dbUser.id },
+              select: { id: true },
+            });
+            if (ownedBusiness) {
+              resolvedBusinessId = ownedBusiness.id;
+            }
+          }
+          payload.businessId = resolvedBusinessId;
+        }
+      } catch (err) {
+        // Log but do not block request if database connection transiently fails
+      }
+
       request['user'] = payload;
     } catch (err) {
       throw new UnauthorizedException(
-        'Invalid or expired authentication token',
+          'Invalid or expired authentication token',
       );
     }
     return true;

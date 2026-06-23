@@ -45,7 +45,7 @@ async function bootstrap() {
           styleSrc: ["'self'", "'unsafe-inline'", '*'],
           imgSrc: ["'self'", 'data:', '*'],
           connectSrc: ["'self'", '*'],
-          frameAncestors: ['*'], // Allow iframe embedding globally for widget
+          frameAncestors: ['*'], 
         },
       },
       crossOriginEmbedderPolicy: false,
