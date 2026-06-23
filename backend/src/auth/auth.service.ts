@@ -14,6 +14,7 @@ import * as crypto from 'crypto';
 import * as speakeasy from 'speakeasy';
 import * as QRCode from 'qrcode';
 import { EmailService } from '../common/email/email.service';
+import axios from 'axios';
 import {
   RegisterDto,
   LoginDto,
@@ -903,6 +904,144 @@ export class AuthService {
         email: user.email,
         name: user.name,
         role: user.role,
+      },
+      accessToken: tokens.token,
+      refreshToken: tokens.refreshToken,
+    };
+  }
+
+  async loginOrCreateGoogleUser(code: string, auditContext: any) {
+    const clientId = this.configService.get<string>('GOOGLE_CLIENT_ID');
+    const clientSecret = this.configService.get<string>('GOOGLE_CLIENT_SECRET');
+    const callbackUrl = this.configService.get<string>('GOOGLE_CALLBACK_URL');
+
+    if (!clientId || !clientSecret || !callbackUrl) {
+      throw new Error('Google OAuth environment variables (GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_CALLBACK_URL) are not set.');
+    }
+
+    let tokensRes;
+    try {
+      tokensRes = await axios.post('https://oauth2.googleapis.com/token', {
+        code,
+        client_id: clientId,
+        client_secret: clientSecret,
+        redirect_uri: callbackUrl,
+        grant_type: 'authorization_code',
+      });
+    } catch (err: any) {
+      this.logger.error(`Failed to exchange Google OAuth code: ${err.response?.data ? JSON.stringify(err.response.data) : err.message}`);
+      throw new Error('Failed to exchange authorization code with Google.');
+    }
+
+    const { access_token } = tokensRes.data;
+
+    let profileRes;
+    try {
+      profileRes = await axios.get('https://www.googleapis.com/oauth2/v3/userinfo', {
+        headers: { Authorization: `Bearer ${access_token}` },
+      });
+    } catch (err: any) {
+      this.logger.error(`Failed to fetch Google user profile: ${err.message}`);
+      throw new Error('Failed to retrieve user profile information from Google.');
+    }
+
+    const { email, name, sub: googleId } = profileRes.data;
+
+    if (!email) {
+      throw new Error('Google account is missing a verified email address.');
+    }
+
+    let user = await this.prisma.user.findFirst({
+      where: {
+        OR: [
+          { googleId },
+          { email },
+        ],
+      },
+    });
+
+    if (user) {
+      const updates: any = {};
+      if (!user.googleId) {
+        updates.googleId = googleId;
+        updates.authProvider = 'GOOGLE';
+        updates.isVerified = true;
+      }
+
+      if (Object.keys(updates).length > 0) {
+        user = await this.prisma.user.update({
+          where: { id: user.id },
+          data: updates,
+        });
+
+        await this.prisma.activityLog.create({
+          data: {
+            userId: user.id,
+            businessId: user.businessId,
+            action: 'AUTH_LINK_ACCOUNT',
+            entity: 'User',
+            entityId: user.id,
+            description: `Linked Google account for user: ${email}`,
+            ipAddress: auditContext.ipAddress,
+            userAgent: auditContext.userAgent,
+            severity: 'INFO',
+            metadata: { provider: 'google', email },
+          },
+        }).catch(() => {});
+      }
+    } else {
+      const defaultBusiness = await this.prisma.business.findFirst();
+      const defaultOrg = await this.prisma.organization.findFirst();
+
+      const randomPassword = crypto.randomUUID();
+      const hashedPassword = await bcrypt.hash(randomPassword, 10);
+
+      user = await this.prisma.user.create({
+        data: {
+          email,
+          name: name || email.split('@')[0],
+          password: hashedPassword,
+          role: 'ADMIN',
+          googleId,
+          authProvider: 'GOOGLE',
+          isVerified: true,
+          businessId: defaultBusiness?.id || null,
+          organizationId: defaultOrg?.id || null,
+        },
+      });
+
+      await this.prisma.activityLog.create({
+        data: {
+          userId: user.id,
+          businessId: user.businessId,
+          action: 'AUTH_REGISTER',
+          entity: 'User',
+          entityId: user.id,
+          description: `Registered new user via Google OAuth: ${email}`,
+          ipAddress: auditContext.ipAddress,
+          userAgent: auditContext.userAgent,
+          severity: 'INFO',
+          metadata: { provider: 'google', email, role: user.role },
+        },
+      }).catch(() => {});
+    }
+
+    const tokens = await this.generateTokensPair(
+      user.id,
+      user.email,
+      user.role,
+    );
+
+    await this.saveRefreshToken(user.id, tokens.refreshToken);
+
+    return {
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        isVerified: user.isVerified,
+        businessId: user.businessId,
       },
       accessToken: tokens.token,
       refreshToken: tokens.refreshToken,

@@ -11,7 +11,7 @@ import * as crypto from 'crypto';
 export class CsrfMiddleware implements NestMiddleware {
   use(req: Request, res: Response, next: NextFunction) {
     // Generate CSRF token if not present in cookies
-    let xsrfToken = req.cookies['XSRF-TOKEN'];
+    let xsrfToken = req.cookies?.['XSRF-TOKEN'];
     if (!xsrfToken) {
       xsrfToken = crypto.randomBytes(32).toString('hex');
       res.cookie('XSRF-TOKEN', xsrfToken, {
@@ -32,7 +32,7 @@ export class CsrfMiddleware implements NestMiddleware {
       return next();
     }
 
-    // Exclude public chat widget, auth routes, and external incoming webhooks (e.g., Stripe)
+    // Exclude public chat widget, auth routes, and external incoming webhooks (e.g., Stripe, email tracking)
     const excludedPaths = [
       '/auth/login',
       '/auth/register',
@@ -48,6 +48,7 @@ export class CsrfMiddleware implements NestMiddleware {
       '/visitor-token',
       '/channels',
       '/stripe',
+      '/email-tracking/webhook',
     ];
 
     const isExcluded = excludedPaths.some((path) => req.originalUrl.includes(path));

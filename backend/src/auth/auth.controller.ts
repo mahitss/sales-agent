@@ -376,6 +376,70 @@ export class AuthController {
     return this.authService.generateReferralCode(req.user.sub);
   }
 
+  @Get('google')
+  async googleAuth(@Res() response: express.Response) {
+    const clientId = process.env.GOOGLE_CLIENT_ID;
+    const callbackUrl = process.env.GOOGLE_CALLBACK_URL;
+
+    if (!clientId || !callbackUrl) {
+      const errorMessage = 'Google OAuth is not fully configured (missing Client ID or Callback URL).';
+      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+      return response.redirect(`${frontendUrl}/login?error=${encodeURIComponent(errorMessage)}`);
+    }
+
+    const scope = encodeURIComponent('openid profile email');
+    const redirectUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${encodeURIComponent(callbackUrl)}&response_type=code&scope=${scope}&access_type=offline&prompt=consent`;
+
+    return response.redirect(redirectUrl);
+  }
+
+  @Get('google/callback')
+  async googleAuthCallback(
+    @Req() req: express.Request,
+    @Res() response: express.Response,
+  ) {
+    const code = req.query.code as string;
+    const error = req.query.error as string;
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+
+    if (error) {
+      return response.redirect(`${frontendUrl}/login?error=${encodeURIComponent(`Google authentication cancelled: ${error}`)}`);
+    }
+
+    if (!code) {
+      return response.redirect(`${frontendUrl}/login?error=${encodeURIComponent('Missing authorization code from Google.')}`);
+    }
+
+    try {
+      const result = await this.authService.loginOrCreateGoogleUser(code, extractAuditContext(req));
+
+      this.setAccessTokenCookie(response, result.accessToken);
+      this.setRefreshTokenCookie(response, result.refreshToken);
+
+      // Audit log: successful Google login
+      await this.auditLog.log({
+        userId: result.user?.id,
+        businessId: result.user?.businessId,
+        action: 'AUTH_LOGIN',
+        entity: 'User',
+        entityId: result.user?.id,
+        description: `User signed in via Google OAuth: ${result.user?.email}`,
+        ipAddress:
+          (req as any).headers?.['x-forwarded-for']?.split(',')[0]?.trim() ||
+          (req as any).ip,
+        userAgent: req.headers?.['user-agent'],
+        severity: 'INFO',
+        metadata: { email: result.user?.email, provider: 'google' },
+      }).catch(() => {});
+
+      return response.redirect(
+        `${frontendUrl}/dashboard?token=${result.accessToken}&user=${encodeURIComponent(JSON.stringify(result.user))}`,
+      );
+    } catch (err: any) {
+      return response.redirect(`${frontendUrl}/login?error=${encodeURIComponent(err.message || 'Google OAuth callback authentication failed.')}`);
+    }
+  }
+
   @Get('sso/saml')
   async initiateSSO(@Res() response: express.Response) {
     const ssoRedirectUrl =

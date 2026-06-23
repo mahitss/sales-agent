@@ -29,6 +29,8 @@ model User {
   activityLogs         ActivityLog[]
   organizationId       String?
   organization         Organization?  @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  googleId             String?        @unique
+  authProvider         String         @default("PASSWORD")
 
   @@index([businessId])
   @@index([organizationId])
@@ -610,27 +612,29 @@ model EmailAccount {
 }
 
 model EmailActivity {
-  id             String             @id @default(uuid())
-  businessId     String
-  business       Business           @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  emailAccountId String
-  emailAccount   EmailAccount       @relation(fields: [emailAccountId], references: [id], onDelete: Cascade)
+  id             String               @id @default(uuid())
+  businessId     String?
+  business       Business?            @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  emailAccountId String?
+  emailAccount   EmailAccount?        @relation(fields: [emailAccountId], references: [id], onDelete: Cascade)
   leadId         String?
-  lead           Lead?              @relation(fields: [leadId], references: [id], onDelete: SetNull)
-  messageId      String             @unique // Google/Microsoft unique message ID
+  lead           Lead?                @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  messageId      String               @unique // Google/Microsoft unique message ID
   threadId       String
   subject        String
-  body           String             @db.Text
+  body           String               @db.Text
   fromAddress    String
   toAddress      String
-  direction      String             // SENT, RECEIVED
-  status         String             @default("SENT") // SENT, RECEIVED, FAILED
-  opensCount     Int                @default(0)
+  direction      String               // SENT, RECEIVED
+  status         String               @default("SENT") // SENT, RECEIVED, FAILED
+  opensCount     Int                  @default(0)
   repliedAt      DateTime?
   sentAt         DateTime
-  createdAt      DateTime           @default(now())
-  updatedAt      DateTime           @updatedAt
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
   opens          EmailOpenTracking[]
+  clicks         EmailClickTracking[]
+  events         EmailTrackingEvent[]
 
   @@index([businessId])
   @@index([leadId])
@@ -646,6 +650,32 @@ model EmailOpenTracking {
   openedAt        DateTime      @default(now())
 
   @@index([emailActivityId])
+}
+
+model EmailClickTracking {
+  id              String        @id @default(uuid())
+  emailActivityId String
+  emailActivity   EmailActivity @relation(fields: [emailActivityId], references: [id], onDelete: Cascade)
+  url             String
+  ipAddress       String?
+  userAgent       String?
+  clickedAt       DateTime      @default(now())
+
+  @@index([emailActivityId])
+}
+
+model EmailTrackingEvent {
+  id              String        @id @default(uuid())
+  emailActivityId String
+  emailActivity   EmailActivity @relation(fields: [emailActivityId], references: [id], onDelete: Cascade)
+  eventType       String        // DELIVERED, BOUNCED, FAILED, OPENED, CLICKED
+  ipAddress       String?
+  userAgent       String?
+  metadata        Json          @default("{}")
+  createdAt       DateTime      @default(now())
+
+  @@index([emailActivityId])
+  @@index([eventType])
 }
 
 model EmailTemplate {

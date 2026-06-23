@@ -24,6 +24,8 @@ model User {
   updatedAt             DateTime       @updatedAt
   businesses            Business[]     @relation("BusinessOwner")
   refreshTokens         RefreshToken[]
+  googleId              String?        @unique
+  authProvider          String         @default("PASSWORD")
 }
 
 model Business {

@@ -97,6 +97,29 @@ export class JobsService {
     );
   }
 
+  async addGenericEmailJob(data: {
+    to: string;
+    subject: string;
+    html: string;
+    from?: string;
+    businessId?: string;
+    leadId?: string;
+    emailActivityId?: string;
+    emailAccountId?: string;
+    emailType?: string;
+  }) {
+    const timestamp = Date.now();
+    const key = `email-delivery:${data.to}:${data.subject.substring(0, 10)}:${timestamp}`;
+    const opts = this.getStandardJobOptions(key);
+    this.logger.log(`Enqueuing generic email job to ${data.to} (subject: ${data.subject})`);
+
+    return this.emailSendingQueue.add(
+      'send-generic-email',
+      data,
+      opts,
+    );
+  }
+
   async addReportGenerationJob(
     businessId: string,
     format: 'csv' | 'excel' | 'json',

@@ -1090,29 +1090,7 @@ export function useDashboardData() {
   const handleGoogleAuth = async (mode: "login" | "register") => {
     setAuthError("");
     setAuthLoading(true);
-    try {
-      const res = await fetch(`${API_URL}/auth/sso/callback`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ samlResponse: "google-oauth-mock-token" }),
-      });
-      const text = await res.text();
-      const resData = text ? JSON.parse(text) : {};
-      if (!res.ok) {
-        throw new Error(resData.message || "Google authentication failed");
-      }
-
-      localStorage.setItem("beacon_token", resData.token);
-      localStorage.setItem("beacon_user", JSON.stringify(resData.user));
-      setBusinessLoading(true);
-      setToken(resData.token);
-      setUser(resData.user);
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : String(err);
-      setAuthError(errorMsg || "Google authentication failed");
-    } finally {
-      setAuthLoading(false);
-    }
+    window.location.href = `${API_URL}/auth/google`;
   };
 
   const handleRequestPasswordReset = async (data: { email: string }) => {
@@ -2005,6 +1983,37 @@ export function useDashboardData() {
     }
     return false;
   };
+
+  // Intercept Google OAuth callback landing
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const searchParams = new URLSearchParams(window.location.search);
+      const queryToken = searchParams.get("token");
+      const queryUser = searchParams.get("user");
+      const queryError = searchParams.get("error");
+
+      if (queryToken && queryUser) {
+        try {
+          const parsedUser = JSON.parse(decodeURIComponent(queryUser));
+          localStorage.setItem("beacon_token", queryToken);
+          localStorage.setItem("beacon_user", JSON.stringify(parsedUser));
+          
+          // Clear query params to clean up the browser URL bar
+          window.history.replaceState({}, document.title, window.location.pathname);
+          
+          setToken(queryToken);
+          setUser(parsedUser);
+          setBusinessLoading(true);
+        } catch (e) {
+          console.error("Failed to parse Google user payload", e);
+        }
+      } else if (queryError) {
+        setAuthError(decodeURIComponent(queryError));
+        window.history.replaceState({}, document.title, window.location.pathname);
+        setAuthLoading(false);
+      }
+    }
+  }, []);
 
   // Intercept real OAuth callback landings in dashboard
   useEffect(() => {
